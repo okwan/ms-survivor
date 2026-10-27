@@ -1,0 +1,8 @@
+{
+  "note": "Mirrors tried in order after the MAPLE_ARCHIVE_URL env var. Inno Setup installers: single .wz files are pulled out with innoextract (7z is the fallback). The CI cache key hashes this file.",
+  "wz": ["Mob.wz", "Skill.wz", "String.wz", "Sound.wz"],
+  "mirrors": [
+    { "id": "maple-legends-dec-152017", "url": "https://archive.org/download/maple-legends-dec-152017/MapleLegendsDec152017.exe" },
+    { "id": "maple-saga-20171113", "url": "https://archive.org/download/maple-saga-20171113/MapleSaga_20171113.exe" }
+  ]
+}

@@ -22,6 +22,7 @@ export function updateSkills(sim: Sim, dt: number) {
 }
 
 function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
+  sim.curSkill = def.key;
   const L = o.level;
   const dmg = def.dmg * skillDmgMult(L);
   const count = skillCount(def, L);
@@ -135,6 +136,7 @@ export function updateProjectiles(sim: Sim, dt: number) {
   const enemies = sim.enemies;
   for (let i = list.length - 1; i >= 0; i--) {
     const p = list[i];
+    sim.curSkill = p.skill;
     p.life -= dt;
     if (p.life <= 0) { explodeIfSplash(sim, p); sim.freeProjectile(i); continue; }
     if (p.target) {
@@ -176,6 +178,7 @@ export function updateProjectiles(sim: Sim, dt: number) {
 
 function explodeIfSplash(sim: Sim, p: { splash: number; x: number; y: number; dmg: number; skill: string; pierce: boolean }) {
   if (p.splash <= 0 || p.pierce) return;
+  sim.curSkill = p.skill;
   sim.emit({ type: 'cast', skill: p.skill, kind: 'bolt', x: p.x, y: p.y, tx: p.x, ty: p.y, r: p.splash, pts: null });
   sim.areaDamage(p.x, p.y, p.splash, p.dmg);
 }
@@ -184,6 +187,7 @@ export function updateAreas(sim: Sim, dt: number) {
   const list = sim.areas;
   for (let i = list.length - 1; i >= 0; i--) {
     const a = list[i];
+    sim.curSkill = a.skill;
     a.t -= dt;
     a.tick -= dt;
     if (a.tick <= 0) {

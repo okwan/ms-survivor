@@ -29,6 +29,8 @@ export class Sim {
   hp = PLAYER_BASE.hp;
   maxHp = PLAYER_BASE.hp;
   facing = 1;
+  /** key of the skill currently dealing damage; carried on 'hit' events so the renderer can pick hit art */
+  curSkill = '';
   inputX = 0;
   inputY = 0;
   moving = false;
@@ -183,7 +185,7 @@ export class Sim {
     amt = Math.max(1, Math.round(amt));
     e.hp -= amt;
     e.flash = 0.08;
-    this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0 });
+    this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0, skill: this.curSkill });
     if (e.hp <= 0) this.kill(e);
   }
 
@@ -207,7 +209,7 @@ export class Sim {
   private kill(e: Enemy) {
     e.alive = false;
     this.kills++;
-    this.emit({ type: 'death', x: e.x, y: e.y, tier: e.tier, boss: e.boss, big: e.big });
+    this.emit({ type: 'death', x: e.x, y: e.y, tier: e.tier, boss: e.boss, big: e.big, facing: e.facing });
     const gv = e.xp * 2 * this.growth;
     if (e.boss >= 0) {
       this.bossKills++;

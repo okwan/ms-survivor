@@ -3,7 +3,10 @@ import { Application } from 'pixi.js';
 import { botInput } from './game/bot.ts';
 import { RUN_LENGTH, TICK } from './game/data.ts';
 import { Sim } from './game/sim.ts';
+import { buildArt } from './maple/art.ts';
+import type { MapleArt } from './maple/art.ts';
 import { loadManifest } from './maple/assets.ts';
+import { Bgm } from './maple/audio.ts';
 import { Renderer } from './render/renderer.ts';
 import { Hud } from './ui/hud.ts';
 import { Input } from './ui/input.ts';
@@ -11,6 +14,23 @@ import { loadSave, writeSave } from './ui/save.ts';
 import { Screens } from './ui/screens.ts';
 
 type Mode = 'title' | 'playing' | 'paused' | 'ended';
+
+/** Real Maple art from maple/manifest.json (written by the deploy step). Null on any failure or after 12 s: the game then uses placeholder art. */
+async function loadArt(): Promise<MapleArt | null> {
+  try {
+    const run = async () => {
+      const m = await loadManifest();
+      if (!m) return null;
+      const art = await buildArt(m);
+      console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
+      return art;
+    };
+    return await Promise.race([run(), new Promise<null>((r) => setTimeout(() => r(null), 12000))]);
+  } catch (e) {
+    console.warn('maple art unavailable, using placeholders', e);
+    return null;
+  }
+}
 
 async function boot() {
   const uiRoot = document.getElementById('ui')!;
@@ -26,10 +46,12 @@ async function boot() {
   });
   host.appendChild(app.canvas);
 
-  const renderer = new Renderer(app);
+  const art = await loadArt();
+  const renderer = new Renderer(app, art);
   app.renderer.on('resize', () => renderer.resize());
 
   const save = loadSave();
+  const bgm = art ? new Bgm(art.bgm, save.settings.volume, save.settings.muted) : null;
   let mode: Mode = 'title';
   let sim = new Sim(1);
   let god = false;
@@ -49,6 +71,7 @@ async function boot() {
     sim.god = god;
     acc = 0;
     mode = 'playing';
+    bgm?.play('run');
     screens.hideAll();
     hud.show(true);
   }
@@ -70,6 +93,7 @@ async function boot() {
   function toTitle() {
     sim = new Sim(1);
     mode = 'title';
+    bgm?.play('title');
     hud.show(false);
     screens.showTitle(save);
   }
@@ -90,11 +114,22 @@ async function boot() {
       pick: (i) => sim.pick(i),
       reroll: () => sim.reroll(),
       banish: (i) => sim.banish(i),
-      volume: (v) => { save.settings.volume = v; writeSave(save); },
+      volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
+      mute: (m) => setMuted(m),
     },
     renderer.tex.icons,
   );
+  function setMuted(m: boolean) {
+    save.settings.muted = m;
+    writeSave(save);
+    bgm?.setMuted(m);
+    screens.setMuted(m);
+    hud.setMuted(m);
+  }
+  hud.muteBtn.addEventListener('click', () => setMuted(!save.settings.muted));
+  hud.setMuted(save.settings.muted);
   screens.showTitle(save);
+  bgm?.play('title');
   input.onPause = () => { if (mode === 'playing') setPaused(true); else if (mode === 'paused') setPaused(false); };
   hud.pauseBtn.addEventListener('click', () => setPaused(true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
@@ -127,8 +162,6 @@ async function boot() {
     }
   });
 
-  loadManifest().then((m) => { if (m) console.info('maple manifest loaded', m.version); });
-
   if (import.meta.env.DEV || /[?&]bot\b/.test(location.search)) {
     const api = {
       get sim() { return sim; },
@@ -152,6 +185,8 @@ async function boot() {
       autopick(on: boolean) { autopick = on; },
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
+      /** what real Maple art was loaded (null = placeholders) */
+      maple: () => (art ? { ...art.counts, bgm: art.bgm } : null),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),
     };
     (window as unknown as { game: typeof api }).game = api;

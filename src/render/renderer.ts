@@ -3,6 +3,8 @@ import { BOSSES, NOVA_RADIUS, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import { BAG, ELIXIR, GEM, MESO, POTION } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
+import { frameAt } from '../maple/art.ts';
+import type { Anim, MapleArt, MobArt } from '../maple/art.ts';
 import { RES, buildTextures } from './textures.ts';
 import type { MobTex, Textures } from './textures.ts';
 
@@ -10,14 +12,22 @@ const PX = PX_PER_YD;
 const MAX_DMG_NUMBERS = 120;
 const MAX_VFX = 110;
 const MAX_GHOSTS = 100;
+const MAX_ANIMFX = 60;
+/** Maple mobs stand with their feet this many radii below the sim position (the hit circle sits on the body) */
+const FOOT = 0.7;
 const MAX_DECOS = 90;
 const DECO_CELL = 14; // yards
 const SCALE = 1 / RES;
 
-interface EnemyView { sp: Sprite; stamp: number; barBg: Sprite | null; barFg: Sprite | null; tex: MobTex | null; flashing: boolean }
+interface EnemyView {
+  sp: Sprite; stamp: number; barBg: Sprite | null; barFg: Sprite | null; tex: MobTex | null; flashing: boolean;
+  /** real-art state: current mob art, animation, time in it, remaining hit1 time */
+  art: MobArt | null; act: Anim | null; t: number; hitT: number; flashPrev: boolean;
+}
 interface DmgNum { t: BitmapText; life: number; vy: number; active: boolean; max: number }
 interface Vfx { sp: Sprite; active: boolean; t: number; dur: number; s0: number; s1: number; a0: number; a1: number; x: number; y: number; vy: number }
-interface Ghost { sp: Sprite; active: boolean; t: number; s: number }
+interface Ghost { sp: Sprite; active: boolean; t: number; s: number; anim: Anim | null; age: number }
+interface AnimFx { sp: Sprite; active: boolean; anim: Anim | null; t: number }
 
 function hash2(x: number, y: number): number {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
@@ -43,7 +53,7 @@ export class Renderer {
   private viewPool: EnemyView[] = [];
   private pickupViews = new Map<Pickup, { sp: Sprite; stamp: number }>();
   private pickupPool: Sprite[] = [];
-  private projViews = new Map<Projectile, { sp: Sprite; stamp: number }>();
+  private projViews = new Map<Projectile, { sp: Sprite; stamp: number; t: number }>();
   private projPool: Sprite[] = [];
   private areaViews = new Map<Area, { sp: Sprite; stamp: number }>();
   private areaPool: Sprite[] = [];
@@ -53,6 +63,9 @@ export class Renderer {
   private vfxNext = 0;
   private ghosts: Ghost[] = [];
   private ghostNext = 0;
+  private animFx: AnimFx[] = [];
+  private animFxNext = 0;
+  private art: MapleArt | null;
   private danger: { fill: Sprite; ring: Sprite }[] = [];
   private stamp = 0;
   private time = 0;
@@ -60,9 +73,11 @@ export class Renderer {
   camX = 0;
   camY = 0;
 
-  constructor(app: Application) {
+  constructor(app: Application, art: MapleArt | null = null) {
     this.app = app;
+    this.art = art;
     this.tex = buildTextures();
+    if (art) Object.assign(this.tex.icons, art.icons);
     const tx = this.tex;
     this.ground = new TilingSprite({ texture: tx.ground, width: 16, height: 16 });
     app.stage.addChild(this.ground);
@@ -101,7 +116,13 @@ export class Renderer {
       const sp = new Sprite(tx.mobs[0].frames[0]);
       sp.anchor.set(0.5, 0.75); sp.visible = false;
       this.entities.addChild(sp);
-      this.ghosts.push({ sp, active: false, t: 0, s: 1 });
+      this.ghosts.push({ sp, active: false, t: 0, s: 1, anim: null, age: 0 });
+    }
+    for (let i = 0; i < MAX_ANIMFX; i++) {
+      const sp = new Sprite(tx.disc);
+      sp.visible = false;
+      this.fxLayer.addChild(sp);
+      this.animFx.push({ sp, active: false, anim: null, t: 0 });
     }
     for (let i = 0; i < 6; i++) {
       const fill = new Sprite(tx.disc), ring = new Sprite(tx.ring);
@@ -129,11 +150,12 @@ export class Renderer {
     const sp = new Sprite(this.tex.mobs[0].frames[0]);
     sp.anchor.set(0.5, 0.82);
     this.entities.addChild(sp);
-    return { sp, stamp: 0, barBg: null, barFg: null, tex: null, flashing: false };
+    return { sp, stamp: 0, barBg: null, barFg: null, tex: null, flashing: false, art: null, act: null, t: 0, hitT: 0, flashPrev: false };
   }
 
   private releaseView(v: EnemyView) {
     v.sp.visible = false;
+    v.art = null; v.act = null; v.tex = null; v.hitT = 0; v.flashPrev = false;
     if (v.barBg) { v.barBg.visible = false; v.barFg!.visible = false; }
     this.viewPool.push(v);
   }
@@ -175,6 +197,17 @@ export class Renderer {
     v.s0 = v.s1 = -1; // marks a line: keep scale
   }
 
+  /** Plays a real-art frame sequence once, anchored at its origin, at pixel position (x, y). */
+  private spawnAnim(a: Anim, x: number, y: number) {
+    const f = this.animFx[this.animFxNext];
+    this.animFxNext = (this.animFxNext + 1) % MAX_ANIMFX;
+    f.anim = a; f.t = 0; f.active = true;
+    f.sp.texture = a.tex[0];
+    f.sp.anchor.set(a.ax[0], a.ay[0]);
+    f.sp.position.set(x, y);
+    f.sp.visible = true;
+  }
+
   private number(x: number, y: number, text: string, tint: number, size: number, life = 0.75) {
     const d = this.dmg[this.dmgNext];
     this.dmgNext = (this.dmgNext + 1) % MAX_DMG_NUMBERS;
@@ -192,10 +225,13 @@ export class Renderer {
   private handle(sim: Sim, e: SimEvent) {
     const tx = this.tex;
     switch (e.type) {
-      case 'hit':
+      case 'hit': {
+        const ha = this.art?.skills.get(e.skill)?.hit;
+        if (ha) this.spawnAnim(ha, e.x * PX, e.y * PX);
         if (e.crit) this.number(e.x, e.y, e.amount + '!', 0xff5a4a, 27, 0.9);
         else this.number(e.x, e.y, String(e.amount), e.boss ? 0xffb060 : 0xff9a2e, 17);
         break;
+      }
       case 'playerHit':
         this.number(e.x, e.y - 1.2, '-' + Math.round(e.amount), 0xc070ff, 24, 1.0);
         this.hurt = 0.25;
@@ -203,20 +239,41 @@ export class Renderer {
       case 'death': {
         const g = this.ghosts[this.ghostNext];
         this.ghostNext = (this.ghostNext + 1) % MAX_GHOSTS;
-        const mt = e.boss >= 0 ? tx.bosses[e.boss] : tx.mobs[e.tier];
-        g.sp.texture = mt.flash[0];
+        const ma = this.art ? (e.boss >= 0 ? this.art.bosses[e.boss] : this.art.tiers[e.tier]) : null;
         g.sp.tint = 0xffffff;
-        g.sp.position.set(e.x * PX, e.y * PX);
         g.sp.zIndex = e.y * PX;
-        g.s = SCALE;
-        g.sp.scale.set(SCALE);
         g.sp.alpha = 0.9; g.sp.visible = true;
-        g.active = true; g.t = e.boss >= 0 ? 0.7 : 0.28;
+        g.active = true;
+        if (ma?.die) {
+          // real art: play die1 once where the mob stood, native size, facing as it was
+          const r = e.boss >= 0 ? 1.6 * BOSSES[e.boss].scale : e.big ? 1.0 : 0.6;
+          g.anim = ma.die; g.age = 0;
+          g.t = Math.min(e.boss >= 0 ? 2.5 : 1.2, ma.die.total + 0.15);
+          g.sp.texture = ma.die.tex[0];
+          g.sp.anchor.set(ma.die.ax[0], ma.die.ay[0]);
+          g.sp.position.set(e.x * PX, e.y * PX + r * PX * FOOT);
+          g.sp.scale.set(-e.facing, 1);
+          g.sp.alpha = 1;
+        } else {
+          const mt = e.boss >= 0 ? tx.bosses[e.boss] : tx.mobs[e.tier];
+          g.anim = null;
+          g.sp.texture = mt.flash[0];
+          g.sp.anchor.set(0.5, 0.75);
+          g.sp.position.set(e.x * PX, e.y * PX);
+          g.s = SCALE;
+          g.sp.scale.set(SCALE);
+          g.t = e.boss >= 0 ? 0.7 : 0.28;
+        }
         if (e.boss >= 0) this.ringFx(tx.ring, e.x, e.y, 10, 0.8, 0xffd23a);
         break;
       }
       case 'cast': {
         const def = SKILL_BY_KEY[e.skill];
+        const ef = this.art?.skills.get(e.skill)?.effect;
+        if (ef) {
+          if (e.kind === 'nova') this.spawnAnim(ef, e.x * PX, e.y * PX);
+          else if (e.kind === 'ground' || e.kind === 'strike') this.spawnAnim(ef, e.tx * PX, e.ty * PX);
+        }
         const el = def?.element;
         const tint = el === 'fire' ? 0xff7a2a : el === 'ice' ? 0x6fd6ff : el === 'lightning' ? 0xffe84a : el === 'poison' ? 0x62d85e : 0xb58cff;
         if (e.kind === 'bolt') this.ringFx(tx.disc, e.x, e.y, e.r, 0.3, tint, 0.8);
@@ -317,22 +374,33 @@ export class Renderer {
       if (!v) { v = this.getView(); this.enemyViews.set(e, v); }
       v.stamp = stamp;
       const boss = e.boss >= 0;
-      const mt = boss ? tx.bosses[e.boss] : tx.mobs[e.tier];
-      const flash = e.flash > 0;
-      const fr = e.moving ? (frameN + ((e.phase * 3) | 0)) & 1 : 0;
-      if (v.tex !== mt || v.flashing !== flash || v.sp.texture !== (flash ? mt.flash[fr] : mt.frames[fr])) {
-        v.tex = mt; v.flashing = flash;
-        v.sp.texture = flash ? mt.flash[fr] : mt.frames[fr];
-      }
       const sp = v.sp;
-      sp.position.set(e.x * PX, e.y * PX);
+      const ma = this.art ? (boss ? this.art.bosses[e.boss] : this.art.tiers[e.tier]) : null;
+      let footY = e.y * PX;
+      let barTop = e.r * PX * 1.9;
+      if (ma) {
+        // real art: native pixel size (the world container already applies the zoom), feet near the hit circle's lower edge
+        footY += e.r * PX * FOOT;
+        barTop = Math.max(e.r * PX * 1.2, this.animateMob(v, e, ma, dt) - e.r * PX * FOOT);
+        sp.scale.set(-e.facing, 1); // Maple sprites face left
+      } else {
+        if (v.art) { v.art = null; v.act = null; v.tex = null; sp.anchor.set(0.5, 0.82); }
+        const mt = boss ? tx.bosses[e.boss] : tx.mobs[e.tier];
+        const flash = e.flash > 0;
+        const fr = e.moving ? (frameN + ((e.phase * 3) | 0)) & 1 : 0;
+        if (v.tex !== mt || v.flashing !== flash || v.sp.texture !== (flash ? mt.flash[fr] : mt.frames[fr])) {
+          v.tex = mt; v.flashing = flash;
+          v.sp.texture = flash ? mt.flash[fr] : mt.frames[fr];
+        }
+        sp.scale.set(SCALE * e.facing, SCALE);
+      }
+      sp.position.set(e.x * PX, footY);
       sp.zIndex = e.y * PX;
-      sp.scale.set(SCALE * e.facing, SCALE);
       sp.tint = e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
       if (boss) {
         this.ensureBar(v);
-        const bw = Math.max(70, e.r * PX * 2);
-        const by = e.y * PX - e.r * PX * 1.9 - 10;
+        const bw = Math.max(70, e.r * PX * 2, ma ? sp.texture.frame.width * 0.45 : 0);
+        const by = e.y * PX - barTop - 10;
         v.barBg!.visible = v.barFg!.visible = true;
         v.barBg!.width = bw + 4; v.barBg!.position.set(e.x * PX, by);
         v.barFg!.width = Math.max(0, (e.hp / e.maxHp) * bw); v.barFg!.position.set(e.x * PX - bw / 2, by);
@@ -391,15 +459,28 @@ export class Renderer {
         const sp = this.projPool.pop() ?? this.topSprite(this.topLayer);
         sp.anchor.set(0.85, 0.5);
         sp.visible = true;
-        v = { sp, stamp };
+        v = { sp, stamp, t: 0 };
         this.projViews.set(p, v);
       }
       v.stamp = stamp;
-      const t = tx.missiles[p.skill] ?? tx.missiles.magic_claw;
-      if (v.sp.texture !== t) v.sp.texture = t;
-      v.sp.scale.set(SCALE * 1.2);
+      const ball = this.art?.skills.get(p.skill)?.ball;
+      if (ball) {
+        // real art faces left: mirror for rightward flight, rotate by the remaining angle
+        v.t += dt;
+        const i = frameAt(ball, v.t);
+        if (v.sp.texture !== ball.tex[i]) v.sp.texture = ball.tex[i];
+        v.sp.anchor.set(ball.ax[i], ball.ay[i]);
+        const a = Math.atan2(p.vy, p.vx);
+        if (p.vx < 0) { v.sp.scale.set(1, 1); v.sp.rotation = a < 0 ? a + Math.PI : a - Math.PI; }
+        else { v.sp.scale.set(-1, 1); v.sp.rotation = a; }
+      } else {
+        const t = tx.missiles[p.skill] ?? tx.missiles.magic_claw;
+        if (v.sp.texture !== t) v.sp.texture = t;
+        v.sp.anchor.set(0.85, 0.5);
+        v.sp.scale.set(SCALE * 1.2);
+        v.sp.rotation = Math.atan2(p.vy, p.vx);
+      }
       v.sp.position.set(p.x * PX, p.y * PX - 16);
-      v.sp.rotation = Math.atan2(p.vy, p.vx);
     }
     for (const [k, v] of this.projViews) {
       if (v.stamp !== stamp) { this.projViews.delete(k); v.sp.visible = false; this.projPool.push(v.sp); }
@@ -441,8 +522,26 @@ export class Renderer {
       if (!g.active) continue;
       g.t -= dt;
       if (g.t <= 0) { g.active = false; g.sp.visible = false; continue; }
+      if (g.anim) {
+        g.age += dt;
+        const k = frameAt(g.anim, g.age, false);
+        g.sp.texture = g.anim.tex[k];
+        g.sp.anchor.set(g.anim.ax[k], g.anim.ay[k]);
+        g.sp.alpha = Math.min(1, g.t * 6);
+        continue;
+      }
       g.sp.alpha = Math.min(1, g.t * 4);
       g.sp.scale.set(g.s * (0.6 + 0.4 * Math.min(1, g.t * 4)), g.s * (1 + 0.1 * (1 - Math.min(1, g.t * 4))));
+    }
+    for (let i = 0; i < MAX_ANIMFX; i++) {
+      const f = this.animFx[i];
+      if (!f.active) continue;
+      f.t += dt;
+      const a = f.anim!;
+      if (f.t >= a.total) { f.active = false; f.sp.visible = false; continue; }
+      const k = frameAt(a, f.t, false);
+      f.sp.texture = a.tex[k];
+      f.sp.anchor.set(a.ax[k], a.ay[k]);
     }
     for (let i = 0; i < MAX_DMG_NUMBERS; i++) {
       const d = this.dmg[i];
@@ -453,6 +552,24 @@ export class Renderer {
       d.vy *= 0.94;
       d.t.alpha = Math.min(1, (d.life / d.max) * 2.2);
     }
+  }
+
+  /** Picks and sets the current frame of a real-art mob; returns the frame's origin height in px (sprite top above the foot). */
+  private animateMob(v: EnemyView, e: Enemy, ma: MobArt, dt: number): number {
+    if (v.art !== ma) { v.art = ma; v.act = null; v.hitT = 0; v.flashPrev = false; v.tex = null; }
+    const flash = e.flash > 0;
+    if (flash && !v.flashPrev && ma.hit) v.hitT = Math.min(0.35, Math.max(0.2, ma.hit.total));
+    v.flashPrev = flash;
+    let a: Anim;
+    if (v.hitT > 0 && ma.hit) { v.hitT -= dt; a = ma.hit; }
+    else if (e.castT > 0 && ma.attack) a = ma.attack;
+    else a = (e.moving ? ma.move ?? ma.stand : ma.stand ?? ma.move)!;
+    if (a !== v.act) { v.act = a; v.t = a === ma.hit ? 0 : e.phase * 0.2; } else v.t += dt;
+    const i = frameAt(a, v.t, a !== ma.hit);
+    const t = a.tex[i];
+    if (v.sp.texture !== t) v.sp.texture = t;
+    v.sp.anchor.set(a.ax[i], a.ay[i]);
+    return a.ay[i] * t.frame.height;
   }
 
   private topSprite(layer: Container): Sprite {
