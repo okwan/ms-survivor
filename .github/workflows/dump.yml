@@ -1,0 +1,40 @@
+name: WZ dump
+
+# Dev tool: prints the layout of WZ images that new extraction code will read.
+on:
+  push:
+    branches: ['claude/wz-dump']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sudo apt-get install -y innoextract || true
+      - name: Download client and extract .wz files
+        run: |
+          curl -sSL -o saga.exe https://archive.org/download/maple-saga-20171113/MapleSaga_20171113.exe
+          innoextract -s -I Base.wz -I Character.wz -I UI.wz -I Effect.wz -I Map.wz -d inno saga.exe
+          mkdir -p wz && find inno -iname '*.wz' -exec mv {} wz/ \;
+          ls -la wz
+      - name: Dump
+        run: >
+          node scripts/dump-wz.mjs wz
+          'Base.wz:zmap.img:1' 'Base.wz:smap.img:1'
+          'Character.wz:000*' 'Character.wz:Face/*' 'Character.wz:Hair/*'
+          'Character.wz:Coat/*' 'Character.wz:Longcoat/*' 'Character.wz:Pants/*' 'Character.wz:Shoes/*' 'Character.wz:Weapon/*'
+          'Character.wz:00002000.img:3' 'Character.wz:00012000.img:3'
+          'Character.wz:Face/00020000.img:3' 'Character.wz:Hair/00030000.img:3'
+          'Character.wz:Coat/01040002.img:3' 'Character.wz:Pants/01060002.img:3' 'Character.wz:Weapon/01302000.img:3'
+          'UI.wz:*' 'UI.wz:StatusBar.img:2' 'UI.wz:Basic.img:2' 'UI.wz:Login.img:2' 'UI.wz:UIWindow.img:1'
+          'Effect.wz:*' 'Effect.wz:BasicEff.img:2'
+          'Map.wz:Tile/*' 'Map.wz:Obj/*' 'Map.wz:Back/*' 'Map.wz:Map/Map1/*'
+          'Map.wz:Tile/grassySoil.img:2' 'Map.wz:Map/Map1/100000000.img:2'
