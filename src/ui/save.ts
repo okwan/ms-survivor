@@ -1,10 +1,10 @@
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number };
+  settings: { volume: number; muted: boolean };
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7 } };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, muted: false } };
 
 export function loadSave(): SaveData {
   try {
@@ -14,7 +14,10 @@ export function loadSave(): SaveData {
     return {
       mesos: typeof o.mesos === 'number' ? o.mesos : 0,
       bestTime: typeof o.bestTime === 'number' ? o.bestTime : 0,
-      settings: { volume: typeof o.settings?.volume === 'number' ? o.settings.volume : DEFAULT.settings.volume },
+      settings: {
+        volume: typeof o.settings?.volume === 'number' ? o.settings.volume : DEFAULT.settings.volume,
+        muted: o.settings?.muted === true,
+      },
     };
   } catch {
     return { ...DEFAULT, settings: { ...DEFAULT.settings } };

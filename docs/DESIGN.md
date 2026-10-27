@@ -37,7 +37,7 @@ World units are yards (Azeroth's unit). `PX_PER_YD = 20` at zoom 1. Player speed
 ### Enemy ladder (tier: name, v83 mob id, hp, speed yd/s, damage, xp, scale, big)
 
 Health, damage and xp are The Barrens ladder; names and ids are classic Victoria Island mobs roughly in level order.
-Mob ids are v83 Mob.wz image names (`0100100.img`) and are unverified until the asset step reads String.wz.
+Mob ids are v83 Mob.wz image names (`0100100.img`); the asset step checks them against String.wz and logs any MISMATCH.
 
 ```
  0 Snail            100100   8  3.6  2  1
@@ -163,8 +163,25 @@ In dev builds and when the URL has `?bot`, expose `window.game` with:
 `autopick(on)` (pick card 0 automatically), and `snapshot()` returning a plain object: elapsed, hp, maxHp, level, xp, kills, alive enemies,
 boss info, owned skills and passives, pending card offer, over/won.
 
-## Assets hook
+## Assets (milestone 3)
 
-`src/maple/assets.ts` holds the literal list of wanted WZ paths (mob images by id from the ladder and bosses, skill ids, later UI and BGM).
-At boot it tries to fetch `maple/manifest.json`; if missing or invalid it returns null and the game uses placeholder art. In this
-milestone only the loader stub and the lists exist.
+`src/maple/assets.ts` is the single source of truth: the wanted mob ids (ladder + bosses, from `data.ts`), skill and passive ids,
+BGM nodes and the manifest types. `scripts/fetch-maple.ts` (run in CI after `vite build`) imports it, gets Mob/Skill/String/Sound `.wz`
+(download from the mirrors in `scripts/maple-sources.json`, `innoextract` then `7z`; cached in `.maple-cache/wz/`) and writes `dist/maple/`:
+
+- `mobs/<id7>.png` atlas per mob (stand, move, hit1, die1, attack1; `info/link` followed; `fly` stands in for a missing `move`), frame records
+  `{action,index,x,y,w,h,ox,oy,delay}`, info (maxHP, speed, level, bodyAttack), name from String.wz.
+- `skills/<id7>.png` atlas (effect, ball, hit) and `skills/<id7>-icon.png` per skill and passive.
+- `bgm/run.mp3` (Bgm00.img/FloralLife) and `bgm/title.mp3` (BgmUI.img/Title), raw Sound_DX8 payload.
+- `manifest.json`: `{version, source:{mirror,region,wzVersion}, mobs, skills, bgm}`, paths relative to `maple/`.
+
+The step never fails the build. The CI log has a mob table (tier, id, expected name, String.wz name, MISMATCH/MISSING), totals, missing
+lists, per-skill lines, BGM header bytes and ASCII previews (Snail, Orange Mushroom, Mano, Zakum, Magic Claw icon).
+`scripts/test-maple.ts` runs it against synthetic WZ files (`scripts/wz-writer.mjs`, `scripts/maple-fixture.mjs`); no Nexon data is in the repo.
+
+In the game, `loadManifest()` + `buildArt()` run at boot (12 s cap). Everything is optional and falls back piece by piece:
+mobs draw their real frames (move while walking, hit1 on damage, die1 on death, attack1 while a boss casts) at native size times the world zoom,
+anchored at the WZ origin and mirrored so they face their travel direction (art faces left); sim radii are unchanged. Skill icons replace the
+placeholder icons in the HUD and level-up cards; `ball` frames replace missiles, `hit` frames play on impact, `effect` frames on nova, ground and strike casts.
+BGM (`src/maple/audio.ts`) plays the title track on the menu and FloralLife in runs, looped, after the first user gesture, with the saved volume
+and a mute toggle (title screen button, HUD `M` button).

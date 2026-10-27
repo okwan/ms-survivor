@@ -93,9 +93,9 @@ export interface Card {
 }
 
 export type SimEvent =
-  | { type: 'hit'; x: number; y: number; amount: number; crit: boolean; boss: boolean }
+  | { type: 'hit'; x: number; y: number; amount: number; crit: boolean; boss: boolean; skill: string }
   | { type: 'playerHit'; x: number; y: number; amount: number }
-  | { type: 'death'; x: number; y: number; tier: number; boss: number; big: boolean }
+  | { type: 'death'; x: number; y: number; tier: number; boss: number; big: boolean; facing: number }
   | { type: 'cast'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number; r: number; pts: number[] | null }
   | { type: 'novaHit'; x: number; y: number; r: number; hit: boolean }
   | { type: 'pickup'; kind: PickupKind; x: number; y: number; value: number }

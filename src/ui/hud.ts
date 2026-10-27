@@ -11,6 +11,7 @@ export class Hud {
   readonly root: HTMLDivElement;
   readonly radar: Radar;
   readonly pauseBtn: HTMLButtonElement;
+  readonly muteBtn: HTMLButtonElement;
   private cache = new Map<HTMLElement, string>();
   private el: Record<string, HTMLElement> = {};
   private skillSlots: HTMLElement[] = [];
@@ -48,7 +49,14 @@ export class Hud {
     this.pauseBtn.className = 'pausebtn';
     this.pauseBtn.textContent = 'II';
     this.pauseBtn.title = 'Pause (Esc)';
-    this.el.tr.appendChild(this.pauseBtn);
+    this.muteBtn = document.createElement('button');
+    this.muteBtn.className = 'pausebtn mutebtn';
+    this.muteBtn.textContent = 'M';
+    this.muteBtn.title = 'Mute music';
+    const btns = document.createElement('div');
+    btns.className = 'hud-btns';
+    btns.append(this.muteBtn, this.pauseBtn);
+    this.el.tr.appendChild(btns);
     for (let i = 0; i < MAX_SKILLS; i++) this.skillSlots.push(this.makeSlot(this.el.skills));
     for (let i = 0; i < MAX_PASSIVES; i++) this.passiveSlots.push(this.makeSlot(this.el.passives));
   }
@@ -86,6 +94,11 @@ export class Hud {
       img.removeAttribute('src');
       slot.lastElementChild!.textContent = '';
     }
+  }
+
+  setMuted(m: boolean) {
+    this.muteBtn.classList.toggle('off', m);
+    this.muteBtn.title = m ? 'Unmute music' : 'Mute music';
   }
 
   show(on: boolean) {

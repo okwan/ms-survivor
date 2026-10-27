@@ -13,6 +13,7 @@ export interface ScreenHandlers {
   reroll(): void;
   banish(i: number): void;
   volume(v: number): void;
+  mute(m: boolean): void;
 }
 
 export interface Results {
@@ -46,6 +47,8 @@ export class Screens {
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
   private volEl!: HTMLInputElement;
+  private muteEl!: HTMLButtonElement;
+  private muted = false;
 
   constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>) {
     this.h = h;
@@ -90,6 +93,8 @@ export class Screens {
     this.volEl.type = 'range'; this.volEl.min = '0'; this.volEl.max = '1'; this.volEl.step = '0.05';
     this.volEl.addEventListener('input', () => this.h.volume(parseFloat(this.volEl.value)));
     vol.appendChild(this.volEl);
+    this.muteEl = this.btn('Mute', 'mute', () => this.h.mute(!this.muted));
+    vol.appendChild(this.muteEl);
     body.appendChild(vol);
     body.appendChild(el('p', 'hint', 'Move: WASD / arrow keys, or drag on the left half of a touch screen.<br>Skills fire automatically. Pause: Esc or P.'));
     return root;
@@ -123,10 +128,16 @@ export class Screens {
     return root;
   }
 
+  setMuted(m: boolean) {
+    this.muted = m;
+    this.muteEl.textContent = m ? 'Unmute' : 'Mute';
+  }
+
   showTitle(save: SaveData) {
     this.bestEl.textContent = save.bestTime > 0 ? fmtTime(save.bestTime) : '-';
     this.mesoEl.textContent = String(save.mesos);
     this.volEl.value = String(save.settings.volume);
+    this.setMuted(save.settings.muted);
     this.hideAll();
     this.title.classList.remove('hidden');
   }

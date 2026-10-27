@@ -33,6 +33,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .bar.cast span { font-size: 10px; }
 .hud-tr { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .radar { border: 2px solid #fff; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.hud-btns { display: flex; gap: 6px; }
+.mutebtn.off { filter: grayscale(1); opacity: .65; }
+.volume .btn { font-size: 12px; padding: 4px 10px; }
 .pausebtn { pointer-events: auto; width: 34px; height: 26px; border-radius: 8px; border: 2px solid #fff; background: linear-gradient(#5aa8f0, #1f5fc0); color: #fff; font-weight: 900; cursor: pointer; }
 .raid { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font-size: clamp(18px, 3.4vw, 34px); font-weight: 900; color: #ffe27a; text-align: center; width: 90vw; -webkit-text-stroke: 1px #5a1000; text-shadow: 0 3px 0 #5a1000, 0 0 14px rgba(255,80,0,.8); letter-spacing: .03em; }
 .hud-skills { position: absolute; left: 12px; bottom: 74px; display: flex; flex-direction: column; gap: 4px; }

@@ -28,9 +28,28 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # Future asset step: node scripts/fetch-maple.mjs dist will go here.
-      # It must never fail the build (handle errors internally / exit 0).
-      - run: echo "asset step placeholder (fetch-maple.mjs not wired up yet)"
+      # Real MapleStory art and music, extracted from a client downloaded here. Never fails the build:
+      # on any problem the script logs a warning and the site keeps its placeholder art.
+      - name: Free disk space
+        continue-on-error: true
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install extraction tools
+        continue-on-error: true
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y innoextract p7zip-full || true
+      - uses: actions/cache@v4
+        with:
+          path: .maple-cache
+          key: maple-wz-${{ hashFiles('scripts/maple-sources.json') }}
+          restore-keys: maple-wz-
+      - name: Extract Maple assets
+        continue-on-error: true
+        run: node --experimental-strip-types scripts/fetch-maple.ts dist
+        env:
+          MAPLE_ARCHIVE_URL: ${{ vars.MAPLE_ARCHIVE_URL }}
       - if: github.ref == 'refs/heads/main' && vars.PAGES_ENABLED == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
