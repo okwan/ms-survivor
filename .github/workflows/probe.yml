@@ -1,0 +1,58 @@
+name: Maple probe
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - scripts/probe-maple.mjs
+      - scripts/wz.mjs
+      - scripts/png.mjs
+      - .github/workflows/probe.yml
+  workflow_dispatch:
+    inputs:
+      archive_url:
+        description: Maple client archive URL (overrides vars.MAPLE_ARCHIVE_URL)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install extraction tools
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y p7zip-full || true
+          sudo apt-get install -y p7zip-rar || true
+          sudo apt-get install -y innoextract || true
+          sudo apt-get install -y unrar || true
+      - name: Install gdown
+        continue-on-error: true
+        run: pip install gdown
+      - uses: actions/cache@v4
+        with:
+          path: .maple-cache
+          key: maple-${{ hashFiles('scripts/probe-maple.mjs') }}
+          restore-keys: maple-
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h
+      - name: Run probe
+        run: node scripts/probe-maple.mjs probe-out
+        env:
+          MAPLE_ARCHIVE_URL: ${{ inputs.archive_url || vars.MAPLE_ARCHIVE_URL }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maple-probe
+          path: probe-out
+          if-no-files-found: ignore
