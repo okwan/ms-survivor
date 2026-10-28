@@ -46,4 +46,20 @@ ok(Object.values(WINDOW_SIZE).every(([w, h]) => w > 100 && h > 100), 'window siz
 eq([statusScale(SB_W), statusScale(1280), statusScale(1600), statusScale(2500)], [1, 1, 2, 3], 'integer scales for wide windows');
 ok(Math.abs(statusScale(400) - 0.5) < 1e-9 && statusScale(360) * SB_W <= 360, 'a phone-width window shrinks the bar to fit');
 
+// ---- real-window mapping from detected frame rectangles (fixture rects) ----
+import { mapEquip, mapInventory } from '../src/ui/realwin.ts';
+import { EQUIP_FIXTURE_RECTS, ITEM_FIXTURE_RECTS } from './maple-fixture.mjs';
+const re = mapEquip(EQUIP_FIXTURE_RECTS)!;
+ok(re, 'the fixture equip frames map to the Equip window');
+eq(re.slots.length, 17, 'all 17 frames matched');
+const rs = (p: string) => re.slots.find((s) => s.pos === p)!;
+ok(rs('cap').y < rs('weapon').y && rs('ring1').x < rs('pendant').x && rs('coat').x === rs('ring2').x + 34 && rs('weapon').x < rs('coat').x, 'positions keep the Maple order');
+ok(rs('cap').x === 74 && rs('pants').y === 34 + 5 * 36, 'frames sit where the background has them');
+ok(re.preview.x >= rs('ring1').x + 32 && re.preview.x + re.preview.w <= rs('pendant').x && re.preview.y > rs('cap').y && re.preview.y + re.preview.h < rs('weapon').y + 1, 'the character area lies between the side columns');
+eq(mapEquip(EQUIP_FIXTURE_RECTS.slice(0, 6)), null, 'too few frames: fall back to the CSS skin');
+eq(mapEquip(ITEM_FIXTURE_RECTS.slice(0, 12).map((r) => ({ ...r, x: r.x % 7 }))), null, 'a grid that is not the equip window: fall back');
+const ri = mapInventory(ITEM_FIXTURE_RECTS)!;
+eq([ri.cells.length, ri.cells[0].x, ri.cells[4].y > ri.cells[0].y, ri.cells[3].x > ri.cells[0].x], [24, 8, true, true], 'bag cells in reading order');
+eq(mapInventory(EQUIP_FIXTURE_RECTS), null, 'five columns are not an inventory');
+
 console.log(`test-ui: ok (${checks} checks)`);
