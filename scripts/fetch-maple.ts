@@ -682,11 +682,11 @@ async function acquire(cacheDir: string): Promise<{ wzDir: string; mirror: strin
       log(`trying mirror ${url}`);
       await download(url, file);
       extractWz(file, wzDir, cacheDir);
-      if (present(wzDir).includes('Mob')) {
-        writeFileSync(join(wzDir, '.source.json'), JSON.stringify({ mirror: url, at: new Date().toISOString() }));
-        return { wzDir, mirror: url };
-      }
-      warn(`no Mob.wz could be extracted from ${url}`);
+      const got = present(wzDir);
+      if (got.includes('Mob')) writeFileSync(join(wzDir, '.source.json'), JSON.stringify({ mirror: url, at: new Date().toISOString() }));
+      // a mirror that leaves files missing (e.g. one that ships loose .img instead of .wz) falls through to the next one
+      if (got.length === WZ_FILES.length) return { wzDir, mirror: url };
+      warn(`${url} left ${WZ_FILES.filter((n) => !got.includes(n)).join(', ')} missing; trying the next mirror`);
     } catch (e) {
       warn(`mirror ${url} failed: ${(e as Error).message}`);
     } finally {
@@ -694,8 +694,9 @@ async function acquire(cacheDir: string): Promise<{ wzDir: string; mirror: strin
       rmSync(file, { force: true });
     }
   }
-  if (have.includes('Mob')) {
-    warn(`could not fetch ${WZ_FILES.filter((n) => !have.includes(n)).join(', ')}; using the incomplete cache (${have.join(', ')})`);
+  const got = present(wzDir);
+  if (got.includes('Mob')) {
+    warn(`could not fetch ${WZ_FILES.filter((n) => !got.includes(n)).join(', ')}; using what was extracted (${got.join(', ')})`);
     return { wzDir, mirror: readMirror() };
   }
   return null;
