@@ -56,6 +56,17 @@ export interface GearItem {
   stats: GearStats;
   /** a one-piece coat: the pants are not drawn */
   long: boolean;
+  /** upgrade slots from info/tuc (absent = DEFAULT_TUC in scrolls.ts) */
+  tuc?: number;
+  /** set on the worn copy of an item once scrolls were used on it (the pool's item is never changed) */
+  up?: ItemUpgrade;
+}
+
+/** What scrolls did to a worn item: successes, slots still free, and the stats they added (uncapped, on top of `stats`). */
+export interface ItemUpgrade {
+  plus: number;
+  left: number;
+  stats: GearStats;
 }
 
 /** One entry of the manifest's gear block. */
@@ -67,6 +78,8 @@ export interface GearEntry {
   /** gender, omitted = 2 */
   g?: 0 | 1 | 2;
   long?: boolean;
+  /** info/tuc, the number of upgrade slots */
+  tuc?: number;
   stats: GearStats;
   /** rectangle in the icon atlas and the icon's origin inside it; absent when the item has no info/icon */
   icon?: { x: number; y: number; w: number; h: number; ox: number; oy: number };
@@ -99,12 +112,21 @@ export function itemBonus(it: GearItem, cls: ClassKey): GearBonus {
     dmg += Math.min(att * GEAR_DMG_PER_ATT, GEAR_TIER_DMG_CAP * (it.tier + 1));
   }
   dmg += (s[MAIN_STAT[cls]] ?? 0) * GEAR_DMG_PER_STAT;
-  return {
+  const b = {
     dmg,
     armor: (s.pdd ?? 0) / GEAR_PDD_PER_ARMOR,
     hp: (s.mhp ?? 0) / GEAR_MHP_PER_HP,
     speed: (s.speed ?? 0) * GEAR_SPEED_PER_POINT,
   };
+  // scroll gains count in full (the weapon's tier cap only limits its base attack)
+  const u = it.up?.stats;
+  if (u) {
+    b.dmg += ((cls === 'magician' ? u.mad : u.pad) ?? 0) * GEAR_DMG_PER_ATT + (u[MAIN_STAT[cls]] ?? 0) * GEAR_DMG_PER_STAT;
+    b.armor += (u.pdd ?? 0) / GEAR_PDD_PER_ARMOR;
+    b.hp += (u.mhp ?? 0) / GEAR_MHP_PER_HP;
+    b.speed += (u.speed ?? 0) * GEAR_SPEED_PER_POINT;
+  }
+  return b;
 }
 
 /** Comparison score: the mapped values in display units (percent, points) added up. */
@@ -164,6 +186,7 @@ export class GearPool {
       list.push({
         id, slot: e.slot, name: typeof e.name === 'string' && e.name ? e.name : `Item ${id}`, level, job: e.job | 0,
         gender: e.g === 0 || e.g === 1 ? e.g : 2, tier: tierOfLevel(level), stats: e.stats ?? {}, long: !!e.long,
+        ...(typeof e.tuc === 'number' && e.tuc >= 0 ? { tuc: Math.floor(e.tuc) } : {}),
       });
     }
     return list.length ? new GearPool(list, true) : GearPool.placeholder();

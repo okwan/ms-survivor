@@ -7,6 +7,7 @@
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import type { AvatarManifest } from './avatar-core.ts';
 import type { RegionsSection, SfxSection } from './region-types.ts';
+import type { ItemsSection } from './items-types.ts';
 import type { AtlasRef, EffectsSection, MapSection, UiSection } from './world-types.ts';
 
 export const pad7 = (n: number) => String(n).padStart(7, '0');
@@ -63,7 +64,7 @@ export const BGM_NODES = {
 };
 
 /** The WZ archives needed (file stems). Later clients split them (Mob001.wz...), which the extractor also accepts. */
-export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Map', 'Effect', 'UI', 'Base', 'Character'] as const;
+export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Map', 'Effect', 'UI', 'Base', 'Character', 'Item'] as const;
 
 // ---- legacy lists, kept for later milestones (UI, map art) -------------------------------------------------------
 /** 'Mob/0100100.img' for every wanted mob. */
@@ -129,6 +130,8 @@ export interface MapleManifest {
   /** one map per run region, and sound effects (scripts/fetch-maple-regions.ts, fetch-maple-sfx.ts) */
   regions?: RegionsSection;
   sfx?: SfxSection;
+  /** potion / meso / scroll icons, the pet and the enchant effect (scripts/fetch-maple-items.ts) */
+  items?: ItemsSection;
 }
 
 /** Fetches maple/manifest.json. Returns null on any failure so the game falls back to placeholder art. */
@@ -151,6 +154,7 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       effects: data.effects,
       regions: data.regions && Array.isArray(data.regions.list) ? data.regions : undefined,
       sfx: data.sfx && typeof data.sfx === 'object' ? data.sfx : undefined,
+      items: data.items && typeof data.items === 'object' ? data.items : undefined,
     };
   } catch {
     return null;

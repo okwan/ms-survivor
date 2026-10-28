@@ -1,4 +1,6 @@
 import { CLASS_BY_KEY } from '../game/data.ts';
+import { sanitizeBook } from '../game/book.ts';
+import type { BookData } from '../game/book.ts';
 import { sanitizeLook } from '../maple/avatar-core.ts';
 import type { Look } from '../maple/avatar-core.ts';
 
@@ -11,11 +13,13 @@ export interface SavedCharacter {
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean };
+  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean };
   character: SavedCharacter | null;
+  /** Monster Book: kills per mob id, kept across runs (src/game/book.ts) */
+  book: BookData;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true }, character: null };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {} };
 
 function readCharacter(c: unknown): SavedCharacter | null {
   if (!c || typeof c !== 'object') return null;
@@ -29,7 +33,7 @@ function readCharacter(c: unknown): SavedCharacter | null {
 export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings } };
+    if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {} };
     const o = JSON.parse(raw) as Partial<SaveData>;
     return {
       mesos: typeof o.mesos === 'number' ? o.mesos : 0,
@@ -39,11 +43,13 @@ export function loadSave(): SaveData {
         sfxVolume: typeof o.settings?.sfxVolume === 'number' ? Math.max(0, Math.min(1, o.settings.sfxVolume)) : DEFAULT.settings.sfxVolume,
         muted: o.settings?.muted === true,
         autoEquip: o.settings?.autoEquip !== false,
+        pet: o.settings?.pet !== false,
       },
       character: readCharacter(o.character),
+      book: sanitizeBook(o.book),
     };
   } catch {
-    return { ...DEFAULT, settings: { ...DEFAULT.settings } };
+    return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {} };
   }
 }
 

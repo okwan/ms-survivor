@@ -5,6 +5,8 @@
 import { ImageSource, Rectangle, Texture } from 'pixi.js';
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import type { FrameRec, MapleManifest } from './assets.ts';
+import { buildItemArt } from './item-art.ts';
+import type { ItemArt } from './item-art.ts';
 import { buildRegionArt } from './region-art.ts';
 import type { RegionArt } from './region-art.ts';
 import type { UiPiece } from './world-types.ts';
@@ -100,6 +102,8 @@ export class MapleArt {
   bgmRegions: (string | null)[] = [];
   /** sound effect URLs by key (see scripts/fetch-maple-sfx.ts) */
   sfx: Record<string, string> = {};
+  /** potion / meso / scroll art, the pet and the enchant effect (null when the manifest has none) */
+  items: ItemArt | null = null;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement | null> {
@@ -198,6 +202,7 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
   await buildWorldArt(m, base, art, atlas);
   art.regions = await buildRegionArt(m, base, atlas);
   art.bgmRegions = art.regions.map((r) => r.bgm);
+  art.items = await buildItemArt(m, base, atlas);
   for (const [k, v] of Object.entries(m.sfx ?? {})) art.sfx[k] = base + v;
   art.tiers = tiers;
   art.bosses = bosses;

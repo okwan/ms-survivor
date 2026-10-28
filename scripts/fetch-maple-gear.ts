@@ -65,6 +65,7 @@ interface Candidate {
   gender: 0 | 1 | 2;
   stats: GearStats;
   where: string;
+  tuc: number;
 }
 
 /** classic items (the low ids of each thousand-block: 01002000..01002199) are preferred over the later event and novelty ones */
@@ -201,7 +202,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
         seen.tooHigh++;
         continue;
       }
-      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path });
+      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')) });
     }
     log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand/walk frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable; filters removed ${seen.noTuc} with tuc <= 0, ${seen.flagged} flagged timeLimited/notSale/exItem/setItemID/charmEXP/tradeBlock, ${seen.noStats} without a usable inc* stat, ${seen.tooHigh} above reqLevel ${MAX_GEAR_LEVEL}; ${cands.length} candidates`);
     const top = (m: Map<string, number>, k = 40) => [...m].sort((a, b) => b[1] - a[1]).slice(0, k).map(([s, c]) => `${s || '(none)'}x${c}`).join(' ');
@@ -288,7 +289,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
           (ids[c.slot] ??= []).push(c.id);
         }
         const entry: GearEntry = {
-          slot: c.slot, name: names.get(c.n) ?? `Item ${c.n}`, level: c.level, job: c.job, ...(c.gender !== 2 ? { g: c.gender } : {}), ...(c.long ? { long: true } : {}), stats: c.stats,
+          slot: c.slot, name: names.get(c.n) ?? `Item ${c.n}`, level: c.level, job: c.job, ...(c.gender !== 2 ? { g: c.gender } : {}), ...(c.long ? { long: true } : {}), tuc: c.tuc, stats: c.stats,
         };
         entries[c.id] = entry;
         // the icon (info/icon, 32x32-ish) with its origin

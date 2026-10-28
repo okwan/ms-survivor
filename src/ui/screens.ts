@@ -18,6 +18,9 @@ export interface ScreenHandlers {
   reroll(): void;
   banish(i: number): void;
   volume(v: number): void;
+  /** opens the Monster Book */
+  book(): void;
+  pet(on: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
 }
@@ -52,6 +55,7 @@ export class Screens {
   private h: ScreenHandlers;
   private icons: Record<string, string>;
   private quickBtn!: HTMLButtonElement;
+  private petEl!: HTMLInputElement;
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
   private volEl!: HTMLInputElement;
@@ -100,6 +104,11 @@ export class Screens {
     this.quickBtn.classList.add('hidden');
     body.appendChild(this.quickBtn);
     body.appendChild(this.btn('START', 'primary big', () => this.h.start()));
+    body.appendChild(this.btn('Monster Book', 'book-btn', () => this.h.book()));
+    const petOpt = el('label', 'pet-opt', '<input type="checkbox"> Pet (follows you and picks up mesos and potions)');
+    this.petEl = petOpt.querySelector('input')!;
+    this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
+    body.appendChild(petOpt);
     const vol = el('label', 'volume', 'Volume ');
     this.volEl = el('input', '');
     this.volEl.type = 'range'; this.volEl.min = '0'; this.volEl.max = '1'; this.volEl.step = '0.05';
@@ -158,6 +167,7 @@ export class Screens {
     const ch = save.character;
     this.quickBtn.classList.toggle('hidden', !ch);
     if (ch) this.quickBtn.textContent = `Quick start: ${ch.name} the ${ch.cls[0].toUpperCase()}${ch.cls.slice(1)}`;
+    this.petEl.checked = save.settings.pet;
     this.volEl.value = String(save.settings.volume);
     this.sfxVolEl.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);

@@ -6,6 +6,7 @@ import { Sim } from './game/sim.ts';
 import { buildArt } from './maple/art.ts';
 import type { MapleArt } from './maple/art.ts';
 import { loadManifest } from './maple/assets.ts';
+import type { MapleManifest } from './maple/assets.ts';
 import { Avatar } from './maple/avatar.ts';
 import { defaultLook, sanitizeLook } from './maple/avatar-core.ts';
 import type { AvatarManifest, Look } from './maple/avatar-core.ts';
@@ -19,6 +20,10 @@ import { CreateScreen } from './ui/create.ts';
 import type { CreateResult } from './ui/create.ts';
 import { MapBanner } from './ui/banner.ts';
 import { Hud } from './ui/hud.ts';
+import { BookPanel } from './ui/book.ts';
+import { NoteUi } from './ui/items.ts';
+import { ScrollPool } from './game/scrolls.ts';
+import { bookBonus, bookCounts, mergeBook } from './game/book.ts';
 import { applyUiTheme } from './ui/theme.ts';
 import { Input } from './ui/input.ts';
 import { loadSave, writeSave } from './ui/save.ts';
@@ -30,6 +35,7 @@ type Mode = 'title' | 'playing' | 'paused' | 'ended';
 let avatarManifest: AvatarManifest | null = null;
 /** move-speed factor per mob id from Mob.wz (info/speed), empty without a manifest: the sim then keeps its hand-tuned speeds */
 let mobSpeeds: Record<number, number> = {};
+let mapleManifest: MapleManifest | null = null;
 async function loadArt(): Promise<MapleArt | null> {
   try {
     const run = async () => {
@@ -38,6 +44,7 @@ async function loadArt(): Promise<MapleArt | null> {
       avatarManifest = m.avatar ?? null;
       mobSpeeds = {};
       for (const [id, e] of Object.entries(m.mobs)) if (typeof e.speed === 'number' && Number.isFinite(e.speed)) mobSpeeds[Number(id)] = e.speed;
+      mapleManifest = m;
       const art = await buildArt(m);
       console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, ${art.counts.objects} map objects, ${art.counts.digitSets} damage sets, ${art.counts.uiPieces} ui pieces, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
       return art;
@@ -65,6 +72,7 @@ async function boot() {
 
   const art = await loadArt();
   const gearPool = GearPool.fromManifest(avatarManifest?.gear);
+  const scrollPool = ScrollPool.fromManifest((mapleManifest as MapleManifest | null)?.items?.scrolls);
   const gearIcons = new GearIcons(avatarManifest?.gear ?? null);
   await gearIcons.load();
   console.info(`maple gear: ${gearPool.items.size} ${gearPool.real ? 'extracted' : 'placeholder'} items`);
@@ -114,7 +122,7 @@ async function boot() {
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, mobSpeeds });
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds });
     sim.god = god;
     gearUi.reset();
     seenGear = 0;
@@ -128,6 +136,7 @@ async function boot() {
   }
 
   function bank(quit: boolean) {
+    save.book = mergeBook(save.book, sim.book);
     save.mesos += sim.mesos;
     const best = !quit && sim.t > save.bestTime;
     if (sim.t > save.bestTime) save.bestTime = sim.t;
@@ -174,12 +183,16 @@ async function boot() {
       pick: (i) => sim.pick(i),
       reroll: () => sim.reroll(),
       banish: (i) => sim.banish(i),
+      book: () => bookPanel.show(save.book),
+      pet: (on) => { save.settings.pet = on; writeSave(save); },
       volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
       sfxVolume: (v) => { save.settings.sfxVolume = v; writeSave(save); sfx?.setVolume(v); sfx?.play('ui.click'); },
       mute: (m) => setMuted(m),
     },
     renderer.tex.icons,
   );
+  const bookPanel = new BookPanel(uiRoot, (mapleManifest as MapleManifest | null)?.mobs ?? {});
+  const noteUi = new NoteUi(uiRoot);
   const create = new CreateScreen(uiRoot, {
     avatar,
     icons: renderer.tex.icons,
@@ -248,6 +261,7 @@ async function boot() {
     if (mode !== 'title') {
       hud.update(sim);
       gearUi.update(sim);
+      noteUi.update(sim);
       if (sim.gearVersion !== seenGear) {
         seenGear = sim.gearVersion;
         renderer.setLook({ ...hero.look, gear: lookGearOf(sim) });
@@ -293,6 +307,13 @@ async function boot() {
       /** sound effects: keys that can play, decoded so far, plays in the last second */
       sfx: () => (sfx ? sfx.stats() : null),
       maple: () => (art ? { ...art.counts, bgm: art.bgm, ground: !!art.map?.ground, levelUp: !!art.levelUp } : null),
+      /** loaded item art keys: potions, mesos, scrolls, pet, enchant */
+      items: () => art?.items?.keys ?? [],
+      /** the pet's position and how many pickups it has collected (null: no pet this run) */
+      pet: () => (sim.pet ? { x: sim.pet.x, y: sim.pet.y, collected: sim.pet.collected } : null),
+      /** the Monster Book: kills per mob id (this run included) */
+      book: () => ({ ...(mode === 'title' ? save.book : sim.book) }),
+      bookBonus: () => ({ ...bookCounts(sim.book), bonus: bookBonus(sim.book) }),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),
     };
     (window as unknown as { game: typeof api }).game = api;

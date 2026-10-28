@@ -4,6 +4,7 @@
  */
 import { GEAR_SLOTS, GEAR_SLOT_NAMES, describeBonus, itemBonus, totalBonus } from '../game/gear.ts';
 import type { GearItem, GearSlot } from '../game/gear.ts';
+import { plusOf, slotsLeft } from '../game/scrolls.ts';
 import type { Sim } from '../game/sim.ts';
 import type { LookGear } from '../maple/avatar-core.ts';
 import type { GearIcons } from '../render/gear-icons.ts';
@@ -125,14 +126,14 @@ export class GearUi {
     }
     this.toast.style.display = show ? '' : 'none';
 
-    if (this.open && this.winVersion !== sim.gearVersion) {
-      this.winVersion = sim.gearVersion;
+    if (this.open && this.winVersion !== sim.gearVersion + sim.upgradeVersion) {
+      this.winVersion = sim.gearVersion + sim.upgradeVersion;
       for (const s of GEAR_SLOTS) {
         const el = this.slotEls.get(s)!;
         const it = sim.equipped[s];
         el.classList.toggle('empty', !it);
-        el.title = it ? `${it.name} (Lv ${it.level}) ${this.statLine(it, sim)}` : GEAR_SLOT_NAMES[s];
-        el.innerHTML = it ? `<img alt="" src="${this.icons.url(it)}">` : '';
+        el.title = it ? `${it.name}${plusOf(it) ? ` +${plusOf(it)}` : ''} (Lv ${it.level}) ${this.statLine(it, sim)} - ${slotsLeft(it)} upgrade slots left` : GEAR_SLOT_NAMES[s];
+        el.innerHTML = it ? `<img alt="" src="${this.icons.url(it)}">${plusOf(it) ? `<b class="plus">+${plusOf(it)}</b>` : ''}` : '';
         el.dataset.name = GEAR_SLOT_NAMES[s];
       }
       const b = totalBonus(Object.values(sim.equipped), sim.cls.key);

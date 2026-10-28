@@ -1,10 +1,11 @@
-import { Application, BitmapFont, BitmapText, Container, Sprite, TilingSprite, Texture } from 'pixi.js';
+import { Application, BitmapFont, BitmapText, Container, Graphics, Sprite, Text, TilingSprite, Texture } from 'pixi.js';
 import { BOSSES, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
 import type { Stance } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
-import { BAG, ELIXIR, GEAR, GEM, MESO, POTION } from '../game/types.ts';
+import { BAG, ELIXIR, GEAR, GEM, MESO, POTION, SCROLL } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
+import { ItemArt } from '../maple/item-art.ts';
 import { AvatarPlayer } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import type { Look } from '../maple/avatar-core.ts';
@@ -93,6 +94,14 @@ export class Renderer {
   private scenery: RegionScenery | null = null;
   private dmgNums: DamageNumbers | null = null;
   private levelFx: FollowFx | null = null;
+  /** potion / meso / scroll art, the pet and the enchant effect (empty when there is no manifest) */
+  private itemArt: ItemArt;
+  private petSp: Sprite;
+  private petTag: Container;
+  private petAct: Anim | null = null;
+  private petT = 0;
+  private petJump = 0;
+  private petCollected = 0;
   private danger: { fill: Sprite; ring: Sprite }[] = [];
   private stamp = 0;
   private time = 0;
@@ -104,6 +113,7 @@ export class Renderer {
     this.app = app;
     this.art = art;
     this.tex = buildTextures();
+    this.itemArt = art?.items ?? new ItemArt();
     if (art) Object.assign(this.tex.icons, art.icons);
     const tx = this.tex;
     const mapArt = art?.map ?? null;
@@ -132,6 +142,20 @@ export class Renderer {
     this.playerSp = new Sprite(tx.player);
     this.playerSp.anchor.set(0.5, 0.9);
     this.entities.addChild(this.playerSp);
+    this.petSp = new Sprite(this.itemArt.placeholderPet());
+    this.petSp.anchor.set(0.5, 0.95);
+    this.petSp.visible = false;
+    this.entities.addChild(this.petSp);
+    this.petTag = new Container();
+    this.petTag.visible = false;
+    this.topLayer.addChild(this.petTag);
+    const petName = this.itemArt.pet?.name ?? 'Brown Kitty';
+    const label = new Text({ text: petName, style: { fontFamily: 'Arial', fontSize: 11, fontWeight: 'bold', fill: 0xffffff } });
+    label.anchor.set(0.5, 0);
+    const plate = new Graphics();
+    plate.roundRect(-label.width / 2 - 4, 0, label.width + 8, label.height + 2, 4).fill({ color: 0x10182c, alpha: 0.7 });
+    label.position.set(0, 1);
+    this.petTag.addChild(plate, label);
     for (let i = 0; i < 2; i++) {
       const o = new Sprite(tx.glow);
       o.anchor.set(0.5); o.visible = false; o.tint = 0xe8f0ff; o.scale.set(0.5);
@@ -395,6 +419,12 @@ export class Renderer {
         this.ringFx(tx.ring, sim.px, sim.py, 5, 0.7, 0xffe060, 1);
         this.number(sim.px, sim.py - 2.4, 'LEVEL UP!', 0xffe060, 24, 1.2);
         break;
+      case 'scroll': {
+        const a = e.ok ? this.itemArt.enchantSuccess : this.itemArt.enchantFailure;
+        if (a) this.spawnAnim(a, sim.px * PX, sim.py * PX - 24);
+        else this.ringFx(tx.glow, sim.px, sim.py - 0.8, 2.4, 0.55, e.ok ? 0x6aff7a : 0xff5a5a, 0.9);
+        break;
+      }
       case 'jobAdvance':
         // the level-up effect again; the "Job Advancement!" banner is the sim's raid text
         if (this.levelFx) this.levelFx.pending = true;
@@ -402,6 +432,10 @@ export class Renderer {
         break;
       case 'drop':
         // the item's name floats up in its tier colour (grey, white, blue, purple, gold); a boss drop stays up longer
+        if (e.tier === undefined) {
+          if (e.boss) this.number(e.x, e.y - 1.4, e.name.toUpperCase(), 0xffe9a0, 15, 2.2);
+          break;
+        }
         this.number(e.x, e.y - 1.4, e.name.toUpperCase(), tierColor(e.tier), e.boss ? 15 : 13, e.boss ? 2.2 : 1.6);
         if (e.tier >= 4) this.ringFx(tx.ring, e.x, e.y, 2.2, 0.6, tierColor(e.tier), 0.9);
         break;
@@ -477,6 +511,8 @@ export class Renderer {
     }
     if (this.hurt > 0) { this.hurt -= dt; ps.tint = 0xff8080; } else ps.tint = 0xffffff;
     ps.visible = !sim.over || sim.won;
+
+    this.renderPet(sim, dt);
 
     // orbiting summons (Silver Hawk): always on once owned
     let oi = 0;
@@ -576,16 +612,24 @@ export class Renderer {
       v.stamp = stamp;
       const sp = v.sp;
       let t: Texture;
+      let scale = SCALE;
+      const ia = this.itemArt;
       switch (p.kind) {
         case GEM: t = tx.gems[p.value < 6 ? 0 : p.value < 20 ? 1 : p.value < 80 ? 2 : 3]; break;
-        case POTION: t = tx.potion; break;
-        case ELIXIR: t = tx.elixir; break;
-        case MESO: t = tx.meso; break;
-        case GEAR: t = (p.item && this.gearIcons?.texture(p.item)) || tx.bag; break;
+        case POTION: { const r = ia.potion(p.value); t = r ?? tx.potion; if (r) scale = 1; break; }
+        case ELIXIR: { const r = ia.elixir(); t = r ?? tx.elixir; if (r) scale = 1; break; }
+        case MESO: case BAG: {
+          // the coin art spins like in the game
+          const a = p.kind === MESO ? ia.meso(p.value) : ia.bag();
+          if (a) { t = a.tex[frameAt(a, this.time + p.x)]; scale = 1; } else t = p.kind === MESO ? tx.meso : tx.bag;
+          break;
+        }
+        case GEAR: t = (p.item && this.gearIcons?.texture(p.item)) || tx.bag; scale = 1; break;
+        case SCROLL: t = p.scroll ? ia.scrollTexture(p.scroll) : ia.placeholderScroll(); scale = 1; break;
         default: t = tx.bag;
       }
       if (sp.texture !== t) sp.texture = t;
-      sp.scale.set(p.kind === GEAR ? 1 : SCALE);
+      sp.scale.set(scale);
       sp.position.set(p.x * PX, p.y * PX - 8 + Math.sin(this.time * 4 + p.x) * 2);
       if (p.kind === GEAR && p.item) {
         let g = v.glow;
@@ -724,6 +768,40 @@ export class Renderer {
       d.vy *= 0.94;
       d.t.alpha = Math.min(1, (d.life / d.max) * 2.2);
     }
+  }
+
+  /** The pet behind the hero: move while travelling, stand otherwise, a hop after each pickup; the drawn cat without art. */
+  private renderPet(sim: Sim, dt: number) {
+    const pet = sim.pet;
+    const sp = this.petSp;
+    if (!pet || (sim.over && !sim.won)) { sp.visible = false; this.petTag.visible = false; return; }
+    if (pet.collected !== this.petCollected) { this.petCollected = pet.collected; this.petJump = 0.35; }
+    const pa = this.itemArt.pet;
+    let a: Anim | null = null;
+    if (pa) {
+      if (this.petJump > 0 && pa.jump) a = pa.jump;
+      else a = (pet.moving ? pa.move ?? pa.stand : pa.stand ?? pa.move) ?? null;
+    }
+    this.petJump = Math.max(0, this.petJump - dt);
+    const fx = pet.x * PX, fy = pet.y * PX + HERO_FOOT;
+    if (a) {
+      if (a !== this.petAct) { this.petAct = a; this.petT = 0; } else this.petT += dt;
+      const i = frameAt(a, this.petT);
+      if (sp.texture !== a.tex[i]) sp.texture = a.tex[i];
+      sp.anchor.set(a.ax[i], a.ay[i]);
+      sp.scale.set(pet.facing >= 0 ? -1 : 1, 1); // extracted sprites face left
+      sp.position.set(fx, fy);
+    } else {
+      const ph = this.itemArt.placeholderPet();
+      if (sp.texture !== ph) sp.texture = ph;
+      sp.anchor.set(0.5, 0.95);
+      sp.scale.set(pet.facing >= 0 ? -1 : 1, 1);
+      sp.position.set(fx, fy - (pet.moving ? Math.abs(Math.sin(this.time * 14)) * 3 : 0));
+    }
+    sp.zIndex = Math.min(pet.y * PX, sim.py * PX) - 1;
+    sp.visible = true;
+    this.petTag.position.set(fx, fy + 2);
+    this.petTag.visible = true;
   }
 
   /** Picks and sets the current frame of a real-art mob; returns the frame's origin height in px (sprite top above the foot). */

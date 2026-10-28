@@ -9,7 +9,8 @@
     "Effect.wz",
     "UI.wz",
     "Base.wz",
-    "Character.wz"
+    "Character.wz",
+    "Item.wz"
   ],
   "mirrors": [
     {
