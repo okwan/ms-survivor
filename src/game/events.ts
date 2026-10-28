@@ -5,7 +5,7 @@
  * - Snail Stampede: a 30 to 50 strong column enters from one screen edge, marches straight across at 1.6x speed ignoring the hero, and
  *   is removed (no loot, no kill) once past the far edge.
  * - Closing Ring: 40 mobs of the current top tier appear in a full ring at 18 yd around the hero and walk inward like any mob.
- * - Treasure Swarm: 12 fast Ribbon Pigs run away from the hero for 20 s, then vanish; each drops 5x mesos and a field item.
+ * - Treasure Swarm: 12 fast Ribbon Pigs run away from the hero for 20 s, then vanish; each drops 5x mesos, and every 4th one a field item.
  * Pure (no DOM).
  */
 import { BOSS_EVERY, RECYCLE_DIST, mesoValue, poolLo } from './data.ts';
@@ -39,6 +39,8 @@ export const TREASURE_COUNT = 12;
 export const TREASURE_TIER = 8;
 export const TREASURE_SECONDS = 20;
 export const TREASURE_MESO_MULT = 5;
+/** only every 4th Treasure Pig killed (the first included) drops a field item, so a swarm is not a flood of them */
+export const TREASURE_FIELD_EVERY = 4;
 /** pig speed as a fraction of the hero's base speed (the hero is a little faster, so a chase is slow) */
 export const TREASURE_SPEED = 0.88;
 
@@ -53,6 +55,8 @@ export class Swarms {
   nextAt: number;
   /** events started so far, by kind index in SWARM_KINDS */
   started = [0, 0, 0];
+  /** Treasure Pigs killed so far this run */
+  pigsKilled = 0;
 
   constructor(seed: number) {
     this.rng = new Rng((seed ^ 0x1b873593) >>> 0);
@@ -159,8 +163,8 @@ export function eventStep(e: Enemy, dx: number, dy: number, inv: number, stepLen
   else if (mx < -0.15) e.facing = -1;
 }
 
-/** A Treasure Pig was killed: 5x the coin and a field item */
+/** A Treasure Pig was killed: 5x the coin, and a field item from every TREASURE_FIELD_EVERY-th pig */
 export function treasureKilled(sim: Sim, e: Enemy) {
   sim.dropPickup(MESO, e.x, e.y, mesoValue(e.tier) * TREASURE_MESO_MULT);
-  dropField(sim, e.x, e.y + 0.6);
+  if (sim.swarms.pigsKilled++ % TREASURE_FIELD_EVERY === 0) dropField(sim, e.x, e.y + 0.6);
 }

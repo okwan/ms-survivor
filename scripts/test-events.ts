@@ -435,7 +435,11 @@ for (const seed of [2, 6]) {
   s.hit(pig, 1e9);
   const meso = s.pickups.filter((p) => p.kind === MESO);
   ok(meso.some((p) => p.value === TREASURE_MESO_MULT * (1 + Math.floor(TREASURE_TIER / 3))), `a pig drops 5x mesos (${meso.map((p) => p.value).join(', ')})`);
-  eq(s.pickups.filter((p) => p.kind === FIELD).length, 1, 'and a field item');
+  eq(s.pickups.filter((p) => p.kind === FIELD).length, 1, 'and the first pig a field item');
+  // the next three pigs drop none, the fifth one does
+  const pigs = s.enemies.filter((e) => e.ev === EV_TREASURE && e.alive);
+  for (let i = 0; i < 4; i++) s.hit(pigs[i], 1e9);
+  eq(s.pickups.filter((p) => p.kind === FIELD).length, 2, 'every 4th pig drops a field item');
 }
 
 // ---- scheduler: 100 to 140 s apart, never within 15 s of a boss spawn ----

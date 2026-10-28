@@ -176,9 +176,9 @@ Event mobs and boxes carry `Enemy.ev` (stampede / ring / treasure / box): the sp
 - **Swarm events.** About every 100 to 140 s, never within 15 s of a boss spawn (it waits). **Snail stampede**: 30 to 50 Blue / Red Snails (the current low tier from tier 8 on)
   enter in a 12 wide column from one cardinal edge and march across at 1.6x speed ignoring the hero, then are removed past the far edge (40 yd, 45 s at most; no loot, no kill).
   **Closing Ring**: 40 mobs of the current top tier in a full ring at 18 yd, walking inward (a ring mob left far behind turns into a plain mob). **Treasure Swarm**: 12 Ribbon Pigs
-  that run away from the hero (at 0.88x his speed, each with its own sideways angle) for 20 s, then vanish; a killed pig drops 5x its coin and a field item.
+  that run away from the hero (at 0.88x the hero's speed, each with its own sideways angle) for 20 s, then vanish; a killed pig drops 5x its coin, and every 4th pig killed (the first included) a field item.
 - **Boxes and field items.** A breakable Maple box (an Enemy with 1 HP that never moves or attacks, so any skill that hits it breaks it) appears on the spawn ring ahead of the
-  hero's movement every 60 to 90 s, at most 3 on the map, and drops one field item. Elites and Treasure Pigs drop one too. Field items are `FIELD` pickups (value = item): touch
+  hero's movement every 60 to 90 s, at most 3 on the map, and drops one field item. Elites drop one too, and every 4th Treasure Pig. Field items are `FIELD` pickups (value = item): touch
   only (no magnet, no pet), gone after 75 s. Weights: Apple 35, 2x EXP Coupon 20, Warrior Elixir 20, Ludibrium Clock 15, Powder Keg 10.
   **Apple** heals 30% max HP. **Coupon** pulls every gem on the map to the hero and makes gems worth 2x for 30 s. **Warrior Elixir** +40% damage for 20 s. **Clock** freezes every
   non-boss mob (no movement, no contact damage) for 5 s and slows bosses 50%. **Powder Keg** kills every non-boss, non-Elite mob within 20 yd (normal gems and drops) and deals 10%
