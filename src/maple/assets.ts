@@ -8,7 +8,7 @@ import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import { EVOLVED_SKILLS } from '../game/evolutions.ts';
 import type { AvatarManifest } from './avatar-core.ts';
 import type { RegionsSection, SfxSection } from './region-types.ts';
-import type { ItemsSection } from './items-types.ts';
+import type { ItemsSection, NpcSection } from './items-types.ts';
 import type { AtlasRef, EffectsSection, MapSection, UiSection } from './world-types.ts';
 
 export const pad7 = (n: number) => String(n).padStart(7, '0');
@@ -65,7 +65,7 @@ export const BGM_NODES = {
 };
 
 /** The WZ archives needed (file stems). Later clients split them (Mob001.wz...), which the extractor also accepts. */
-export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Map', 'Effect', 'UI', 'Base', 'Character', 'Item'] as const;
+export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Map', 'Effect', 'UI', 'Base', 'Character', 'Item', 'Npc'] as const;
 
 // ---- legacy lists, kept for later milestones (UI, map art) -------------------------------------------------------
 /** 'Mob/0100100.img' for every wanted mob. */
@@ -133,6 +133,8 @@ export interface MapleManifest {
   sfx?: SfxSection;
   /** potion / meso / scroll icons, the pet and the enchant effect (scripts/fetch-maple-items.ts) */
   items?: ItemsSection;
+  /** the Henesys shop keeper's portrait (scripts/fetch-maple-npc.ts) */
+  npc?: NpcSection;
 }
 
 /** Fetches maple/manifest.json. Returns null on any failure so the game falls back to placeholder art. */
@@ -156,6 +158,7 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       regions: data.regions && Array.isArray(data.regions.list) ? data.regions : undefined,
       sfx: data.sfx && typeof data.sfx === 'object' ? data.sfx : undefined,
       items: data.items && typeof data.items === 'object' ? data.items : undefined,
+      npc: data.npc && typeof data.npc === 'object' && Array.isArray(data.npc.frames) ? data.npc : undefined,
     };
   } catch {
     return null;

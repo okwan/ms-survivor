@@ -207,6 +207,7 @@ export type SimEvent =
   | { type: 'gacha'; boss: number; count: number; results: GachaResult[]; /** dropped by an Elite: not a boss capsule */ elite?: boolean }
   | { type: 'evolve'; from: string; to: string; name: string }
   | { type: 'region'; region: number }
+  | { type: 'revive'; x: number; y: number; r: number }
   | { type: 'elite'; name: string; affix: string; x: number; y: number }
   | { type: 'swarm'; kind: 'stampede' | 'ring' | 'treasure' }
   | { type: 'box'; x: number; y: number }

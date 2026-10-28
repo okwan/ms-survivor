@@ -66,7 +66,7 @@ export function applyUpgrades(sim: Sim, count: number, boss: number): GachaResul
     r ??= upgradeSkill(sim) ?? upgradePassive(sim);
     if (!r) {
       const amount = GACHA_MESOS * (boss + 1);
-      sim.mesos += amount;
+      sim.gainMesos(amount);
       r = { kind: 'meso', key: 'mesobag', name: 'Meso Bag', from: 0, to: 0, amount };
     }
     out.push(r);
@@ -86,7 +86,7 @@ export function openGacha(sim: Sim, boss: number, elite = false) {
 export function useMasteryBook(sim: Sim) {
   const rec = readyRecipe(sim);
   const r = rec ? evolve(sim, rec) : null;
-  if (!r) { sim.mesos += GACHA_MESOS; sim.note(`Mastery Book: +${GACHA_MESOS} mesos`, 'info'); }
+  if (!r) { sim.gainMesos(GACHA_MESOS); sim.note(`Mastery Book: +${GACHA_MESOS} mesos`, 'info'); }
 }
 
 /** After a normal kill at (x,y): once no boss is left to come, a ready recipe may drop a Mastery Book (at most one lying around) */
