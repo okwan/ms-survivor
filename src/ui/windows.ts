@@ -6,6 +6,7 @@
  * State lives in the sim; this reads it every frame and only touches the DOM when it changed. Pixel positions: layout.ts.
  */
 import { CLASS_BY_KEY, JOB_BY_CODE } from '../game/data.ts';
+import { plusOf, slotsLeft } from '../game/scrolls.ts';
 import { BAG_SIZE, GEAR_SLOT_NAMES, JOB_BIT, describeBonus, itemBonus, totalBonus } from '../game/gear.ts';
 import type { GearItem, GearStats } from '../game/gear.ts';
 import type { Sim } from '../game/sim.ts';
@@ -44,8 +45,7 @@ const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c =
 
 /** The Maple item tooltip as HTML: yellow name, REQ lines, stat list, upgrade slots and the mapped game bonus. */
 export function itemTooltip(it: GearItem, sim: Sim, worn?: GearItem): string {
-  const ext = it as GearItem & { tuc?: number; scrolls?: number };
-  const plus = ext.scrolls ? ` (+${ext.scrolls})` : '';
+  const plus = plusOf(it) ? ` (+${plusOf(it)})` : '';
   const ok = (a: boolean) => (a ? 'ok' : 'bad');
   const reqJob = !it.job || !!(it.job & JOB_BIT[sim.cls.key]);
   let h = `<div class="tip-name">${esc(it.name)}${plus}</div>`;
@@ -54,10 +54,10 @@ export function itemTooltip(it: GearItem, sim: Sim, worn?: GearItem): string {
   h += `<div class="${ok(reqJob)}">${esc(jobText(it.job))}</div>`;
   h += `<div class="tip-slot">${esc(GEAR_SLOT_NAMES[it.slot].toUpperCase())}</div></div><div class="tip-sep"></div><div class="tip-stats">`;
   for (const [k, label] of STAT_LINES) {
-    const v = it.stats[k];
+    const v = (it.stats[k] ?? 0) + (it.up?.stats[k] ?? 0);
     if (v) h += `<div>${label} : ${k === 'speed' || v < 0 ? '' : '+'}${v}</div>`;
   }
-  if (ext.tuc !== undefined) h += `<div>Upgrades Available : ${ext.tuc}</div>`;
+  h += `<div>Upgrades Available : ${slotsLeft(it)}</div>`;
   h += `</div>`;
   const b = describeBonus(itemBonus(it, sim.cls.key));
   h += `<div class="tip-game">${esc(b || 'No bonus for your class')}</div>`;
@@ -259,7 +259,7 @@ export class GearWindows {
       const el = this.slotEls.get(s.pos)!;
       const it = sim.equipped[s.gear];
       el.classList.toggle('empty', !it);
-      el.innerHTML = it ? `<img alt="" src="${this.icons.url(it)}">` : '';
+      el.innerHTML = it ? `<img alt="" src="${this.icons.url(it)}">${plusOf(it) ? `<b class="plus">+${plusOf(it)}</b>` : ''}` : '';
     }
     const b = totalBonus(Object.values(sim.equipped), sim.cls.key);
     this.totalsEl.textContent = describeBonus(b) || 'Nothing equipped yet.';
@@ -399,7 +399,7 @@ export class GearWindows {
       this.statsSig = '';
     }
     if (this.isOpen('equip')) {
-      if (this.seen.gear !== sim.gearVersion) { this.seen.gear = sim.gearVersion; this.refreshEquip(sim); }
+      if (this.seen.gear !== sim.gearVersion + sim.upgradeVersion) { this.seen.gear = sim.gearVersion + sim.upgradeVersion; this.refreshEquip(sim); }
       this.drawPreview(performance.now());
     }
     if (this.isOpen('inventory') && this.seen.bag !== sim.bagVersion + sim.gearVersion) { this.seen.bag = sim.bagVersion + sim.gearVersion; this.refreshInventory(sim); }

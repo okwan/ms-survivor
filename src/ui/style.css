@@ -320,3 +320,36 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .cs-name { font-size: 16px; }
 .cs-info { font-size: 12px; color: #ffe066; }
 .cs-btns { flex-direction: row; justify-content: center; gap: 10px; }
+.gear-win { position: absolute; left: 12px; top: 64px; width: 224px; z-index: 6; pointer-events: auto; }
+.gear-win .win-head { position: relative; font-size: 16px; padding: 5px 12px; }
+.gear-x { position: absolute; right: 6px; top: 4px; border: 0; border-radius: 4px; background: rgba(0,0,0,.25); color: #fff; font-weight: 900; cursor: pointer; width: 22px; height: 22px; line-height: 20px; padding: 0; }
+.gear-grid { display: grid; grid-template-columns: repeat(4, 44px); gap: 6px; justify-content: center; }
+.gear-slot { width: 44px; height: 44px; border: 2px solid #8a98c8; border-radius: 6px; background: #eaf0ff; display: flex; align-items: center; justify-content: center; position: relative; }
+.gear-slot.empty::after { content: attr(data-name); font-size: 9px; color: #7a86a8; }
+.gear-slot img { width: 36px; height: 36px; image-rendering: pixelated; }
+.gear-totals { font-size: 13px; font-weight: bold; min-height: 18px; color: var(--orange2); }
+.gear-auto { font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer; }
+
+/* ---------- items: notes, equip window upgrades, Monster Book ---------- */
+.notes { position: absolute; left: 50%; bottom: calc(71px * var(--sbs, 1) + 60px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px; align-items: center; pointer-events: none; z-index: 5; }
+.note { padding: 4px 12px; border-radius: 10px; border: 2px solid #fff; background: rgba(10,20,50,.85); color: #fff; font-size: 14px; font-weight: bold; }
+.note.good { border-color: #6aff7a; color: #d6ffd9; }
+.note.bad { border-color: #ff6a6a; color: #ffd6d6; }
+.note.card { border-color: #ffd23a; color: #fff0b0; }
+.gear-slot .left { position: absolute; left: 2px; top: 0; font-size: 9px; font-style: normal; color: #4a5278; }
+.gear-slot .plus { position: absolute; right: 1px; bottom: 0; font-size: 10px; color: #c05000; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+.book .win { width: min(760px, 100%); }
+.book-bonus { font-weight: 900; color: var(--orange2); }
+.book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; padding: 2px; }
+.book-card { border: 2px solid #8a98c8; border-radius: 8px; background: #eaf0ff; padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; }
+.book-card.gold { border-color: #e0a000; background: #fff4c8; }
+.book-card.none { background: #2a3050; border-color: #4a5278; color: #9aa4c8; }
+.book-card span { font-size: 11px; color: #5a6688; min-height: 14px; }
+.book-card.gold span { color: #a06000; font-weight: bold; }
+.book-art { position: relative; width: 72px; height: 72px; overflow: hidden; }
+.book-sprite { position: absolute; left: 50%; top: 50%; transform-origin: center; image-rendering: pixelated; }
+.book-card.none .book-sprite, .book-card.none .book-blob { filter: brightness(0); opacity: .6; }
+.book-blob { position: absolute; left: 14px; top: 14px; width: 44px; height: 44px; border-radius: 50%; background: #7a86a8; }
+.pet-opt { font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer; }
+.eqs .plus { position: absolute; right: 1px; bottom: 0; font-size: 9px; color: #ffe066; text-shadow: -1px 0 #000, 1px 0 #000, 0 1px #000, 0 -1px #000; }
+.login-options .pet-opt { font-size: 11px; display: flex; gap: 4px; align-items: center; cursor: pointer; }

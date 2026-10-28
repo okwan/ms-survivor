@@ -19,6 +19,7 @@ export interface LoginHandlers {
   volume(v: number): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
+  pet(on: boolean): void;
 }
 
 /** the classic layout needs at least the two real title buttons */
@@ -58,6 +59,8 @@ export class LoginScreen {
   private shown = false;
   private save: SaveData | null = null;
   private playBtn: HTMLButtonElement;
+  private petEl!: HTMLInputElement;
+  private selectBtns!: HTMLDivElement;
   /** frames the select stage drew (tests) */
   drawn = 0;
 
@@ -89,6 +92,11 @@ export class LoginScreen {
     this.sfxVol = this.slider('SFX', (v) => this.h.sfxVolume(v));
     this.muteBtn = this.button('Mute', 'login-mute', () => this.h.mute(!this.muted));
     this.optionsPane.appendChild(this.muteBtn);
+    const petOpt = el('label', 'pet-opt', '<input type="checkbox"> Pet');
+    petOpt.title = 'A pet follows you and picks up mesos and potions';
+    this.petEl = petOpt.querySelector('input')!;
+    this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
+    this.optionsPane.appendChild(petOpt);
     this.board.appendChild(this.optionsPane);
     this.board.appendChild(el('p', 'login-hint', 'Move: WASD / arrows or drag on touch.<br>Skills fire automatically. Q equip, I items, C stats.'));
     this.titlePane.appendChild(this.board);
@@ -110,6 +118,7 @@ export class LoginScreen {
       this.button('New Character', 'pb-cnew', () => this.h.create()),
       this.button('Back', 'cs-back', () => this.showTitle()),
     );
+    this.selectBtns = btns;
     this.selectPane.append(frame, btns);
     this.stage.append(this.titlePane, this.selectPane);
     parent.appendChild(root);
@@ -179,6 +188,8 @@ export class LoginScreen {
   addButton(label: string, fn: () => void): HTMLButtonElement {
     const b = this.button(label, 'login-extra-btn', fn);
     this.board.querySelector('.login-extra')!.appendChild(b);
+    // the same button on the character select stage
+    this.selectBtns.appendChild(this.button(label, 'login-extra-btn', fn));
     return b;
   }
 
@@ -196,6 +207,7 @@ export class LoginScreen {
     this.vol.value = String(save.settings.volume);
     this.sfxVol.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
+    this.petEl.checked = save.settings.pet;
     this.statsEl.innerHTML = `<div>Best time <b>${save.bestTime > 0 ? fmtTime(save.bestTime) : '-'}</b></div><div>Banked mesos <b>${save.mesos}</b></div>`;
     this.shown = true;
     this.root.classList.remove('hidden');

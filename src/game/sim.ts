@@ -11,9 +11,14 @@ import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
 import { BAG_SIZE, GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
 import type { GearItem, GearSlot } from './gear.ts';
-import { BAG, ELIXIR, GEAR, GEM, MESO, POTION } from './types.ts';
+import { BAG, ELIXIR, GEAR, GEM, MESO, POTION, SCROLL } from './types.ts';
+import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
+import type { BookData } from './book.ts';
+import { Pet } from './pet.ts';
+import { SCROLL_BOSS_DROPS, SCROLL_DROP_NORMAL, SCROLL_PICKUP_LIFE, ScrollPool, slotsLeft } from './scrolls.ts';
+import type { ScrollDef } from './scrolls.ts';
 import type { ClassDef, SkillDef } from './data.ts';
-import type { Area, Card, Enemy, PassiveState, Pickup, PickupKind, Projectile, SimEvent, SkillState } from './types.ts';
+import type { Area, Card, Enemy, Note, PassiveState, Pickup, PickupKind, Projectile, SimEvent, SkillState } from './types.ts';
 
 export { TICK };
 
@@ -84,6 +89,22 @@ export class Sim {
   gearDrops = 0;
   private gearRng: Rng;
 
+  // items (src/game/scrolls.ts, pet.ts, book.ts): own seeded stream again, so none of it shifts the run's other random draws
+  scrollPool: ScrollPool;
+  private itemRng: Rng;
+  scrollDrops = 0;
+  /** counts up whenever a scroll changed a worn item (the equip window redraws) */
+  upgradeVersion = 0;
+  /** short messages for the UI (newest last), pruned as they expire */
+  notes: Note[] = [];
+  private noteSeq = 0;
+  /** null when the setting is off */
+  pet: Pet | null = null;
+  /** Monster Book kills: what the save held at the start plus this run's kills, by mob id */
+  book: BookData = {};
+  /** damage bonus of the Monster Book as a fraction, fixed for the run */
+  bookBonus = 0;
+
   offer: Card[] | null = null;
   pendingLevels = 0;
   rerolls = START_REROLLS;
@@ -117,10 +138,14 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
+    this.itemRng = new Rng((seed ^ 0x5bd1e995) >>> 0);
+    this.scrollPool = opts.scrolls ?? ScrollPool.placeholder();
+    this.book = { ...(opts.book ?? {}) };
+    this.bookBonus = Math.max(0, Math.min(BOOK_BONUS_CAP, opts.bookBonus ?? bookBonus(opts.book)));
     this.gearPool = opts.pool ?? GearPool.placeholder();
     this.gender = opts.gender ?? 0;
     this.autoEquip = opts.autoEquip ?? true;
@@ -130,6 +155,8 @@ export class Sim {
     this.speed = this.cls.speed;
     this.crit = this.cls.crit;
     this.hp = this.maxHp = this.cls.hp;
+    if (opts.pet) this.pet = new Pet(0, 0);
+    if (this.bookBonus > 0) this.recalc();
   }
 
   // ---- events ----------------------------------------------------------------------------------
@@ -163,7 +190,7 @@ export class Sim {
       }
     }
     const g = totalBonus(Object.values(this.equipped), this.cls.key);
-    might += g.dmg;
+    might += g.dmg + this.bookBonus;
     armor += g.armor;
     speed += g.speed;
     this.might = might * levelDamageMult(this.level);
@@ -275,6 +302,7 @@ export class Sim {
     this.kills++;
     this.emit({ type: 'death', x: e.x, y: e.y, tier: e.tier, boss: e.boss, big: e.big, facing: e.facing });
     const gv = e.xp * 2 * this.growth;
+    this.bookKill(e);
     if (e.boss >= 0) {
       this.bossKills++;
       const def = BOSSES[e.boss];
@@ -284,12 +312,83 @@ export class Sim {
       this.dropPickup(ELIXIR, e.x + 1.2, e.y + 0.6, 1);
       this.dropPickup(BAG, e.x - 1.2, e.y + 0.6, 50 * (e.boss + 1));
       for (let k = 0; k < GEAR_BOSS_DROPS; k++) this.dropGear(e.x + (k === 0 ? 1.8 : -1.8), e.y - 0.4, true);
+      for (let k = 0; k < SCROLL_BOSS_DROPS; k++) this.dropScroll(e.x, e.y - 1.4);
       return;
     }
     this.dropPickup(GEM, e.x, e.y, gv);
     if (this.rng.next() < 0.015) this.dropPickup(POTION, e.x, e.y, 0.25);
     if (this.rng.next() < 0.3) this.dropPickup(MESO, e.x, e.y, mesoValue(e.tier));
     if (this.gearRng.next() < (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL)) this.dropGear(e.x, e.y, false);
+    if (this.itemRng.next() < SCROLL_DROP_NORMAL) this.dropScroll(e.x, e.y + 0.4);
+  }
+
+  // ---- notes, Monster Book, scrolls --------------------------------------------------------------
+  /** Queues a short message for the UI (at most four are kept). */
+  note(text: string, kind: Note['kind'], seconds = 3) {
+    this.notes.push({ id: ++this.noteSeq, text, kind, until: this.t + seconds });
+    if (this.notes.length > 4) this.notes.shift();
+  }
+
+  private bookKill(e: Enemy) {
+    const def = e.boss >= 0 ? BOSSES[e.boss] : LADDER[e.tier];
+    const key = String(def.id);
+    const n = (this.book[key] ?? 0) + 1;
+    this.book[key] = n;
+    if (n === 1) {
+      this.note(`New card: ${def.name}`, 'card', 4);
+      this.emit({ type: 'card', mob: def.id, name: def.name, complete: false });
+    } else if (n === BOOK_COMPLETE) {
+      this.note(`Card complete: ${def.name}`, 'card', 4);
+      this.emit({ type: 'card', mob: def.id, name: def.name, complete: true });
+    }
+  }
+
+  private dropScroll(x: number, y: number) {
+    const d = this.scrollPool.roll(this.itemRng, this.equipped, this.cls.key);
+    if (!d) return;
+    this.scrollDrops++;
+    const p = this.newPickup(SCROLL, x, y, 0);
+    p.scroll = d;
+    p.life = SCROLL_PICKUP_LIFE;
+    this.pickups.push(p);
+    this.emit({ type: 'drop', x, y, id: d.id, name: d.name, boss: false });
+  }
+
+  /**
+   * Reads a scroll on the worn item of its slot: the success rate is rolled; a success adds +1 upgrade and the scroll's stat,
+   * and either way one upgrade slot is used. The worn item is replaced by an upgraded copy (the pool's item stays as it was).
+   * 'noitem': nothing fitting is worn; 'noslots': the item has no upgrade slots left (nothing is consumed or rolled).
+   */
+  useScroll(d: ScrollDef): 'success' | 'failed' | 'noitem' | 'noslots' {
+    const cur = this.equipped[d.slot];
+    if (!cur || (d.slot === 'weapon' && d.wclass !== undefined && d.wclass !== this.cls.key)) {
+      this.note(`No ${d.slot === 'weapon' ? 'weapon' : d.slot} to use the scroll on.`, 'info');
+      return 'noitem';
+    }
+    const left = slotsLeft(cur);
+    if (left <= 0) {
+      this.note(`${cur.name} has no upgrade slots left.`, 'info');
+      return 'noslots';
+    }
+    const ok = this.itemRng.next() * 100 < d.pct;
+    const stats = { ...(cur.up?.stats ?? {}) };
+    if (ok) stats[d.stat] = (stats[d.stat] ?? 0) + d.gain;
+    const plus = (cur.up?.plus ?? 0) + (ok ? 1 : 0);
+    this.equipped[d.slot] = { ...cur, up: { plus, left: left - 1, stats } };
+    this.upgradeVersion++;
+    this.recalc();
+    this.note(ok ? `${cur.name} +${plus}` : 'The scroll failed.', ok ? 'good' : 'bad', 3);
+    this.emit({ type: 'scroll', ok, slot: d.slot, name: cur.name, plus });
+    return ok ? 'success' : 'failed';
+  }
+
+  /** The pet reached a pickup: it counts as collected. False when the pickup is no longer lying there. */
+  collectByPet(p: Pickup): boolean {
+    const i = this.pickups.indexOf(p);
+    if (i < 0) return false;
+    this.collect(p);
+    this.removePickup(i);
+    return true;
   }
 
   /** Drops a piece of gear for this class at the current run tier. */
@@ -385,8 +484,8 @@ export class Sim {
   }
 
   private newPickup(kind: PickupKind, x: number, y: number, value: number): Pickup {
-    const p = this.pickupPool.pop() ?? { kind, x, y, value, life: 0, pulled: false, item: null };
-    p.item = null;
+    const p = this.pickupPool.pop() ?? { kind, x, y, value, life: 0, pulled: false, item: null, scroll: null };
+    p.item = null; p.scroll = null;
     p.kind = kind; p.x = x; p.y = y; p.value = value; p.pulled = false;
     p.life = kind === POTION || kind === MESO ? 50 : 1e9;
     return p;
@@ -688,6 +787,7 @@ export class Sim {
       case ELIXIR: this.hp = this.maxHp; break;
       case MESO: case BAG: this.mesos += p.value; break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
+      case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
     }
   }
 
@@ -893,6 +993,8 @@ export class Sim {
     updateProjectiles(this, dt);
     updateAreas(this, dt);
     this.updatePickups(dt);
+    if (this.pet) this.pet.update(this, dt);
+    while (this.notes.length && this.notes[0].until < this.t) this.notes.shift();
 
     // compact dead enemies
     let w = 0;
