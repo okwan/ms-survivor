@@ -2,7 +2,10 @@
 // Balance probe: the kiting bot (always takes card 0, picks the job branch 0) plays each class over several seeds. Prints win rate, the
 // hero's damage and the enemies' stats at minutes 1, 3, 5, 8, 12, 15, and the final level. Informational (no asserts).
 import { botInput } from '../src/game/bot.ts';
-import { BOSSES, CLASSES, enemyDmgMult, enemyHpMult, LADDER, SKILL_BY_KEY, poolLo, progress, skillDmgMult } from '../src/game/data.ts';
+import { GEAR_TIER_DMG_CAP, BOSSES, CLASSES, enemyDmgMult, enemyHpMult, LADDER, SKILL_BY_KEY, poolLo, progress, skillDmgMult } from '../src/game/data.ts';
+import { GEAR_SLOTS, GearPool, JOB_BIT, MAIN_STAT, TIER_LEVELS, deriveGearStats, itemBonus } from '../src/game/gear.ts';
+import type { GearItem, GearSlot, GearStats } from '../src/game/gear.ts';
+import type { ClassKey } from '../src/game/data.ts';
 import { Sim } from '../src/game/sim.ts';
 
 const seeds = Number(process.argv[2] ?? 8);
@@ -11,12 +14,59 @@ const only = process.argv[3];
 const mobSpeeds: Record<number, number> | undefined = process.env.PROBE_SPEEDS === 'rand'
   ? Object.fromEntries([...LADDER, ...BOSSES].map((d) => [d.id, 0.3 + (((d.id * 2654435761) >>> 0) % 1400) / 1000]))
   : undefined;
+// PROBE_GEAR=real: a pool with MapleStory-sized stats instead of the placeholder items (stats grow with reqLevel like the real classic equipment: weapon attack
+// ~10 + 1.1 L, armor PDD ~0.4-1.0 L, main stat up to L / 8 on a few slots, boots speed up to +15), two items per slot and tier (three per class for weapons)
+function realPool(): GearPool {
+  const list: GearItem[] = [];
+  TIER_LEVELS.forEach((lo, t) => {
+    for (const v of [0, 1]) {
+      const L = Math.min(99, lo + 4 + v * 5 + (t === 7 ? 5 : 0));
+      const mk = (slot: GearSlot, job: number, stats: GearStats, name: string) => list.push({ id: `rl${slot}${job}t${t}v${v}`, slot, name: `${name} L${L}`, level: L, job, gender: 2, tier: t, stats, long: false });
+      const st = L / 8 | 0;
+      mk('cap', 0, { pdd: 3 + L * 0.6 | 0, mhp: L > 40 ? L : 0, str: st / 2 | 0, dex: st / 2 | 0, int: st / 2 | 0, luk: st / 2 | 0 }, 'Cap');
+      mk('coat', 0, { pdd: 5 + L | 0, str: st / 2 | 0, dex: st / 2 | 0, int: st / 2 | 0, luk: st / 2 | 0 }, 'Top');
+      mk('pants', 0, { pdd: 4 + L * 0.7 | 0, str: st / 2 | 0, dex: st / 2 | 0, int: st / 2 | 0, luk: st / 2 | 0 }, 'Bottom');
+      mk('shoes', 0, { pdd: 2 + L * 0.4 | 0, speed: 2 + L / 7 | 0, dex: st / 3 | 0 }, 'Shoes');
+      mk('glove', 0, { pdd: 1 + L * 0.25 | 0, pad: L / 10 | 0, mad: L / 10 | 0, str: st / 3 | 0, dex: st / 3 | 0, int: st / 3 | 0, luk: st / 3 | 0 }, 'Gloves');
+      mk('cape', 0, { pdd: 2 + L * 0.4 | 0, mhp: L > 30 ? L / 2 | 0 : 0, str: st, dex: st, int: st, luk: st }, 'Cape');
+      mk('shield', JOB_BIT.warrior, { pdd: 5 + L * 0.8 | 0, mhp: L > 40 ? L : 0, str: st / 2 | 0 }, 'Shield');
+      for (const c of Object.keys(JOB_BIT) as ClassKey[]) mk('weapon', JOB_BIT[c], { pad: 10 + L * 1.1 | 0, mad: 10 + L * 1.2 | 0, [MAIN_STAT[c]]: st }, c);
+    }
+  });
+  return new GearPool(list, true);
+}
+// PROBE_GEAR=derived: a pool of items whose stats come from deriveGearStats (what the extractor gives equips with no inc* keys): per tier a level near the
+// top of the window, one item per slot (a shield for the Warrior) and one weapon per class, every item requiring the class's main stat; the t7 weapon-cap
+// check is printed too
+function derivedPool(): GearPool {
+  const list: GearItem[] = [];
+  const wt: Record<ClassKey, number> = { warrior: 130, magician: 137, bowman: 145, thief: 133 };
+  TIER_LEVELS.forEach((lo, t) => {
+    for (const v of [0, 1]) {
+      const L = Math.min(99, lo + 4 + v * 5 + (t === 7 ? 5 : 0));
+      const req = { str: 1, dex: 1, int: 1, luk: 1 };
+      for (const slot of GEAR_SLOTS) {
+        if (slot === 'weapon') {
+          for (const c of Object.keys(JOB_BIT) as ClassKey[]) {
+            const stats = deriveGearStats('weapon', L, { weaponType: wt[c], req: { [MAIN_STAT[c]]: 1 } });
+            list.push({ id: `dv${c}t${t}v${v}`, slot, name: `${c} L${L}`, level: L, job: JOB_BIT[c], gender: 2, tier: t, stats, long: false });
+            if (t === TIER_LEVELS.length - 1 && v === 1) console.log(`t7 ${c} weapon L${L}: ${JSON.stringify(stats)} -> dmg ${itemBonus(list[list.length - 1], c).dmg.toFixed(2)} (cap ${(GEAR_TIER_DMG_CAP * (t + 1)).toFixed(2)})`);
+          }
+        } else {
+          list.push({ id: `dv${slot}t${t}v${v}`, slot, name: `${slot} L${L}`, level: L, job: slot === 'shield' ? JOB_BIT.warrior : 0, gender: 2, tier: t, stats: deriveGearStats(slot, L, { req }), long: false });
+        }
+      }
+    }
+  });
+  return new GearPool(list, true);
+}
+const gearPool = process.env.PROBE_GEAR === 'real' ? realPool() : process.env.PROBE_GEAR === 'derived' ? derivedPool() : undefined;
 const MINUTES = [1, 3, 5, 8, 12, 15];
 
 interface Row { ttk: { boss: number; wave: number; s: number }[]; win: boolean; t: number; level: number; kills: number; snaps: Record<number, { might: number; hit: number; hp: number; maxHp: number; level: number; mobHp: number; mobDmg: number; bossKills: number; gear: number }> }
 
 function play(seed: number, cls: string): Row {
-  const sim = new Sim(seed, cls, { mobSpeeds });
+  const sim = new Sim(seed, cls, { mobSpeeds, ...(gearPool ? { pool: gearPool } : {}) });
   const snaps: Row['snaps'] = {};
   const ttk: Row['ttk'] = [];
   const spawnedAt: Record<number, number[]> = {};

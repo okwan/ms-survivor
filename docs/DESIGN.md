@@ -192,9 +192,13 @@ Items come in 8 tiers by reqLevel (0-9, 10-19, ..., 60-79, 80-99; the extractor 
 tier every 90 s to tier 7 (at 9:00). A drop is the run's tier, 15% of the time one higher. Normal kills drop gear 0.8% of the time, big mobs and tier 18+ 2%.
 Bosses drop 3 items (see Boss waves). Dropped gear glows and prints its name in a tier colour: grey (tiers 0-1), white (2-3), blue (4-5), purple (6), gold (7).
 
+The extractor (scripts/fetch-maple-gear.ts) keeps at most ~320 items under a ~2 MB byte budget, with per-tier quotas (t0 24, t1 30, t2 34, t3-t7 46 each) so the late tiers always exist.
+Buckets are (tier, slot, class, gender); each bucket's best item is taken first (clean items before ones flagged tuc 0 / notSale / exItem / setItemID / charmEXP / tradeBlock, then classic ids, then the highest reqLevel in the window).
+An empty bucket borrows the nearest higher-level item (up to reqLevel 120, then lower ones) and the manifest entry carries a `tier` override. The CI log prints a per-slot scan table (scanned / candidates / clean per tier, the rejection reasons and sample items) and the kept per-slot per-tier table.
+
 ## Balance curve (scripts/balance-probe.ts)
 
-`node --experimental-strip-types scripts/balance-probe.ts [seeds] [class]` plays the kiting bot (always card 0) over seeds and prints, per class, the win rate, the
+`node --experimental-strip-types scripts/balance-probe.ts [seeds] [class]` (PROBE_GEAR=real: a pool with MapleStory-sized item stats; PROBE_SPEEDS=rand: random mob speeds) plays the kiting bot (always card 0) over seeds and prints, per class, the win rate, the
 average time to kill each boss and the hero and mob numbers at minutes 1, 3, 5, 8, 12, 15. "dmg/hit" is the average base damage of the owned skills times the hero's damage
 multiplier (level, passives, gear, Masteries). Targets and results (12 seeds x 4 classes, placeholder gear):
 

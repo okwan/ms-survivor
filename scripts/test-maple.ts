@@ -1,6 +1,7 @@
 // Run: node --experimental-strip-types scripts/test-maple.ts
 // Builds synthetic Mob/Skill/String/Sound .wz files, runs the extractor (scripts/fetch-maple.ts) on them and checks
 // the manifest, atlases, link/fly/UOL handling, missing-mob handling and the mp3 passthrough.
+import { deriveGearStats, tierOfLevel } from '../src/game/gear.ts';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -49,9 +50,9 @@ function decodePng(file: string) {
   return { w, h, rgba, px };
 }
 
-function extract(name: string, localDir: string) {
+function extract(name: string, localDir: string, env: Record<string, string> = {}) {
   const dist = join(root, name);
-  const r = spawnSync('node', ['--experimental-strip-types', '--no-warnings', 'scripts/fetch-maple.ts', dist, localDir], { encoding: 'utf8' });
+  const r = spawnSync('node', ['--experimental-strip-types', '--no-warnings', 'scripts/fetch-maple.ts', dist, localDir], { encoding: 'utf8', env: { ...process.env, ...env } });
   return { dist, out: r.stdout + r.stderr, status: r.status };
 }
 
@@ -182,7 +183,7 @@ try {
   const gi = gear.items;
   const ids = Object.keys(gi);
   ok(ids.length > 60 && ids.length <= 320, `gear items extracted (${ids.length})`);
-  for (const skip of ['01002999', '01002998', '01002997', '01009998', '01009997', '01009999', '01432000', '01092002']) ok(!(skip in gi), `${skip} (no tuc, event flag, no stats, cash, pirate-only, no walk frames, spear, mage shield) is skipped`);
+  for (const skip of ['01002999', '01002998', '01002997', '01002996', '01009998', '01009997', '01009999', '01432000', '01092002']) ok(!(skip in gi), `${skip} (no tuc, event flag, no stats, cash, pirate-only, no walk frames, spear, mage shield) is skipped`);
   eq(gi['01302103'], { slot: 'weapon', name: 'Test Sword 3', level: 30, job: 1, tuc: 7, stats: { pad: 24 }, icon: gi['01302103'].icon }, 'a sword: name from String.wz, level, job, stats from info/inc*');
   eq(gi['01372103'].stats, { mad: 29, int: 3 }, 'wand stats: incMAD and incINT map to mad / int');
   eq(gi['01072103'].stats, { pdd: 5, speed: 3 }, 'boots stats: incPDD, incSPEED');
@@ -191,9 +192,32 @@ try {
   eq([gi['01052000'].slot, gi['01052000'].long], ['coat', true], 'a Longcoat is a coat slot item marked long');
   ok(Object.values(gi).every((e) => e.slot !== 'shield' || e.job === 1 || e.job === 0), 'shields are warrior (or all-class) only');
   ok(Object.values(gi).every((e) => e.slot !== 'weapon' || [1, 2, 4, 8, 0].includes(e.job)), 'weapons have one class job');
+  // every tier t0..t7 has items, gloves, capes, shields and every class's weapon included; empty tier windows borrow a higher-level item and say so
+  const tierOfE = (e: { level: number; tier?: number }) => e.tier ?? tierOfLevel(e.level);
+  for (let t = 0; t < 8; t++) {
+    for (const slot of ['glove', 'cape', 'shield', 'weapon', 'cap', 'coat', 'pants', 'shoes'] as const) ok(Object.values(gi).some((e) => e.slot === slot && tierOfE(e) === t), `tier ${t} has a ${slot}`);
+    for (const [job, nm] of [[1, 'warrior'], [2, 'magician'], [4, 'bowman'], [8, 'thief']] as const) ok(Object.values(gi).some((e) => e.slot === 'weapon' && e.job === job && tierOfE(e) === t), `tier ${t} has a ${nm} weapon`);
+  }
+  ok(Object.values(gi).filter((e) => e.slot === 'glove' && e.tier === 5).every((e) => e.level > 59), 'the glove standing in for tier 5 is a higher-level one (tier field set)');
+  ok(Object.values(gi).every((e) => e.level <= 120), 'no item above reqLevel 120');
+  ok(/gear: kept items per slot \(rows\) and offered tier t0..t7/.test(run.out) && /gear:   glove +\d+/.test(run.out) && /empty buckets borrowed from a higher reqLevel/.test(run.out) && /MB of the 2\.0 MB budget/.test(run.out), 'the per-slot per-tier tables, the borrowing and the byte budget are logged');
+  // stat-less equips: wearable ones (tuc or price) are kept with derived stats, real ones stay ahead of them
+  const dd = deriveGearStats('glove', 60, {});
+  eq([gi['01082400'].derived, gi['01082400'].stats], [true, { ...dd, dex: 3 }], 'a stat-less glove with a price gets derived stats and is marked derived');
+  eq(gi['01102400'].stats, deriveGearStats('cape', 50), 'a stat-less cape (price only) is derived from slot and reqLevel');
+  eq(gi['01102401'].derived, true, 'a stat-less cape with upgrade slots is derived');
+  eq([gi['01332400'].derived, gi['01332400'].stats], [true, { pad: 58, dex: 3, luk: 3 }], 'a derived dagger has attack from its level and +main stat per 25 levels for each req stat');
+  eq(gi['01072400'].stats.speed, 6, 'derived boots get speed');
+  ok(Object.values(gi).filter((e) => !e.derived).every((e) => e.derived === undefined), 'items with real inc* stats are not marked derived');
+  ok(/kept with DERIVED stats/.test(run.out) && /gear: \d+ of \d+ kept items have DERIVED stats/.test(run.out) && /01082400 \| glove \| Plain Gloves .* derived/.test(run.out), 'derived items are logged');
+  // a small budget trims the picks instead of overshooting
+  const small = extract('dist-small', fx, { MAPLE_GEAR_BYTES: '250000' });
+  const sm = /gear: (\d+) items extracted .*?, (\d+) bytes/.exec(small.out);
+  ok(!!sm && Number(sm[2]) <= 250000 && Number(sm[1]) > 8 && Number(sm[1]) < ids.length, `a 250000 byte budget trims the gear (${sm?.[1]} items, ${sm?.[2]} bytes)`);
+  ok(/lowest-priority picks .* trimmed to fit/.test(small.out), 'the trimming is logged');
   const perBucket = new Map<string, number>();
   for (const e of Object.values(gi)) if (e.slot === 'weapon' && e.job === 8) perBucket.set(String(Math.floor(e.level / 10)), (perBucket.get(String(Math.floor(e.level / 10))) ?? 0) + 1);
-  ok([...perBucket.values()].every((n) => n <= 2), 'at most two thief weapons per level tier');
+  ok([...perBucket.values()].every((n) => n <= 3), 'at most three thief weapons per level tier');
   for (const slot of ['cap', 'glove', 'cape', 'shield'] as const) ok(av.items[slot].length >= 7 && av.items[slot].every((id) => existsSync(join(run.dist, 'maple', 'avatar', `${slot}-${id}.json`)) && existsSync(join(run.dist, 'maple', 'avatar', `${slot}-${id}.png`))), `${slot} frame files are written and listed in the avatar items`);
   eq(new Set(av.items.weapon).size, av.items.weapon.length, 'no item is listed twice');
   const capFrames = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'cap-01002003.json'), 'utf8'));

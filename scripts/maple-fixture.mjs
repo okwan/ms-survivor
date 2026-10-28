@@ -227,7 +227,7 @@ function capeTree(col) {
 function shieldTree(col) {
   return { info: { islot: 'Si', vslot: 'Si', cash: 0 }, ...forFrames((a, i) => ({ shield: cv(10, 12, box(10, 12, col), 5, 6, 'shield', { navel: [-9 - swingOf(a, i), 2 + bobOf(a, i)] }) })) };
 }
-const LEVELS = [0, 10, 20, 30, 40, 50, 60];
+const LEVELS = [0, 10, 20, 30, 40, 50, 60, 80];
 
 /** { Character: {'Cap/01002000.img': tree...}, Eqp: String.wz Eqp.img/Eqp tree } */
 export function gearImages() {
@@ -248,14 +248,21 @@ export function gearImages() {
     add('Pants', 'Bottom', 1061100 + t, pantsTree(1061100 + t), `Test Skirt ${t}`, { ...lvl, incPDD: 4 + t });
     add('Shoes', 'Shoes', 1072100 + t, shoesTree(1072100 + t), `Test Boots ${t}`, { ...lvl, incPDD: 2 + t, incSPEED: t });
     add('Shoes', 'Shoes', 1072200 + t, shoesTree(1072200 + t), `Test Sandals ${t}`, { ...lvl, reqJob: 8, incPDD: 2, incSPEED: 2 * t });
-    add('Glove', 'Glove', 1082100 + t, gloveTree(tint(t + 2)), `Test Gloves ${t}`, { ...lvl, incPDD: 1 + t });
-    add('Cape', 'Cape', 1102100 + t, capeTree(tint(t + 3)), `Test Cape ${t}`, { ...lvl, incPDD: 2 + t, incMDD: t });
+    // gloves and capes have no items at tiers 5 and 6: those tiers must borrow the nearest higher ones
+    if (t < 5 || t === 7) add('Glove', 'Glove', 1082100 + t, gloveTree(tint(t + 2)), `Test Gloves ${t}`, { ...lvl, incPDD: 1 + t });
+    if (t < 5 || t === 7) add('Cape', 'Cape', 1102100 + t, capeTree(tint(t + 3)), `Test Cape ${t}`, { ...lvl, incPDD: 2 + t, incMDD: t });
     add('Shield', 'Shield', 1092100 + t, shieldTree(tint(t + 4)), `Test Shield ${t}`, { ...lvl, reqJob: 1, incPDD: 5 + t });
     add('Weapon', 'Weapon', 1302100 + t, weaponTree('sword'), `Test Sword ${t}`, { ...lvl, reqJob: 1, incPAD: 15 + 3 * t });
     add('Weapon', 'Weapon', 1372100 + t, weaponTree('wand'), `Test Wand ${t}`, { ...lvl, reqJob: 2, incMAD: 20 + 3 * t, incINT: t });
     add('Weapon', 'Weapon', 1452100 + t, weaponTree('bow'), `Test Bow ${t}`, { ...lvl, reqJob: 4, incPAD: 15 + 3 * t });
     add('Weapon', 'Weapon', 1332100 + t, weaponTree('dagger'), `Test Dagger ${t}`, { ...lvl, reqJob: 8, incPAD: 12 + 3 * t });
   });
+  // a tier with no clean gloves / capes at all: only a notSale glove at level 95 and gloves / capes of level 105-115 exist above them
+  add('Glove', 'Glove', 1082300, gloveTree(tint(9)), 'Rare Gloves', { reqLevel: 95, reqJob: 0, cash: 0, incPDD: 9, notSale: 1, tuc: 0 });
+  add('Glove', 'Glove', 1082301, gloveTree(tint(8)), 'Far Gloves', { reqLevel: 105, reqJob: 0, cash: 0, incPDD: 10 });
+  add('Glove', 'Glove', 1082302, gloveTree(tint(7)), 'Farther Gloves', { reqLevel: 112, reqJob: 0, cash: 0, incPDD: 11 });
+  add('Cape', 'Cape', 1102300, capeTree(tint(8)), 'Far Cape', { reqLevel: 110, reqJob: 0, cash: 0, incPDD: 12 });
+  add('Cape', 'Cape', 1102301, capeTree(tint(6)), 'Farther Cape', { reqLevel: 115, reqJob: 0, cash: 0, incPDD: 13 });
   // one-piece coat for the Magician at tier 3, in Longcoat/
   add('Longcoat', 'Overall', 1052000, coatTree(1052000), 'Test Robe', { reqLevel: 30, reqJob: 2, cash: 0, incPDD: 12, incMDD: 12, vslot: 'MaPn' });
   // items the selection must skip
@@ -264,9 +271,16 @@ export function gearImages() {
   // novelty items the drop filters must reject: no tuc, an event flag, no stats
   add('Cap', 'Cap', 1002999, capTree(tint(3), 'CpH1H5'), 'No Slots Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, tuc: 0 });
   add('Cap', 'Cap', 1002998, capTree(tint(3), 'CpH1H5'), 'Event Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, timeLimited: 1 });
-  add('Cap', 'Cap', 1002997, capTree(tint(3), 'CpH1H5'), 'Statless Cap', { reqLevel: 30, reqJob: 0, cash: 0 });
+  add('Cap', 'Cap', 1002997, capTree(tint(3), 'CpH1H5'), 'Statless Cap', { reqLevel: 30, reqJob: 0, cash: 0, tuc: 0 });
   add('Weapon', 'Weapon', 1432000, weaponTree('sword'), 'Test Spear', { reqLevel: 0, reqJob: 1, cash: 0, incPAD: 99 });
   add('Shield', 'Shield', 1092002, shieldTree(tint(1)), 'Mage Shield', { reqLevel: 0, reqJob: 2, cash: 0, incPDD: 3 });
+  // equips without any inc* key (most of the real client): wearable ones (tuc or price) get derived stats
+  add('Glove', 'Glove', 1082400, gloveTree(tint(5)), 'Plain Gloves', { reqLevel: 60, reqJob: 0, cash: 0, reqDEX: 50, price: 800 });
+  add('Cape', 'Cape', 1102400, capeTree(tint(4)), 'Plain Cape', { reqLevel: 50, reqJob: 0, cash: 0, price: 500 });
+  add('Cape', 'Cape', 1102401, capeTree(tint(2)), 'Plainer Cape', { reqLevel: 60, reqJob: 0, cash: 0, tuc: 5 });
+  add('Weapon', 'Weapon', 1332400, weaponTree('dagger'), 'Plain Dagger', { reqLevel: 60, reqJob: 8, cash: 0, reqDEX: 50, reqLUK: 30, price: 5000 });
+  add('Shoes', 'Shoes', 1072400, shoesTree(1072400), 'Plain Boots', { reqLevel: 50, reqJob: 0, cash: 0, price: 900 });
+  add('Cap', 'Cap', 1002996, capTree(tint(6), 'CpH1H5'), 'Worthless Cap', { reqLevel: 30, reqJob: 0, cash: 0, tuc: 0 });
   const noWalk = capTree(tint(5), 'CpH1H5');
   for (const a of ['walk1', 'walk2']) delete noWalk[a];
   add('Cap', 'Cap', 1009999, noWalk, 'Unwalkable Cap', { reqLevel: 0, reqJob: 0, cash: 0 });

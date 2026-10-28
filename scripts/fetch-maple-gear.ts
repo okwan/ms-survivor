@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLASSES } from '../src/game/data.ts';
 import type { ClassKey } from '../src/game/data.ts';
-import { GEAR_SLOTS, JOB_BIT, MAX_GEAR_LEVEL, TIER_LEVELS, tierOfLevel } from '../src/game/gear.ts';
+import { GEAR_SLOTS, JOB_BIT, deriveGearStats, MAX_GEAR_LEVEL, TIER_LEVELS, tierOfLevel } from '../src/game/gear.ts';
 import type { GearEntry, GearManifest, GearSlot, GearStats } from '../src/game/gear.ts';
 import { compose, defaultLook, itemFile, lookItems, rasterize, stanceActions } from '../src/maple/avatar-core.ts';
 import type { Part, Slot, ZTable } from '../src/maple/avatar-core.ts';
@@ -31,8 +31,16 @@ export interface GearTools {
 
 /** total items kept (the whole gear block is a few MB) */
 export const MAX_GEAR_ITEMS = 320;
-/** items picked per tier, slot, class and gender */
-const PER_BUCKET = 2;
+/** items picked per tier, slot, class and gender (the first one of every bucket is chosen before any second one) */
+const PER_BUCKET = 3;
+/** items kept per tier t0..t7 (sums to ~MAX_GEAR_ITEMS): the late tiers get the biggest share so the cool gear exists for every class */
+const TIER_QUOTA = [24, 30, 34, 46, 46, 46, 46, 46];
+/** gear frame files and icons stay under this many bytes (the manifest and the atlases are small next to it); lowest-priority picks are dropped first */
+export const GEAR_BYTE_BUDGET = Number(process.env.MAPLE_GEAR_BYTES) > 0 ? Number(process.env.MAPLE_GEAR_BYTES) : 2_000_000;
+/** highest reqLevel that may stand in for an empty tier window (the normal cap is MAX_GEAR_LEVEL) */
+const BORROW_MAX_LEVEL = 120;
+/** selection order inside a tier: scarce slots first */
+const SLOT_PRIO: Record<GearSlot, number> = { weapon: 0, shield: 1, glove: 2, cape: 3, shoes: 4, cap: 5, coat: 6, pants: 7 };
 
 const FOLDERS: Record<string, { slot: GearSlot; long: boolean }> = {
   cap: { slot: 'cap', long: false },
@@ -66,6 +74,12 @@ interface Candidate {
   stats: GearStats;
   where: string;
   tuc: number;
+  /** stats came from deriveGearStats (the item has no inc* keys) */
+  derived: boolean;
+  /** why the item is a worse drop candidate (it is only picked when a bucket has nothing cleaner): tuc0, flag:<key>, nowalk */
+  bad: string[];
+  /** tier the item is offered at (tierOfLevel(level) unless it stands in for an empty tier window) */
+  tier: number;
 }
 
 /** classic items (the low ids of each thousand-block: 01002000..01002199) are preferred over the later event and novelty ones */
@@ -126,11 +140,23 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     // ---- scan every equip image's info node ----
     const names = equipNames(strings, lg);
     const cands: Candidate[] = [];
-    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, tooHigh: 0 };
+    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, derived: 0, tooHigh: 0, timeLimited: 0 };
     const infoKeys = new Map<string, number>();
     const vslots = new Map<string, number>();
     const islots = new Map<string, number>();
     const perFolder = new Map<string, number>();
+    /** diagnostics: per slot, how many scanned items each rule touched, and per slot and tier how many scanned items there were / survived as clean candidates */
+    const reasonBy = new Map<string, Map<string, number>>();
+    const scannedBy = new Map<string, number>();
+    const hardBy = new Map<string, number>();
+    const samples = new Map<string, string[]>();
+    const bump = <K>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
+    const reasonOf = (slot: string) => reasonBy.get(slot) ?? reasonBy.set(slot, new Map()).get(slot)!;
+    const sample = (slot: string, text: string) => {
+      const l = samples.get(slot) ?? samples.set(slot, []).get(slot)!;
+      if (l.length < 4) l.push(text);
+    };
+    const NOISE = ['timeLimited', 'notSale', 'exItem', 'setItemID', 'charmEXP', 'tradeBlock'];
     for (const path of character.names()) {
       const m = /^(cap|coat|longcoat|pants|shoes|glove|cape|shield|weapon)\/(\d+)\.img$/i.exec(path);
       if (!m) continue;
@@ -146,6 +172,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       }
       if (!img) {
         seen.unreadable++;
+        bump(reasonOf(f.slot), 'unreadable');
         continue;
       }
       seen.images++;
@@ -153,6 +180,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       const info = root.get('info');
       if (!info?.children) {
         seen.noInfo++;
+        bump(reasonOf(f.slot), 'noInfo');
         continue;
       }
       for (const k of info.keys()) infoKeys.set(k, (infoKeys.get(k) ?? 0) + 1);
@@ -161,21 +189,31 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       const is = String(val('islot') ?? '');
       vslots.set(vs, (vslots.get(vs) ?? 0) + 1);
       islots.set(is, (islots.get(is) ?? 0) + 1);
+      const level = intOf(val('reqLevel'));
+      bump(scannedBy, `${f.slot}/${tierOfLevel(level)}`);
+      const hard = (why: string) => {
+        bump(reasonOf(f.slot), why);
+        bump(hardBy, `${f.slot}/${tierOfLevel(level)}`);
+        sample(f.slot, `${m[2]} L${level} rejected ${why}: ${[...info.keys()].filter((k: string) => k !== 'icon' && k !== 'iconRaw').map((k: string) => `${k}=${val(k)}`).slice(0, 14).join(' ')}`);
+      };
       if (intOf(val('cash')) === 1) {
         seen.cash++;
+        hard('cash');
         continue;
       }
       const has = (a: string) => tools.frameNodes(root.get(a)).length > 0;
-      // armor needs stand1 and walk1; weapons may use the 2 variants (bows stand with stand2)
+      // armor wants stand1 and walk1; weapons may use the 2 variants (bows stand with stand2). Without a walk action the item is still usable (penalised)
       const walks = f.slot === 'weapon' ? has('walk1') || has('walk2') : has('walk1');
-      const stands = f.slot === 'weapon' ? has('stand1') || has('stand2') : has('stand1');
-      if (!stands || !walks) {
+      const stands = f.slot === 'weapon' ? has('stand1') || has('stand2') : has('stand1') || has('stand2');
+      if (!stands) {
         seen.noFrames++;
+        hard('noStand');
         continue;
       }
       const job = intOf(val('reqJob'));
       if (job === 16) {
         seen.pirate++;
+        hard('pirate');
         continue;
       }
       const stats: GearStats = {};
@@ -183,28 +221,55 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
         const v = intOf(val(k));
         if (v) stats[to] = v;
       }
-      // a normal drop item: upgradeable (tuc > 0), not an event / limited / set / untradeable novelty, and with a stat that counts
-      if (intOf(val('tuc')) <= 0) {
-        seen.noTuc++;
-        continue;
-      }
-      if (['timeLimited', 'notSale', 'exItem', 'setItemID', 'charmEXP'].some((k) => intOf(val(k)) !== 0) || intOf(val('tradeBlock')) === 1) {
-        seen.flagged++;
-        continue;
-      }
-      const hasStat = f.slot === 'weapon' ? !!(stats.pad || (stats.mad && [137, 138].includes(Math.floor(n / 10000)))) : Object.keys(stats).length > 0;
+      const wtype = Math.floor(n / 10000);
+      const hasStat = f.slot === 'weapon' ? !!(stats.pad || (stats.mad && [137, 138].includes(wtype))) : Object.keys(stats).length > 0;
+      let derived = false;
       if (!hasStat) {
-        seen.noStats++;
+        // this client's Character.wz carries no inc* keys for most equips: a real wearable (reqLevel present, upgrade slots or a price) gets derived stats
+        const wearable = info.get('reqLevel') !== undefined && (intOf(val('tuc')) > 0 || intOf(val('price')) > 1);
+        if (!wearable) {
+          seen.noStats++;
+          hard('noStat');
+          continue;
+        }
+        const d = deriveGearStats(f.slot, level, { weaponType: wtype, long: f.long, req: { str: intOf(val('reqSTR')), dex: intOf(val('reqDEX')), int: intOf(val('reqINT')), luk: intOf(val('reqLUK')) } });
+        for (const [k, v] of Object.entries(d)) if (stats[k as keyof GearStats] === undefined) stats[k as keyof GearStats] = v;
+        derived = true;
+        seen.derived++;
+        bump(reasonOf(f.slot), 'derivedStats');
+      }
+      if (intOf(val('timeLimited')) !== 0) {
+        seen.timeLimited++;
+        hard('timeLimited');
         continue;
       }
-      const level = intOf(val('reqLevel'));
-      if (level > MAX_GEAR_LEVEL) {
+      if (level > BORROW_MAX_LEVEL) {
         seen.tooHigh++;
+        hard('levelOver' + BORROW_MAX_LEVEL);
         continue;
       }
-      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')) });
+      // soft problems: an item with any of these is only picked when the bucket has nothing cleaner
+      const bad: string[] = [];
+      if (intOf(val('tuc')) <= 0) { bad.push('tuc0'); seen.noTuc++; }
+      for (const k of NOISE) if (k !== 'timeLimited' && (k === 'tradeBlock' ? intOf(val(k)) === 1 : intOf(val(k)) !== 0)) { bad.push('flag:' + k); seen.flagged++; }
+      if (!walks) bad.push('nowalk');
+      if (level > MAX_GEAR_LEVEL) bad.push('level>' + MAX_GEAR_LEVEL);
+      for (const b of bad) bump(reasonOf(f.slot), b);
+      if (bad.length) sample(f.slot, `${m[2]} L${level} soft ${bad.join(',')}: ${[...info.keys()].filter((k: string) => k !== 'icon' && k !== 'iconRaw').map((k: string) => `${k}=${val(k)}`).slice(0, 14).join(' ')}`);
+      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')), derived, bad, tier: tierOfLevel(Math.min(level, MAX_GEAR_LEVEL)) });
     }
-    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand/walk frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable; filters removed ${seen.noTuc} with tuc <= 0, ${seen.flagged} flagged timeLimited/notSale/exItem/setItemID/charmEXP/tradeBlock, ${seen.noStats} without a usable inc* stat, ${seen.tooHigh} above reqLevel ${MAX_GEAR_LEVEL}; ${cands.length} candidates`);
+    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable, ${seen.noStats} without inc* stats and not a real wearable, ${seen.derived} kept with DERIVED stats (no inc* keys), ${seen.timeLimited} timeLimited, ${seen.tooHigh} above reqLevel ${BORROW_MAX_LEVEL}; kept ${cands.length} candidates, of which soft-flagged (picked only when nothing cleaner): ${seen.noTuc} tuc <= 0, ${seen.flagged} notSale/exItem/setItemID/charmEXP/tradeBlock`);
+    {
+      const clean = (slot: string, t: number) => cands.filter((c) => c.slot === slot && tierOfLevel(Math.min(c.level, MAX_GEAR_LEVEL)) === t && !c.bad.length).length;
+      const any = (slot: string, t: number) => cands.filter((c) => c.slot === slot && tierOfLevel(Math.min(c.level, MAX_GEAR_LEVEL)) === t).length;
+      log('gear: scan table per slot, "scanned/candidates/clean" by tier t0..t7 (scanned = every readable image of that reqLevel window):');
+      for (const slot of GEAR_SLOTS) {
+        const row = TIER_LEVELS.map((_, t) => `${scannedBy.get(`${slot}/${t}`) ?? 0}/${any(slot, t)}/${clean(slot, t)}`);
+        const why = [...reasonOf(slot)].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ');
+        log(`gear:   ${slot.padEnd(7)} ${row.join('  ')}  | ${why || 'no rejections'}`);
+        for (const l of samples.get(slot) ?? []) log(`gear:     e.g. ${l}`);
+      }
+    }
     const top = (m: Map<string, number>, k = 40) => [...m].sort((a, b) => b[1] - a[1]).slice(0, k).map(([s, c]) => `${s || '(none)'}x${c}`).join(' ');
     log(`gear: info keys seen: ${top(infoKeys, 60)}`);
     log(`gear: islot values seen: ${top(islots)}`);
@@ -214,49 +279,79 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       return none;
     }
 
-    // ---- selection: buckets of (tier, slot, class, gender), two lowest ids each ----
-    const byLevel = cands.map((c) => ({ c, tier: tierOfLevel(c.level) }));
-    interface Pick { c: Candidate; key: number }
-    const picks: Pick[] = [];
-    const chosenIds = new Set<string>();
-    let bi = 0;
+    // ---- selection: buckets of (tier, slot, class, gender); every bucket's best item first, per-tier quotas ----
+    // best = clean (no soft problem), classic id range, highest reqLevel inside the window. An empty bucket borrows upward (higher reqLevels up to
+    // BORROW_MAX_LEVEL), then downward, and the item is offered at the bucket's tier.
+    interface Pick { c: Candidate; tier: number; layer: number; prio: number; key: number }
     const classes = CLASSES.map((c) => c.key as ClassKey);
+    const fits = (c: Candidate, slot: GearSlot, cls: ClassKey, gender: 0 | 1 | 2) => {
+      if (c.slot !== slot || !jobFits(c.job, cls)) return false;
+      if (slot === 'weapon') return WEAPON_TYPES[cls].includes(Math.floor(c.n / 10000));
+      return gender === 2 || c.gender === 2 || c.gender === gender;
+    };
+    const order = (a: Candidate, b: Candidate) => a.bad.length - b.bad.length || +a.derived - +b.derived || classic(a.n) - classic(b.n) || b.level - a.level || a.n - b.n;
+    const picksByTier: Pick[][] = TIER_LEVELS.map(() => []);
+    const borrowed = { up: 0, down: 0, buckets: 0 };
+    /** empty buckets: resolved after every tier took its own items, so a borrowed item never steals another tier's natural one */
+    const borrowReqs: { tier: number; pool: Candidate[]; slot: GearSlot }[] = [];
+    let bi = 0;
     for (let tier = 0; tier < TIER_LEVELS.length; tier++) {
+      const lo = TIER_LEVELS[tier], hi = tier + 1 < TIER_LEVELS.length ? TIER_LEVELS[tier + 1] - 1 : MAX_GEAR_LEVEL;
       for (const slot of GEAR_SLOTS) {
         for (const cls of classes) {
           if (slot === 'shield' && cls !== 'warrior') continue;
           for (const gender of (slot === 'weapon' || slot === 'shield' ? [2] : ARMOR.includes(slot) ? [0, 1] : [2]) as (0 | 1 | 2)[]) {
             bi++;
-            const pool = byLevel
-              .filter(({ c, tier: t }) => {
-                if (t !== tier || c.slot !== slot || !jobFits(c.job, cls)) return false;
-                if (slot === 'weapon') return WEAPON_TYPES[cls].includes(Math.floor(c.n / 10000));
-                return gender === 2 || c.gender === 2 || c.gender === gender;
-              })
-              .map((x) => x.c)
-              .sort((a, b) => classic(a.n) - classic(b.n) || a.n - b.n);
+            const all = cands.filter((c) => fits(c, slot, cls, gender));
+            // clean items of the window, else soft-flagged ones of the window, else (window extended) cleaner-first higher reqLevels, then lower ones
+            const inWin = all.filter((c) => c.level >= lo && c.level <= hi).sort(order);
+            let pool = inWin.filter((c) => !c.bad.length);
+            if (!pool.length) pool = inWin;
+            if (!pool.length) {
+              borrowed.buckets++;
+              const up = all.filter((c) => c.level > hi).sort((a, b) => a.bad.length - b.bad.length || a.level - b.level || a.n - b.n);
+              const down = all.filter((c) => c.level < lo).sort((a, b) => a.bad.length - b.bad.length || b.level - a.level || a.n - b.n);
+              if (up.length) { borrowReqs.push({ tier, pool: up, slot }); borrowed.up++; }
+              else if (down.length) { borrowReqs.push({ tier, pool: down, slot }); borrowed.down++; }
+              continue;
+            }
             pool.slice(0, PER_BUCKET).forEach((c, rank) => {
-              // tier 3 first-picks come first (the CI preview needs a full set), as do the top tier's (the best drops must exist), then the rest of rank 0, then rank 1; spread inside a rank
-              const lead = (tier === 3 || tier === TIER_LEVELS.length - 1) && rank === 0 ? 0 : 1 + rank;
-              picks.push({ c, key: lead * 4294967296 + scatter(tier, bi) });
+              picksByTier[tier].push({ c, tier, layer: rank, prio: SLOT_PRIO[slot], key: scatter(tier, bi) });
             });
           }
         }
       }
     }
-    picks.sort((a, b) => a.key - b.key);
-    const chosen: Candidate[] = [];
-    let overCap = 0;
-    for (const p of picks) {
-      if (chosenIds.has(p.c.id)) continue;
-      if (chosen.length >= MAX_GEAR_ITEMS) {
-        overCap++;
-        continue;
-      }
+    // the tier-3 first-picks come first within their layer (the CI preview needs a full set)
+    const byPriority = (a: Pick, b: Pick) => a.layer - b.layer || a.prio - b.prio || a.key - b.key;
+    const chosen: (Candidate & { tier: number; layer: number })[] = [];
+    const chosenIds = new Set<string>();
+    const perTier = TIER_LEVELS.map(() => 0);
+    const take = (p: Pick) => {
+      if (chosenIds.has(p.c.id) || chosen.length >= MAX_GEAR_ITEMS) return false;
       chosenIds.add(p.c.id);
-      chosen.push(p.c);
+      chosen.push({ ...p.c, tier: p.tier, layer: p.layer });
+      perTier[p.tier]++;
+      return true;
+    };
+    picksByTier.forEach((l, t) => { l.sort(byPriority); for (const p of l) if (perTier[t] < TIER_QUOTA[t]) take(p); });
+    // empty buckets: the nearest higher (then lower) item that is still free, offered at the bucket's tier; each tier / slot / job / gender gets one
+    const got = new Map<string, number>();
+    for (const r of borrowReqs) {
+      const k = `${r.tier}/${r.slot}/${r.pool[0].job}/${r.pool[0].gender}`;
+      for (const c of r.pool) {
+        if ((got.get(k) ?? 0) >= 1) break;
+        if (chosenIds.has(c.id)) continue;
+        take({ c, tier: r.tier, layer: 0, prio: SLOT_PRIO[r.slot], key: 0 });
+        got.set(k, (got.get(k) ?? 0) + 1);
+      }
     }
-    if (overCap) log(`gear: ${overCap} more candidate picks were dropped by the ${MAX_GEAR_ITEMS} item cap`);
+    // quota left over by thin tiers goes to the tiers that still have picks, late tiers first
+    let overCap = 0;
+    for (let t = TIER_LEVELS.length - 1; t >= 0; t--) for (const p of picksByTier[t]) if (!chosenIds.has(p.c.id) && !take(p)) overCap++;
+    log(`gear: selection took ${chosen.length} items (per tier ${perTier.map((n, t) => `t${t} ${n}/${TIER_QUOTA[t]}`).join(', ')}); ${borrowed.buckets} empty buckets borrowed from a higher reqLevel (${borrowed.up}) or a lower one (${borrowed.down}); ${overCap} more picks dropped by the ${MAX_GEAR_ITEMS} item cap`);
+    // most important first, so that the byte budget only ever cuts the least important picks
+    chosen.sort((a, b) => a.layer - b.layer || b.tier - a.tier || SLOT_PRIO[a.slot] - SLOT_PRIO[b.slot]);
 
     // ---- extract frames and icons ----
     const items = new Map<string, ExtractedItem>();
@@ -266,7 +361,39 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     let bytes = 0;
     const failed: string[] = [];
     let noIcon = 0;
+    let overBudget = 0;
+    // the icon atlas is written after the frames: read every chosen icon first and pack them once to learn what the atlas costs, then
+    // whatever is left of the budget is for frame files (in priority order; a pick whose frames would not fit is trimmed)
+    const iconOf = new Map<string, { id: string; w: number; h: number; rgba: Buffer; ox: number; oy: number } | null>();
     for (const c of chosen) {
+      let got: { id: string; w: number; h: number; rgba: Buffer; ox: number; oy: number } | null = null;
+      try {
+        const ic = character.image(c.where)?.root.get('info/icon');
+        if (ic?.type === 'canvas') {
+          const [w, h, rgba] = canvasRgba(ic, character.image(c.where)!.key);
+          const o = ic.get('origin')?.value;
+          if (w > 0 && h > 0) got = { id: c.id, w, h, rgba, ox: o?.x ?? 0, oy: o?.y ?? 0 };
+        }
+      } catch (e) {
+        warn(`gear icon ${c.where}: ${(e as Error).message}`);
+      }
+      iconOf.set(c.id, got);
+    }
+    let atlasEstimate = 0;
+    {
+      const all = [...iconOf.values()].filter((x): x is NonNullable<typeof x> => !!x);
+      if (all.length) {
+        const a = tools.shelfPack(all);
+        atlasEstimate = encodePng(a.w, a.h, a.rgba).length;
+      }
+    }
+    const frameBudget = GEAR_BYTE_BUDGET - atlasEstimate;
+    log(`gear: icon atlas for all ${chosen.length} picks would be ${atlasEstimate} bytes; ${Math.max(0, frameBudget)} bytes left of the budget for frame files`);
+    for (const c of chosen) {
+      if (bytes >= frameBudget) {
+        overBudget++;
+        continue;
+      }
       const img = character.image(c.where);
       if (!img) {
         failed.push(`${c.id} (gone)`);
@@ -281,6 +408,10 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
           failed.push(`${c.id} (no frames)`);
           continue;
         }
+        if (!old && bytes + it.bytes > frameBudget) {
+          overBudget++;
+          continue;
+        }
         if (!old) {
           writeFileSync(join(dir, itemFile(c.slot, c.id, 'png')), encodePng(it.atlas.w, it.atlas.h, it.atlas.rgba));
           writeFileSync(join(dir, itemFile(c.slot, c.id, 'json')), JSON.stringify(it.json));
@@ -289,30 +420,20 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
           (ids[c.slot] ??= []).push(c.id);
         }
         const entry: GearEntry = {
-          slot: c.slot, name: names.get(c.n) ?? `Item ${c.n}`, level: c.level, job: c.job, ...(c.gender !== 2 ? { g: c.gender } : {}), ...(c.long ? { long: true } : {}), tuc: c.tuc, stats: c.stats,
+          slot: c.slot, name: names.get(c.n) ?? `Item ${c.n}`, level: c.level, ...(c.tier !== tierOfLevel(c.level) ? { tier: c.tier } : {}), job: c.job, ...(c.gender !== 2 ? { g: c.gender } : {}), ...(c.long ? { long: true } : {}), tuc: c.tuc, stats: c.stats, ...(c.derived ? { derived: true as const } : {}),
         };
         entries[c.id] = entry;
         // the icon (info/icon, 32x32-ish) with its origin
-        const ic = img.root.get('info/icon');
-        let hadIcon = false;
-        if (ic?.type === 'canvas') {
-          try {
-            const [w, h, rgba] = canvasRgba(ic, img.key);
-            if (w > 0 && h > 0) {
-              const o = ic.get('origin')?.value;
-              icons.push({ id: c.id, w, h, rgba, ox: o?.x ?? 0, oy: o?.y ?? 0 });
-              hadIcon = true;
-            }
-          } catch (e) {
-            warn(`gear icon ${c.where}: ${(e as Error).message}`);
-          }
-        }
+        const icon = iconOf.get(c.id);
+        if (icon) icons.push(icon);
+        const hadIcon = !!icon;
         if (!hadIcon) noIcon++;
       } catch (e) {
         warn(`gear ${c.where}: ${(e as Error).stack}`);
         failed.push(`${c.id} (error)`);
       }
     }
+    if (overBudget) log(`gear: byte budget ${(GEAR_BYTE_BUDGET / 1e6).toFixed(1)} MB: ${overBudget} lowest-priority picks (second and third choices of the lowest tiers first) were trimmed to fit`);
     if (failed.length) log(`gear: ${failed.length} chosen items could not be extracted: ${failed.slice(0, 30).join('; ')}`);
     if (!Object.keys(entries).length) {
       warn('gear: none of the chosen items could be extracted; drops use placeholder items');
@@ -328,18 +449,32 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       writeFileSync(join(dir, 'gear-icons.png'), png);
       bytes += png.length;
       iconAtlas = 'avatar/gear-icons.png';
-      log(`gear: icon atlas ${atlas.w}x${atlas.h} with ${icons.length} icons`);
+      log(`gear: icon atlas ${atlas.w}x${atlas.h} with ${icons.length} icons (${png.length} bytes)`);
+      if (bytes > GEAR_BYTE_BUDGET) warn(`gear: ${bytes} bytes written, over the ${GEAR_BYTE_BUDGET} byte budget (icon atlas larger than its reserve)`);
     }
     if (noIcon) log(`gear: ${noIcon} items have no info/icon (shown as plain squares)`);
 
     // ---- report ----
     const perSlot = GEAR_SLOTS.map((s) => `${s} ${Object.values(entries).filter((e) => e.slot === s).length}`).join(', ');
-    log(`gear: items per tier: ${TIER_LEVELS.map((_, t) => `t${t} ${Object.values(entries).filter((e) => tierOfLevel(e.level) === t).length}`).join(', ')}`);
-    log(`gear: ${Object.keys(entries).length} items extracted (${perSlot}), ${bytes} bytes (${(bytes / 1e6).toFixed(2)} MB), cap ${MAX_GEAR_ITEMS}`);
-    log('gear: id | slot | name | reqLevel | reqJob | gender | stats');
-    const rows = Object.entries(entries).slice(0, 40);
+    {
+      const tierOf = (e: GearEntry) => e.tier ?? tierOfLevel(e.level);
+      log('gear: kept items per slot (rows) and offered tier t0..t7 (columns), borrowed ones included:');
+      for (const slot of GEAR_SLOTS) {
+        const row = TIER_LEVELS.map((_, t) => Object.values(entries).filter((e) => e.slot === slot && tierOf(e) === t).length);
+        log(`gear:   ${slot.padEnd(7)} ${row.map((n) => String(n).padStart(2)).join(' ')}  = ${row.reduce((a, b) => a + b, 0)}`);
+      }
+      const cl = (cls: ClassKey) => TIER_LEVELS.map((_, t) => Object.entries(entries).filter(([id, e]) => tierOf(e) === t && jobFits(e.job, cls) && (e.slot !== 'weapon' || WEAPON_TYPES[cls].includes(Math.floor(Number(id) / 10000))) && (e.slot !== 'shield' || cls === 'warrior')).length);
+      for (const cls of classes) log(`gear:   wearable by ${cls.padEnd(8)} per tier: ${cl(cls).join(' ')}`);
+      const t7 = Object.values(entries).filter((e) => tierOf(e) === TIER_LEVELS.length - 1).length;
+      const nd = Object.values(entries).filter((e) => e.derived).length;
+      log(`gear: ${nd} of ${Object.keys(entries).length} kept items have DERIVED stats (no inc* keys in Character.wz), ${Object.keys(entries).length - nd} have real ones`);
+      if (t7 < 10) warn(`gear: only ${t7} items at the top tier`);
+    }
+    log(`gear: ${Object.keys(entries).length} items extracted (${perSlot}), ${bytes} bytes (${(bytes / 1e6).toFixed(2)} MB of the ${(GEAR_BYTE_BUDGET / 1e6).toFixed(1)} MB budget), cap ${MAX_GEAR_ITEMS}`);
+    log('gear: id | slot | name | reqLevel | reqJob | gender | stats (derived = computed from slot and reqLevel)');
+    const rows = Object.entries(entries).sort((a, b) => a[0].localeCompare(b[0]));
     for (const [id, e] of rows) {
-      log(`gear: ${id} | ${e.slot}${e.long ? '(long)' : ''} | ${e.name} | ${e.level} | ${e.job} | ${e.g ?? '-'} | ${Object.entries(e.stats).map(([k, v]) => `${k}${v}`).join(' ') || '-'}`);
+      log(`gear: ${id} | ${e.slot}${e.long ? '(long)' : ''} | ${e.name} | ${e.level} | ${e.job} | ${e.g ?? '-'} | ${Object.entries(e.stats).map(([k, v]) => `${k}${v}`).join(' ') || '-'}${e.derived ? ' derived' : ''}`);
     }
     const manifest: GearManifest = { items: entries as Record<string, GearEntry>, iconAtlas };
     return { manifest, bytes, items, ids };
