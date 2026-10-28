@@ -30,7 +30,7 @@ export interface GearTools {
 }
 
 /** total items kept (the whole gear block is a few MB) */
-export const MAX_GEAR_ITEMS = 220;
+export const MAX_GEAR_ITEMS = 320;
 /** items picked per tier, slot, class and gender */
 const PER_BUCKET = 2;
 
@@ -66,6 +66,9 @@ interface Candidate {
   stats: GearStats;
   where: string;
 }
+
+/** classic items (the low ids of each thousand-block: 01002000..01002199) are preferred over the later event and novelty ones */
+const classic = (n: number) => (n % 1000 < 200 ? 0 : 1);
 
 const intOf = (v: unknown): number => (typeof v === 'number' ? Math.round(v) : typeof v === 'string' && /^-?\d+$/.test(v.trim()) ? parseInt(v, 10) : 0);
 
@@ -122,7 +125,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     // ---- scan every equip image's info node ----
     const names = equipNames(strings, lg);
     const cands: Candidate[] = [];
-    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0 };
+    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0 };
     const infoKeys = new Map<string, number>();
     const vslots = new Map<string, number>();
     const islots = new Map<string, number>();
@@ -179,9 +182,23 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
         const v = intOf(val(k));
         if (v) stats[to] = v;
       }
+      // a normal drop item: upgradeable (tuc > 0), not an event / limited / set / untradeable novelty, and with a stat that counts
+      if (intOf(val('tuc')) <= 0) {
+        seen.noTuc++;
+        continue;
+      }
+      if (['timeLimited', 'notSale', 'exItem', 'setItemID', 'charmEXP'].some((k) => intOf(val(k)) !== 0) || intOf(val('tradeBlock')) === 1) {
+        seen.flagged++;
+        continue;
+      }
+      const hasStat = f.slot === 'weapon' ? !!(stats.pad || (stats.mad && [137, 138].includes(Math.floor(n / 10000)))) : Object.keys(stats).length > 0;
+      if (!hasStat) {
+        seen.noStats++;
+        continue;
+      }
       cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level: intOf(val('reqLevel')), job, gender: genderOfId(n), stats, where: path });
     }
-    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand/walk frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable; ${cands.length} candidates`);
+    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand/walk frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable; filters removed ${seen.noTuc} with tuc <= 0, ${seen.flagged} flagged timeLimited/notSale/exItem/setItemID/charmEXP/tradeBlock, ${seen.noStats} without a usable inc* stat; ${cands.length} candidates`);
     const top = (m: Map<string, number>, k = 40) => [...m].sort((a, b) => b[1] - a[1]).slice(0, k).map(([s, c]) => `${s || '(none)'}x${c}`).join(' ');
     log(`gear: info keys seen: ${top(infoKeys, 60)}`);
     log(`gear: islot values seen: ${top(islots)}`);
@@ -211,7 +228,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
                 return gender === 2 || c.gender === 2 || c.gender === gender;
               })
               .map((x) => x.c)
-              .sort((a, b) => a.n - b.n);
+              .sort((a, b) => classic(a.n) - classic(b.n) || a.n - b.n);
             pool.slice(0, PER_BUCKET).forEach((c, rank) => {
               // tier 3 first-picks come first (the CI preview needs a full set), then the rest of rank 0, then rank 1; spread inside a rank
               const lead = tier === 3 && rank === 0 ? 0 : 1 + rank;
@@ -311,7 +328,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
 
     // ---- report ----
     const perSlot = GEAR_SLOTS.map((s) => `${s} ${Object.values(entries).filter((e) => e.slot === s).length}`).join(', ');
-    log(`gear: ${Object.keys(entries).length} items extracted (${perSlot}), ${(bytes / 1e6).toFixed(2)} MB`);
+    log(`gear: ${Object.keys(entries).length} items extracted (${perSlot}), ${bytes} bytes (${(bytes / 1e6).toFixed(2)} MB), cap ${MAX_GEAR_ITEMS}`);
     log('gear: id | slot | name | reqLevel | reqJob | gender | stats');
     const rows = Object.entries(entries).slice(0, 40);
     for (const [id, e] of rows) {
@@ -333,7 +350,7 @@ export function previewGear(gear: GearResult, loaded: Map<string, ExtractedItem>
   const { log, warn } = lg;
   if (!gear.manifest) return;
   try {
-    const pool = Object.entries(gear.manifest.items);
+    const pool = Object.entries(gear.manifest.items).sort((a, b) => a[0].localeCompare(b[0]));
     for (const c of CLASSES) {
       const cls = c.key as ClassKey;
       const look = defaultLook(c.weapon);

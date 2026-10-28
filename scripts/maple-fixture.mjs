@@ -215,7 +215,7 @@ export function gearImages() {
   const Eqp = {};
   const add = (folder, cat, id, tree, name, info) => {
     const full = String(id).padStart(8, '0');
-    Character[`${folder}/${full}.img`] = infoOf(tree, { icon: icon32(tint(id)), ...info });
+    Character[`${folder}/${full}.img`] = infoOf(tree, { icon: icon32(tint(id)), tuc: 7, ...info });
     (Eqp[cat] ??= {})[String(id)] = { name };
   };
   LEVELS.forEach((lv, t) => {
@@ -241,6 +241,10 @@ export function gearImages() {
   // items the selection must skip
   add('Cap', 'Cap', 1009998, capTree(tint(1), 'CpH1H5'), 'Cash Cap', { reqLevel: 0, reqJob: 0, cash: 1 });
   add('Cap', 'Cap', 1009997, capTree(tint(2), 'CpH1H5'), 'Pirate Cap', { reqLevel: 0, reqJob: 16, cash: 0 });
+  // novelty items the drop filters must reject: no tuc, an event flag, no stats
+  add('Cap', 'Cap', 1002999, capTree(tint(3), 'CpH1H5'), 'No Slots Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, tuc: 0 });
+  add('Cap', 'Cap', 1002998, capTree(tint(3), 'CpH1H5'), 'Event Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, timeLimited: 1 });
+  add('Cap', 'Cap', 1002997, capTree(tint(3), 'CpH1H5'), 'Statless Cap', { reqLevel: 30, reqJob: 0, cash: 0 });
   add('Weapon', 'Weapon', 1432000, weaponTree('sword'), 'Test Spear', { reqLevel: 0, reqJob: 1, cash: 0, incPAD: 99 });
   add('Shield', 'Shield', 1092002, shieldTree(tint(1)), 'Mage Shield', { reqLevel: 0, reqJob: 2, cash: 0, incPDD: 3 });
   const noWalk = capTree(tint(5), 'CpH1H5');
