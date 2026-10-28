@@ -549,8 +549,8 @@ export class Renderer {
       sp.position.set(e.x * PX, footY);
       sp.zIndex = e.y * PX;
       sp.tint = e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
-      if (!boss && sim.t - e.lastHit < HP_BAR_SECONDS) {
-        // small Maple-style bar over the head for a few seconds after the last hit
+      if (!boss && e.big && sim.t - e.lastHit < HP_BAR_SECONDS) {
+        // Maple-style bar over the head of big mobs for a few seconds after the last hit (small mobs die too fast to need one)
         this.ensureBar(v);
         const bw = Math.max(26, e.r * PX * 1.6);
         const by = e.y * PX - barTop - 4;
