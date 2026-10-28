@@ -143,10 +143,37 @@ class Login {
     if (!backs.length && !objs.length) { warn('login scene: nothing could be placed'); return null; }
 
     const steps = findSteps(groups, log);
-    const scene: LoginSection = { source, backs, objs, bounds, steps };
+    const scene: LoginSection = { source, backs, objs, bounds, steps, ui: this.loginUi(ui) };
     log(`login scene: ${backs.length} backs, ${objs.length} objects/tiles, ${this.written.size} images, ${(this.out.bytes / 1e6).toFixed(2)} MB; steps ${JSON.stringify(steps)}`);
     this.dumpPreview(scene);
     return scene;
+  }
+
+  /**
+   * Every canvas of Login.img's Title / Common / WorldSelect / CharSelect / NewChar trees (buttons with their states, the
+   * world and channel buttons, the step labels, name tags...) keyed by its path, e.g. 'WorldSelect/BtWorld/0/normal/0'.
+   */
+  private loginUi(ui: SetLike): Record<string, LoginSprite> {
+    const img = ui.image('Login.img');
+    const res: Record<string, LoginSprite> = {};
+    if (!img) return res;
+    const walk = (node: Any, path: string, depth: number) => {
+      if (!node || depth > 6 || /SoftKey|Pincode/.test(path)) return;
+      if (node.type === 'canvas') {
+        const [sp] = this.frames(node, img.key, `ui.${path.replace(/\//g, '.')}`);
+        if (sp) res[path] = sp;
+        return;
+      }
+      for (const k of node.keys()) walk(node.get(k), path ? `${path}/${k}` : k, depth + 1);
+    };
+    for (const top of ['Title', 'Common', 'WorldSelect', 'CharSelect', 'NewChar']) walk(img.root.get(top), top, 0);
+    const keys = Object.keys(res);
+    this.d.log(`login ui: ${keys.length} canvases`);
+    for (let i = 0; i < keys.length; i += 12)
+      this.d.log(`login ui: ${keys.slice(i, i + 12).map((k) => `${k} ${res[k].w}x${res[k].h}@${res[k].ox},${res[k].oy}`).join(' | ')}`);
+    const logo = ui.image('Logo.img');
+    if (logo) this.d.log(`login ui: Logo.img: ${logo.root.keys().join(' ')}`);
+    return res;
   }
 
   private image(set: SetLike, path: string) {
@@ -182,16 +209,11 @@ class Login {
     }
     return res;
   }
-
+  /** Renders the camera view at each step at half size, as one base64 PNG in the log. */
   /** Renders the camera view at each step and a map-locked overview of all objects at 1/4 scale, as base64 PNGs in the log. */
   private dumpPreview(scene: LoginSection) {
-    const views: [string, number, number][] = Object.entries(scene.steps).map(([k, p]) => [k, p!.x, p!.y]);
-    let y0 = Infinity, y1 = -Infinity, x0 = Infinity, x1 = -Infinity;
-    for (const o of scene.objs) { const f = o.frames[0]; x0 = Math.min(x0, o.x - f.ox); x1 = Math.max(x1, o.x - f.ox + f.w); y0 = Math.min(y0, o.y - f.oy); y1 = Math.max(y1, o.y - f.oy + f.h); }
     if (!Number.isFinite(y0)) { x0 = -400; x1 = 400; y0 = -300; y1 = 300; }
-    // views every 600 px down the object extent too, so the overview shows what the camera would see there
-    for (let y = y0 + 300; y < y1 + 300; y += 600) views.push([`y${y}`, Math.round((x0 + x1) / 2), y]);
-    const S = 4;
+    const S = 2;
     const W = 800 / S, H = 600 / S;
     const all = Buffer.alloc(W * H * views.length * 4);
     views.forEach(([, cx, cy], vi) => {
@@ -234,7 +256,8 @@ function findSteps(groups: Map<string, { x0: number; y0: number; x1: number; y1:
       x0 = Math.min(x0, g.x0); y0 = Math.min(y0, g.y0); x1 = Math.max(x1, g.x1); y1 = Math.max(y1, g.y1);
     }
     if (!Number.isFinite(x0)) continue;
-    steps[step] = { x: Math.round((x0 + x1) / 2), y: Math.round((y0 + y1) / 2) };
+    // the client's camera rows are one 800x600 screen apart (title at 0,0, then 600 px further up per step): snap to them
+    steps[step] = { x: 0, y: Math.round((y0 + y1) / 2 / 600) * 600 || 0 };
     log(`login scene: step ${step} from objects spanning x ${x0}..${x1} y ${y0}..${y1}`);
   }
   return steps;

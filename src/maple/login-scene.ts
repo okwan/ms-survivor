@@ -54,6 +54,8 @@ export interface LoginSection {
   bounds: { left: number; top: number; right: number; bottom: number } | null;
   /** camera centres of the login steps when they could be found from the map's objects */
   steps: Partial<Record<LoginStep, { x: number; y: number }>>;
+  /** Login.img canvases by path, e.g. 'Title/BtLogin/normal/0', 'WorldSelect/BtWorld/0/mouseOver/0', 'Common/frame' */
+  ui: Record<string, LoginSprite>;
 }
 
 export type LoginStep = 'title' | 'world' | 'select' | 'create';
