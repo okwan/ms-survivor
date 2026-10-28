@@ -26,15 +26,15 @@ export const LAYOUT = {
   panMs: 900,
   /** relative to the title signboard */
   title: {
-    id: { x: 70, y: 78, w: 150, h: 20 },
-    pw: { x: 70, y: 104, w: 150, h: 20 },
-    login: [232, 76] as Pt,
-    idSave: [56, 136] as Pt,
-    idLost: [136, 136] as Pt,
-    pwLost: [222, 136] as Pt,
-    newChar: [48, 164] as Pt,
-    home: [142, 164] as Pt,
-    quit: [237, 164] as Pt,
+    id: { x: 119, y: 21, w: 140, h: 20 },
+    pw: { x: 119, y: 51, w: 140, h: 20 },
+    login: [269, 24] as Pt,
+    idSave: [91, 93] as Pt,
+    idLost: [175, 93] as Pt,
+    pwLost: [265, 93] as Pt,
+    newChar: [71, 138] as Pt,
+    home: [169, 138] as Pt,
+    quit: [268, 138] as Pt,
     /** controls hint: top of the line, centred */
     hintY: 580,
   },
@@ -42,12 +42,12 @@ export const LAYOUT = {
     step: [8, 8] as Pt,
     back: [8, 540] as Pt,
     /** unrolled scroll: top-left, ms per frame */
-    scroll: [143, 92] as Pt,
+    scroll: [187, 95] as Pt,
     scrollMs: 90,
     /** world tabs: offset from the scroll, spacing; world ids 0..count-1 */
-    tabs: { dx: 42, dy: 150, step: 29, count: 15 },
+    tabs: { dx: 31, dy: 40, step: 30, count: 15 },
     /** channel panel: where its origin point goes */
-    panel: [400, 330] as Pt,
+    panel: [443, 361] as Pt,
     /** relative to the panel's top-left */
     name: [14, 10] as Pt,
     channels: { x: 14, y: 58, dx: 85, dy: 34, cols: 5, count: 20 },
@@ -62,15 +62,15 @@ export const LAYOUT = {
     step: [162, 8] as Pt,
     back: [8, 540] as Pt,
     /** the character's feet */
-    feet: [240, 365] as Pt,
+    feet: [330, 368] as Pt,
     /** name tag offset from the feet (centred) */
     tag: [0, 4] as Pt,
     /** relative to the CharSelect signboard */
-    btSelect: [16, 40] as Pt,
-    btNew: [16, 80] as Pt,
-    btDelete: [16, 122] as Pt,
+    btSelect: [13, 18] as Pt,
+    btNew: [13, 60] as Pt,
+    btDelete: [13, 106] as Pt,
     /** charInfo's origin point, and the texts relative to its top-left */
-    info: [470, 470] as Pt,
+    info: [475, 457] as Pt,
     name: [60, 8] as Pt,
     job: [60, 30] as Pt,
     level: [60, 50] as Pt,

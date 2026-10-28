@@ -162,6 +162,7 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       sfx: data.sfx && typeof data.sfx === 'object' ? data.sfx : undefined,
       items: data.items && typeof data.items === 'object' ? data.items : undefined,
       npc: data.npc && typeof data.npc === 'object' && Array.isArray(data.npc.frames) ? data.npc : undefined,
+      login: data.login && typeof data.login === 'object' && Array.isArray(data.login.backs) && Array.isArray(data.login.objs) && data.login.ui && typeof data.login.ui === 'object' ? data.login : undefined,
     };
   } catch {
     return null;
