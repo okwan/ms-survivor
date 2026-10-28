@@ -1,3 +1,4 @@
+import { EVOLUTION_PASSIVE_SLOTS } from '../game/evolutions.ts';
 import { BOSSES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import { Radar } from './radar.ts';
@@ -90,7 +91,7 @@ export class Hud {
     fit();
     window.addEventListener('resize', fit);
     for (let i = 0; i < MAX_SKILLS; i++) { const sl = this.makeSlot(this.el.skills); this.skillSlots.push(sl); this.skillCd.push(sl.querySelector('.cd')!); }
-    for (let i = 0; i < MAX_PASSIVES; i++) this.passiveSlots.push(this.makeSlot(this.el.passives));
+    for (let i = 0; i < MAX_PASSIVES + EVOLUTION_PASSIVE_SLOTS; i++) this.passiveSlots.push(this.makeSlot(this.el.passives));
   }
 
   private makeSlot(parent: HTMLElement): HTMLElement {
@@ -210,7 +211,7 @@ export class Hud {
       const s = sim.skills[i];
       this.fillSlot(this.skillSlots[i], s ? s.key : null, s ? s.level : 0);
     }
-    for (let i = 0; i < MAX_PASSIVES; i++) {
+    for (let i = 0; i < MAX_PASSIVES + EVOLUTION_PASSIVE_SLOTS; i++) {
       const s = sim.passives[i];
       this.fillSlot(this.passiveSlots[i], s ? s.key : null, s ? s.level : 0);
     }

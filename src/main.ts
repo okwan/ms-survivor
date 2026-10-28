@@ -22,6 +22,7 @@ import { MapBanner } from './ui/banner.ts';
 import { Hud } from './ui/hud.ts';
 import { BookPanel } from './ui/book.ts';
 import { NoteUi } from './ui/items.ts';
+import { GachaUi } from './ui/gachapon.ts';
 import { ScrollPool } from './game/scrolls.ts';
 import { bookBonus, bookCounts, mergeBook } from './game/book.ts';
 import { applyUiTheme } from './ui/theme.ts';
@@ -128,6 +129,7 @@ async function boot() {
     sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds });
     sim.god = god;
     gearUi.reset();
+    gachaUi.reset();
     hud.setHero(hero.name, hero.cls);
     seenGear = 0;
     acc = 0;
@@ -157,6 +159,7 @@ async function boot() {
 
   function toTitle() {
     sim = new Sim(1);
+    gachaUi.reset();
     mode = 'title';
     bgm?.play('title');
     banner.hide();
@@ -199,6 +202,8 @@ async function boot() {
   );
   const bookPanel = new BookPanel(uiRoot, (mapleManifest as MapleManifest | null)?.mobs ?? {});
   const noteUi = new NoteUi(uiRoot);
+  const gachaUi = new GachaUi(uiRoot, renderer.tex.icons);
+  gachaUi.onReveal = (_i, r) => sfx?.play(r.kind === 'evolve' ? 'game.levelup' : 'game.pickup', { volume: 0.5 });
   const create = new CreateScreen(uiRoot, {
     avatar,
     icons: renderer.tex.icons,
@@ -261,6 +266,7 @@ async function boot() {
       for (let i = 0; i < sim.events.length; i++) {
         const ev = sim.events[i];
         if (ev.type === 'region') enterRegion(ev.region);
+        else if (ev.type === 'gacha') gachaUi.show(ev);
       }
     }
     renderer.render(sim, dt);

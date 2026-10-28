@@ -220,6 +220,9 @@ export function playSimEvents(sfx: SfxLike, events: readonly SimEvent[], cls: st
       case 'levelUp':
         sfx.play('game.levelup', { volume: 0.9 });
         break;
+      case 'gacha':
+        sfx.play(e.count >= 5 ? 'game.levelup' : 'game.drop', { volume: 0.9 });
+        break;
       case 'pickup':
         sfx.play('game.pickup', { volume: e.kind === GEM ? 0.2 : 0.35 });
         break;
