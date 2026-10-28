@@ -28,6 +28,7 @@ import type { MetaRanks } from './meta.ts';
 import { hyperMods } from './hyper.ts';
 import type { HyperMods } from './hyper.ts';
 import { Pet } from './pet.ts';
+import { DamageMeter } from './meter.ts';
 import { SCROLL_BOSS_DROPS, SCROLL_DROP_NORMAL, SCROLL_PICKUP_LIFE, ScrollPool, slotsLeft } from './scrolls.ts';
 import type { ScrollDef } from './scrolls.ts';
 import type { ClassDef, MasteryKey, SkillDef } from './data.ts';
@@ -58,6 +59,8 @@ export class Sim {
   facing = 1;
   /** key of the skill currently dealing damage; carried on 'hit' events so the renderer can pick hit art */
   curSkill = '';
+  /** damage dealt per source this run (read by the HUD meter and the results screen) */
+  readonly meter = new DamageMeter();
   inputX = 0;
   inputY = 0;
   moving = false;
@@ -334,6 +337,7 @@ export class Sim {
     if (crit) amt *= PLAYER_BASE.critMult;
     if (this.field.elixirT > 0) amt *= ELIXIR_DAMAGE;
     amt = eliteDamage(e, Math.max(1, Math.round(amt)));
+    if (e.ev !== EV_BOX) this.meter.add(this.curSkill || 'other', Math.min(amt, Math.max(0, e.hp)), crit, this.t);
     e.hp -= amt;
     e.flash = 0.08;
     e.lastHit = this.t;
@@ -377,6 +381,7 @@ export class Sim {
   /** Flat damage that bypasses the hero's multipliers (Powder Keg against Elites and bosses) */
   hurt(e: Enemy, amt: number) {
     if (!e.alive) return;
+    if (e.ev !== EV_BOX) this.meter.add('keg', Math.min(amt, Math.max(0, e.hp)), false, this.t);
     e.hp -= amt;
     e.flash = 0.08;
     e.lastHit = this.t;

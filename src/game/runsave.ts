@@ -23,6 +23,7 @@ import { BAG_SIZE, GEAR_SLOTS } from './gear.ts';
 import type { GearItem, GearSlot, GearStats, ItemUpgrade } from './gear.ts';
 import { regionAt } from './regions.ts';
 import type { Sim } from './sim.ts';
+import type { MeterRow } from './meter.ts';
 
 /** A worn item: the pool id plus what scrolls did to it (the rest is rebuilt from the GearPool). */
 export interface SavedGear {
@@ -68,6 +69,8 @@ export interface RunSave {
   banished: string[];
   /** the run's Monster Book (the save's book at the start plus this run's kills) */
   book: BookData;
+  /** damage meter rows (older saves have none: the meter restarts at zero) */
+  meter?: MeterRow[];
   /** Date.now() at capture */
   savedAt: number;
 }
@@ -95,7 +98,8 @@ export function captureRun(sim: Sim): RunSave {
     swarms: { nextAt: sim.swarms.nextAt, started: [...sim.swarms.started], pigsKilled: sim.swarms.pigsKilled },
     field: { nextBox: sim.field.nextBox, boxesBroken: sim.field.boxesBroken, itemsUsed: sim.field.itemsUsed },
     branch: sim.branch, pendingLevels: sim.pendingLevels, pendingJob: sim.pendingJob,
-    rerolls: sim.rerolls, banishes: sim.banishes, banished: [...sim.banished], book: { ...sim.book }, savedAt: Date.now(),
+    rerolls: sim.rerolls, banishes: sim.banishes, banished: [...sim.banished], book: { ...sim.book },
+    meter: sim.meter.sorted().map((m) => ({ ...m })), savedAt: Date.now(),
   };
 }
 
@@ -179,8 +183,21 @@ export function sanitizeRunSave(raw: unknown): RunSave | null {
     pendingLevels: int(o.pendingLevels, 0, 999, 0), pendingJob: o.pendingJob === true && branch === 0,
     rerolls: int(o.rerolls, 0, 99, START_REROLLS), banishes: int(o.banishes, 0, 99, START_BANISHES),
     banished: Array.isArray(o.banished) ? o.banished.filter((k): k is string => typeof k === 'string' && (!!SKILL_BY_KEY[k] || !!PASSIVE_BY_KEY[k])).slice(0, 64) : [],
-    book: sanitizeBook(o.book), savedAt: num(o.savedAt, 0, 8.64e15, 0),
+    book: sanitizeBook(o.book), meter: sanitizeMeter(o.meter, o.t), savedAt: num(o.savedAt, 0, 8.64e15, 0),
   };
+}
+
+function sanitizeMeter(raw: unknown, t: number): MeterRow[] {
+  const out: MeterRow[] = [];
+  if (!Array.isArray(raw)) return out;
+  for (const r of raw.slice(0, 64)) {
+    if (!r || typeof r !== 'object') continue;
+    const o = r as Record<string, unknown>;
+    if (typeof o.key !== 'string' || o.key.length > 40 || out.some((m) => m.key === o.key)) continue;
+    const hits = int(o.hits, 0, MAX_COUNT, 0);
+    out.push({ key: o.key, dmg: num(o.dmg, 0, 1e15, 0), hits, crits: int(o.crits, 0, hits, 0), first: num(o.first, 0, t, 0) });
+  }
+  return out;
 }
 
 /**
@@ -232,6 +249,7 @@ export function restoreRun(sim: Sim, data: RunSave): boolean {
   sim.banishes = data.banishes;
   sim.banished = new Set(data.banished);
   sim.book = { ...data.book };
+  sim.meter.load(data.meter ?? []);
   sim.hp = 1;
   sim.recalc();
   sim.hp = Math.min(sim.maxHp, Math.max(1, data.hp));

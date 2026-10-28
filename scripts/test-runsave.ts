@@ -46,6 +46,7 @@ for (const cls of ['warrior', 'magician']) {
   ok(JSON.stringify(b.swarms.started) === JSON.stringify(a.swarms.started) && b.swarms.nextAt === a.swarms.nextAt && b.elites.killed === a.elites.killed && b.elites.nextAt === a.elites.nextAt && b.field.nextBox === a.field.nextBox, 'event schedules');
   ok(b.rerolls === a.rerolls && b.banishes === a.banishes && [...b.banished].join() === [...a.banished].join(), 'rerolls/banishes');
   ok(Math.abs(b.maxHp - a.maxHp) < 1e-6 && Math.abs(b.might - a.might) < 1e-9 && b.hp <= b.maxHp, 'derived stats match');
+  ok(a.meter.total > 0 && Math.abs(b.meter.total - a.meter.total) < 1e-6 && JSON.stringify(b.meter.sorted()) === JSON.stringify(a.meter.sorted()), `damage meter ${Math.round(b.meter.total)}`);
   b.god = true;
   advance(b, 330);
   ok(!b.over && b.t >= 330, 'resumed sim ticks on');

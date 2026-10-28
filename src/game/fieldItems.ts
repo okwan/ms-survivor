@@ -147,7 +147,7 @@ export function useFieldItem(sim: Sim, item: number, x: number, y: number) {
         if (!e.alive || e.ev === EV_BOX) continue;
         const dx = e.x - sim.px, dy = e.y - sim.py;
         if (dx * dx + dy * dy > r2) continue;
-        if (e.boss < 0 && !e.elite) { e.hp = 0; sim.kill(e); } else sim.hurt(e, e.maxHp * KEG_BOSS_FRAC);
+        if (e.boss < 0 && !e.elite) { sim.meter.add('keg', e.hp, false, sim.t); e.hp = 0; sim.kill(e); } else sim.hurt(e, e.maxHp * KEG_BOSS_FRAC);
       }
       break;
     }
