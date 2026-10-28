@@ -26,7 +26,7 @@ World units are yards (Azeroth's unit). `PX_PER_YD = 20` at zoom 1. Player speed
 | Alive target | `min(220, floor(14 + 225p))` |
 | Spawner | every 0.12 s, if alive < target spawn a pack of up to 4 (never above target); ring 34 to 42 yd from the player at a random angle |
 | Recycling | enemies farther than 60 yd from the player are moved back onto the spawn ring (ahead of the player's movement if moving) |
-| Scaling | enemy HP x(1 + 0.75p) at spawn, damage x(1 + 0.9p) |
+| Scaling | enemy HP x(1 + 3p) at spawn, damage x(1 + 0.9p); hero damage x(1 + 0.2·sqrt(level - 1)), +3 max HP per level to 60 |
 | Contact | an enemy touching the player hits for `max(1, dmg - armor)`, then waits 1.3 s (boss 1.0 s) |
 | Player | HP 120, speed 7 yd/s, magnet 4.5 yd, hit radius 0.7 yd, crit 5% for x2 |
 | XP | gem value = mob xp x 2.0 x growth. To next level: L<20: `5 + 10(L-1)`; L<40: `195 + 13(L-20)`; else `455 + 16(L-40)` |
