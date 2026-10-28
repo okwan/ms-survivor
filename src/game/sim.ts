@@ -145,7 +145,7 @@ export class Sim {
   reviveUsed = false;
   reviveT = 0;
   /** fraction of a meso that Greed has not paid out yet */
-  private mesoCarry = 0;
+  mesoCarry = 0;
 
   offer: Card[] | null = null;
   pendingLevels = 0;
@@ -155,7 +155,8 @@ export class Sim {
   /** chosen 2nd job code (0 = not yet; the choice is offered at JOB2_LEVEL) and the job codes whose skills and passives are on offer */
   branch = 0;
   jobs: number[];
-  private pendingJob = false;
+  /** the 2nd job choice is waiting to be offered (public for src/game/runsave.ts) */
+  pendingJob = false;
 
   enemies: Enemy[] = [];
   pickups: Pickup[] = [];
