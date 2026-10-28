@@ -4,6 +4,7 @@ import {
   SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
   ENEMY_DMG_GROWTH, ENEMY_HP_GROWTH, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
 } from './data.ts';
+import { regionAt } from './regions.ts';
 import { SpatialGrid } from './grid.ts';
 import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
@@ -89,6 +90,8 @@ export class Sim {
   projectiles: Projectile[] = [];
   areas: Area[] = [];
   events: SimEvent[] = [];
+  /** current region 0..6, derived from run time (see regions.ts); a 'region' event fires when it changes */
+  region = 0;
   raidText = '';
   raidUntil = 0;
 
@@ -219,7 +222,7 @@ export class Sim {
     amt = Math.max(1, Math.round(amt));
     e.hp -= amt;
     e.flash = 0.08;
-    this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0, skill: this.curSkill });
+    this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0, skill: this.curSkill, tier: e.tier, bossIdx: e.boss });
     const def = SKILL_BY_KEY[this.curSkill];
     if (def !== undefined && (def.drain || def.stun || def.root || def.weaken)) this.applyEffects(e, def, amt);
     if (e.hp <= 0) this.kill(e);
@@ -785,6 +788,12 @@ export class Sim {
       if (e.alive) this.grid.insert(i, e.x, e.y);
     }
 
+    const region = regionAt(this.t);
+    if (region !== this.region) {
+      this.region = region;
+      this.emit({ type: 'region', region });
+    }
+
     // bosses on the clock
     while (this.bossesSpawned < BOSSES.length && this.t >= BOSS_EVERY * (this.bossesSpawned + 1)) {
       this.spawnBoss(this.bossesSpawned);
@@ -817,6 +826,7 @@ export class Sim {
     return {
       cls: this.cls.key,
       elapsed: this.t,
+      region: this.region,
       hp: this.hp,
       maxHp: this.maxHp,
       level: this.level,

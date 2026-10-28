@@ -101,7 +101,7 @@ export interface Card {
 }
 
 export type SimEvent =
-  | { type: 'hit'; x: number; y: number; amount: number; crit: boolean; boss: boolean; skill: string }
+  | { type: 'hit'; x: number; y: number; amount: number; crit: boolean; boss: boolean; skill: string; tier: number; bossIdx: number }
   | { type: 'playerHit'; x: number; y: number; amount: number }
   | { type: 'death'; x: number; y: number; tier: number; boss: number; big: boolean; facing: number }
   | { type: 'cast'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number; r: number; pts: number[] | null }
@@ -113,4 +113,5 @@ export type SimEvent =
   | { type: 'bossSpawn'; boss: number; name: string; x: number; y: number }
   | { type: 'bossDeath'; boss: number; name: string; x: number; y: number }
   | { type: 'levelUp'; level: number }
+  | { type: 'region'; region: number }
   | { type: 'end'; won: boolean };

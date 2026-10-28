@@ -6,6 +6,7 @@
  */
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import type { AvatarManifest } from './avatar-core.ts';
+import type { RegionsSection, SfxSection } from './region-types.ts';
 import type { AtlasRef, EffectsSection, MapSection, UiSection } from './world-types.ts';
 
 export const pad7 = (n: number) => String(n).padStart(7, '0');
@@ -123,6 +124,9 @@ export interface MapleManifest {
   damage?: AtlasRef;
   ui?: UiSection;
   effects?: EffectsSection;
+  /** one map per run region, and sound effects (scripts/fetch-maple-regions.ts, fetch-maple-sfx.ts) */
+  regions?: RegionsSection;
+  sfx?: SfxSection;
 }
 
 /** Fetches maple/manifest.json. Returns null on any failure so the game falls back to placeholder art. */
@@ -143,6 +147,8 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       damage: data.damage,
       ui: data.ui,
       effects: data.effects,
+      regions: data.regions && Array.isArray(data.regions.list) ? data.regions : undefined,
+      sfx: data.sfx && typeof data.sfx === 'object' ? data.sfx : undefined,
     };
   } catch {
     return null;
