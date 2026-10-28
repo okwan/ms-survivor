@@ -176,19 +176,19 @@ Rank r+1 costs `base x growth^r`, rounded to the nearest 10 (`metaCost` in `src/
 
 | key | name | per rank | max | base cost | growth | total cost |
 |---|---|---|---|---|---|---|
-| hp | Max HP | +8% max HP | 5 | 200 | 1.6 | 3160 |
-| might | Might | +5% damage | 5 | 300 | 1.6 | 4750 |
-| haste | Haste | +4% cooldown speed | 5 | 300 | 1.6 | 4750 |
-| armor | Armor | +1 flat armor | 3 | 400 | 1.8 | 2420 |
-| speed | Speed | +3% move speed | 3 | 250 | 1.6 | 1290 |
-| magnet | Magnet | +12% pickup radius | 3 | 150 | 1.5 | 720 |
-| growth | Growth | +4% EXP | 5 | 350 | 1.6 | 5550 |
-| greed | Greed | +8% mesos | 5 | 250 | 1.6 | 3950 |
-| reroll | Gachapon Ticket | +1 reroll per run | 3 | 500 | 2.0 | 3500 |
-| banish | Trash Can | +1 banish per run | 3 | 500 | 2.0 | 3500 |
-| revive | Safety Charm | one revive per run at 50% HP | 1 | 3000 | 1 | 3000 |
+| hp | Max HP | +8% max HP | 5 | 3000 | 1.6 | 47430 |
+| might | Might | +5% damage | 5 | 4500 | 1.6 | 71140 |
+| haste | Haste | +4% cooldown speed | 5 | 4500 | 1.6 | 71140 |
+| armor | Armor | +1 flat armor | 3 | 6000 | 1.8 | 36240 |
+| speed | Speed | +3% move speed | 3 | 3750 | 1.6 | 19350 |
+| magnet | Magnet | +12% pickup radius | 3 | 2250 | 1.5 | 10690 |
+| growth | Growth | +4% EXP | 5 | 5250 | 1.6 | 83000 |
+| greed | Greed | +8% mesos | 5 | 3750 | 1.6 | 59290 |
+| reroll | Gachapon Ticket | +1 reroll per run | 3 | 7500 | 2.0 | 52500 |
+| banish | Trash Can | +1 banish per run | 3 | 7500 | 2.0 | 52500 |
+| revive | Safety Charm | one revive per run at 50% HP | 1 | 45000 | 1 | 45000 |
 
-Everything costs 36570 mesos (`metaTotalCost()`).
+Everything costs 548280 mesos (`metaTotalCost()`), about 18 bot runs of income with an empty shop, so the shop fills over many runs.
 
 - **Save.** `SaveData.meta` holds the rank per key; a save without it (or with junk in it) loads as all zeros, ranks are clamped to 0..max.
 - **In the run.** `main.ts` passes `meta: save.meta` to the Sim. `recalc()` adds the ranks to the other sources: Might and Haste add to the passive and Mastery sums
@@ -213,7 +213,7 @@ Everything costs 36570 mesos (`metaTotalCost()`).
 | Bowman | 91 > 39 | 7 s > 11 s | 34.4k > 51.7k |
 | Thief | 837 > 632 | 9 s > 12 s | 37.4k > 54.5k |
 
-  A run banks about 30k mesos for the bot (20-37k), so the whole shop (36570) is about 1.2 runs of bot income. Kill times of the ranged classes are noise (a different
+  A run banks about 30k mesos for the bot (20-37k), so the whole shop (548280) is about 18 runs of bot income (prices were raised 15x from the first draft, which emptied the shop in about one run). Kill times of the ranged classes are noise (a different
   build and a different fight position, 7-12 s); the Warrior melee bot halves its time. Human runs are shorter and poorer, but the prices are probably low by a factor of 10 or more.
 
 ## Elites, events and field items

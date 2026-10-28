@@ -28,17 +28,17 @@ const pct = (v: number) => `+${Math.round(v * 100)}%`;
 const plural = (n: number, w: string) => `+${n} ${w}${n === 1 ? '' : 's'}`;
 
 export const META: MetaDef[] = [
-  { key: 'hp', name: 'Max HP', per: 0.08, max: 5, base: 200, growth: 1.6, text: (n) => `${pct(0.08 * n)} max HP` },
-  { key: 'might', name: 'Might', per: 0.05, max: 5, base: 300, growth: 1.6, text: (n) => `${pct(0.05 * n)} damage` },
-  { key: 'haste', name: 'Haste', per: 0.04, max: 5, base: 300, growth: 1.6, text: (n) => `${pct(0.04 * n)} cooldown speed` },
-  { key: 'armor', name: 'Armor', per: 1, max: 3, base: 400, growth: 1.8, text: (n) => `+${n} armor` },
-  { key: 'speed', name: 'Speed', per: 0.03, max: 3, base: 250, growth: 1.6, text: (n) => `${pct(0.03 * n)} move speed` },
-  { key: 'magnet', name: 'Magnet', per: 0.12, max: 3, base: 150, growth: 1.5, text: (n) => `${pct(0.12 * n)} pickup radius` },
-  { key: 'growth', name: 'Growth', per: 0.04, max: 5, base: 350, growth: 1.6, text: (n) => `${pct(0.04 * n)} EXP` },
-  { key: 'greed', name: 'Greed', per: 0.08, max: 5, base: 250, growth: 1.6, text: (n) => `${pct(0.08 * n)} mesos` },
-  { key: 'reroll', name: 'Gachapon Ticket', per: 1, max: 3, base: 500, growth: 2, text: (n) => `${plural(n, 'reroll')} per run` },
-  { key: 'banish', name: 'Trash Can', per: 1, max: 3, base: 500, growth: 2, text: (n) => `${plural(n, 'banish')} per run` },
-  { key: 'revive', name: 'Safety Charm', per: 1, max: 1, base: 3000, growth: 1, text: (n) => (n > 0 ? `One revive per run at ${Math.round(REVIVE_HP * 100)}% HP` : 'No revive') },
+  { key: 'hp', name: 'Max HP', per: 0.08, max: 5, base: 3000, growth: 1.6, text: (n) => `${pct(0.08 * n)} max HP` },
+  { key: 'might', name: 'Might', per: 0.05, max: 5, base: 4500, growth: 1.6, text: (n) => `${pct(0.05 * n)} damage` },
+  { key: 'haste', name: 'Haste', per: 0.04, max: 5, base: 4500, growth: 1.6, text: (n) => `${pct(0.04 * n)} cooldown speed` },
+  { key: 'armor', name: 'Armor', per: 1, max: 3, base: 6000, growth: 1.8, text: (n) => `+${n} armor` },
+  { key: 'speed', name: 'Speed', per: 0.03, max: 3, base: 3750, growth: 1.6, text: (n) => `${pct(0.03 * n)} move speed` },
+  { key: 'magnet', name: 'Magnet', per: 0.12, max: 3, base: 2250, growth: 1.5, text: (n) => `${pct(0.12 * n)} pickup radius` },
+  { key: 'growth', name: 'Growth', per: 0.04, max: 5, base: 5250, growth: 1.6, text: (n) => `${pct(0.04 * n)} EXP` },
+  { key: 'greed', name: 'Greed', per: 0.08, max: 5, base: 3750, growth: 1.6, text: (n) => `${pct(0.08 * n)} mesos` },
+  { key: 'reroll', name: 'Gachapon Ticket', per: 1, max: 3, base: 7500, growth: 2, text: (n) => `${plural(n, 'reroll')} per run` },
+  { key: 'banish', name: 'Trash Can', per: 1, max: 3, base: 7500, growth: 2, text: (n) => `${plural(n, 'banish')} per run` },
+  { key: 'revive', name: 'Safety Charm', per: 1, max: 1, base: 45000, growth: 1, text: (n) => (n > 0 ? `One revive per run at ${Math.round(REVIVE_HP * 100)}% HP` : 'No revive') },
 ];
 export const META_BY_KEY = Object.fromEntries(META.map((d) => [d.key, d])) as Record<MetaKey, MetaDef>;
 

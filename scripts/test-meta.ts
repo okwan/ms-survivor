@@ -18,40 +18,40 @@ const full = (): MetaRanks => Object.fromEntries(META.map((d) => [d.key, d.max])
 
 // ---- the table and the cost curve: rank r+1 costs base x growth^r, to the nearest 10 ----
 eq(META.map((d) => [d.key, d.max, d.base, d.growth]), [
-  ['hp', 5, 200, 1.6], ['might', 5, 300, 1.6], ['haste', 5, 300, 1.6], ['armor', 3, 400, 1.8], ['speed', 3, 250, 1.6], ['magnet', 3, 150, 1.5],
-  ['growth', 5, 350, 1.6], ['greed', 5, 250, 1.6], ['reroll', 3, 500, 2], ['banish', 3, 500, 2], ['revive', 1, 3000, 1],
+  ['hp', 5, 3000, 1.6], ['might', 5, 4500, 1.6], ['haste', 5, 4500, 1.6], ['armor', 3, 6000, 1.8], ['speed', 3, 3750, 1.6], ['magnet', 3, 2250, 1.5],
+  ['growth', 5, 5250, 1.6], ['greed', 5, 3750, 1.6], ['reroll', 3, 7500, 2], ['banish', 3, 7500, 2], ['revive', 1, 45000, 1],
 ], 'the eleven upgrades with their ranks, base costs and growth');
-eq([0, 1, 2, 3, 4].map((r) => metaCost('hp', r)), [200, 320, 510, 820, 1310], 'Max HP: 200 x 1.6^r rounded to 10');
-eq([0, 1, 2].map((r) => metaCost('armor', r)), [400, 720, 1300], 'Armor: 400 x 1.8^r');
-eq([0, 1, 2].map((r) => metaCost('magnet', r)), [150, 230, 340], 'Magnet: 150 x 1.5^r (225 rounds to 230, 337.5 to 340)');
-eq([0, 1, 2].map((r) => metaCost('reroll', r)), [500, 1000, 2000], 'Gachapon Ticket doubles');
-eq(metaCost('revive', 0), 3000, 'Safety Charm 3000');
+eq([0, 1, 2, 3, 4].map((r) => metaCost('hp', r)), [3000, 4800, 7680, 12290, 19660], 'Max HP: 3000 x 1.6^r rounded to 10');
+eq([0, 1, 2].map((r) => metaCost('armor', r)), [6000, 10800, 19440], 'Armor: 6000 x 1.8^r');
+eq([0, 1, 2].map((r) => metaCost('magnet', r)), [2250, 3380, 5060], 'Magnet: 2250 x 1.5^r');
+eq([0, 1, 2].map((r) => metaCost('reroll', r)), [7500, 15000, 30000], 'Gachapon Ticket doubles');
+eq(metaCost('revive', 0), 45000, 'Safety Charm 45000');
 for (const d of META) for (let r = 0; r < d.max; r++) ok(metaCost(d.key, r) % 10 === 0 && metaCost(d.key, r) >= metaCost(d.key, Math.max(0, r - 1)), `${d.key} rank ${r + 1} cost is a multiple of 10 and never falls`);
 eq(META.reduce((a, d) => a + metaTotalCost(d.key), 0), metaTotalCost(), 'the total is the sum of the upgrades');
 eq(metaSpent(full()), metaTotalCost(), 'full ranks have spent the total');
 console.log(`  everything in the shop costs ${metaTotalCost()} mesos`);
 
 // ---- buying and refunding ----
-const start = { mesos: 1000, ranks: emptyMeta() };
+const start = { mesos: 15000, ranks: emptyMeta() };
 let r1 = buyMeta(start.mesos, start.ranks, 'hp')!;
-eq([r1.mesos, r1.ranks.hp], [800, 1], 'buying Max HP rank 1 costs 200');
+eq([r1.mesos, r1.ranks.hp], [12000, 1], 'buying Max HP rank 1 costs 3000');
 r1 = buyMeta(r1.mesos, r1.ranks, 'hp')!;
-eq([r1.mesos, r1.ranks.hp], [480, 2], 'rank 2 costs 320');
-eq(buyMeta(300, r1.ranks, 'hp'), null, 'too few mesos: refused');
+eq([r1.mesos, r1.ranks.hp], [7200, 2], 'rank 2 costs 4800');
+eq(buyMeta(4500, r1.ranks, 'hp'), null, 'too few mesos: refused');
 eq(start.ranks.hp, 0, 'the input ranks are not changed');
-eq(buyMeta(510, r1.ranks, 'hp')!.mesos, 0, 'exact change buys rank 3 (510)');
+eq(buyMeta(7680, r1.ranks, 'hp')!.mesos, 0, 'exact change buys rank 3 (7680)');
 eq(buyMeta(1e9, full(), 'hp'), null, 'a maxed upgrade cannot be bought');
 eq(buyMeta(1e9, emptyMeta(), 'nope' as MetaKey), null, 'an unknown key is refused');
-const charm = buyMeta(5000, emptyMeta(), 'revive')!;
+const charm = buyMeta(47000, emptyMeta(), 'revive')!;
 eq([charm.mesos, charm.ranks.revive], [2000, 1], 'the Safety Charm is one purchase');
 const refunded = refundMeta(0, full());
 eq([refunded.mesos, metaSpent(refunded.ranks)], [metaTotalCost(), 0], 'refund gives back everything and clears the ranks');
-let bank = 20000;
+let bank = 300000;
 let ranks = emptyMeta();
 for (const k of ['hp', 'hp', 'might', 'revive', 'greed'] as MetaKey[]) { const b = buyMeta(bank, ranks, k)!; bank = b.mesos; ranks = b.ranks; }
-eq(bank + metaSpent(ranks), 20000, 'mesos + spent is conserved while buying');
+eq(bank + metaSpent(ranks), 300000, 'mesos + spent is conserved while buying');
 const back = refundMeta(bank, ranks);
-eq([back.mesos, back.ranks], [20000, emptyMeta()], 'a refund restores the starting mesos exactly');
+eq([back.mesos, back.ranks], [300000, emptyMeta()], 'a refund restores the starting mesos exactly');
 eq(refundMeta(7, emptyMeta()).mesos, 7, 'refund with nothing bought changes nothing');
 
 // ---- sanitising and the save ----
