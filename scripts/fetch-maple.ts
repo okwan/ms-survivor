@@ -506,7 +506,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     const mobs = extractMobs(sets.Mob, sets.String, distDir, report);
     const skills = extractSkills(sets.Skill, distDir, report);
     report.bgm = extractBgm(sets.Sound, distDir, report);
-    const av = extractAvatar(sets.Character, sets.Base, join(distDir, 'maple'), { log, warn });
+    const av = extractAvatar(sets.Character, sets.Base, join(distDir, 'maple'), { log, warn }, sets.String);
     report.bytes += av.bytes;
 
     const world = buildWorld({ dist: distDir, sets: { Map: sets.Map, Effect: sets.Effect, UI: sets.UI }, log, warn, canvasList, packAtlas });

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { WANTED_MOBS, WANTED_SKILLS } from '../src/maple/assets.ts';
 import type { FrameRec, MapleManifest } from '../src/maple/assets.ts';
+import { wantedItems } from '../src/maple/avatar-core.ts';
 import { sniffAudio } from './fetch-maple.ts';
 import { ID3_MP3, SYNC_MP3, q, writeFixture } from './maple-fixture.mjs';
 
@@ -152,7 +153,8 @@ try {
   // ---- avatar (Character.wz / Base.wz) ---------------------------------------------------------------------------
   const av = m.avatar!;
   ok(!!av, 'manifest has the avatar block');
-  eq([av.items.body.length, av.items.head.length, av.items.face.length, av.items.hair.length, av.items.coat.length, av.items.pants.length, av.items.shoes.length, av.items.weapon.length], [5, 5, 6, 48, 4, 4, 2, 4], 'all avatar items extracted');
+  const want = wantedItems();
+  for (const slot of ['body', 'head', 'face', 'hair', 'coat', 'pants', 'shoes', 'weapon'] as const) eq(av.items[slot].slice(0, want[slot].length), want[slot], `all ${slot} avatar items extracted (gear items follow them)`);
   ok(av.zmap.indexOf('face') < av.zmap.indexOf('head') && av.zmap.indexOf('head') < av.zmap.indexOf('body'), 'zmap order kept (front-most first)');
   const bodyJson = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'body-00002000.json'), 'utf8'));
   eq(Object.keys(bodyJson.actions).sort(), ['alert', 'shoot1', 'stabO1', 'stabO2', 'stand1', 'stand2', 'swingO1', 'swingO2', 'swingO3', 'walk1', 'walk2'], 'body actions');
@@ -170,6 +172,35 @@ try {
   ok(/avatar: 78\/78 items extracted/.test(run.out), 'avatar totals line');
   ok(/avatar preview Warrior stand1\/0: 11 layers/.test(run.out), 'composite preview log');
   ok(/--- warrior look stand1\/0 \d+x\d+ \(feet at/.test(run.out), 'ASCII preview of the composited character');
+
+  // ---- gear (scripts/fetch-maple-gear.ts) --------------------------------------------------------------------------
+  const gear = av.gear!;
+  ok(!!gear && gear.iconAtlas === 'avatar/gear-icons.png', 'avatar block has the gear block with an icon atlas');
+  const gi = gear.items;
+  const ids = Object.keys(gi);
+  ok(ids.length > 60 && ids.length <= 320, `gear items extracted (${ids.length})`);
+  for (const skip of ['01002999', '01002998', '01002997', '01009998', '01009997', '01009999', '01432000', '01092002']) ok(!(skip in gi), `${skip} (no tuc, event flag, no stats, cash, pirate-only, no walk frames, spear, mage shield) is skipped`);
+  eq(gi['01302103'], { slot: 'weapon', name: 'Test Sword 3', level: 30, job: 1, stats: { pad: 24 }, icon: gi['01302103'].icon }, 'a sword: name from String.wz, level, job, stats from info/inc*');
+  eq(gi['01372103'].stats, { mad: 29, int: 3 }, 'wand stats: incMAD and incINT map to mad / int');
+  eq(gi['01072103'].stats, { pdd: 5, speed: 3 }, 'boots stats: incPDD, incSPEED');
+  eq([gi['01040103'].g, gi['01041103'].g, gi['01060103'].g, gi['01061103'].g], [0, 1, 0, 1], 'gendered coats and pants carry their gender');
+  eq(gi['01002003'].g, undefined, 'caps are unisex');
+  eq([gi['01052000'].slot, gi['01052000'].long], ['coat', true], 'a Longcoat is a coat slot item marked long');
+  ok(Object.values(gi).every((e) => e.slot !== 'shield' || e.job === 1 || e.job === 0), 'shields are warrior (or all-class) only');
+  ok(Object.values(gi).every((e) => e.slot !== 'weapon' || [1, 2, 4, 8, 0].includes(e.job)), 'weapons have one class job');
+  const perBucket = new Map<string, number>();
+  for (const e of Object.values(gi)) if (e.slot === 'weapon' && e.job === 8) perBucket.set(String(Math.floor(e.level / 10)), (perBucket.get(String(Math.floor(e.level / 10))) ?? 0) + 1);
+  ok([...perBucket.values()].every((n) => n <= 2), 'at most two thief weapons per level tier');
+  for (const slot of ['cap', 'glove', 'cape', 'shield'] as const) ok(av.items[slot].length >= 7 && av.items[slot].every((id) => existsSync(join(run.dist, 'maple', 'avatar', `${slot}-${id}.json`)) && existsSync(join(run.dist, 'maple', 'avatar', `${slot}-${id}.png`))), `${slot} frame files are written and listed in the avatar items`);
+  eq(new Set(av.items.weapon).size, av.items.weapon.length, 'no item is listed twice');
+  const capFrames = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'cap-01002003.json'), 'utf8'));
+  eq([capFrames.info.vslot, capFrames.actions.stand1[0].l[0].z, capFrames.actions.stand1[0].l[0].m.brow], ['CpH1H5', 'cap', [0, -5]], 'cap frames keep vslot, z and the brow map point');
+  const icons = decodePng(join(run.dist, 'maple', 'avatar', 'gear-icons.png'));
+  const ic = gi['01302103'].icon!;
+  ok(ic.x + ic.w <= icons.w && ic.y + ic.h <= icons.h && ic.w === 32 && icons.px(ic.x + 8, ic.y + 8)[3] > 0, 'the icon rectangle in the atlas holds the item icon');
+  ok(/gear: scanned \d+ equip images/.test(run.out) && /gear: vslot values seen: .*CpH1H5/.test(run.out) && /gear: info keys seen: .*incPDD/.test(run.out), 'gear scan logs the info keys and vslots seen');
+  ok(/gear: \d+ items extracted \(cap \d+, coat \d+/.test(run.out) && /gear: id \| slot \| name \| reqLevel \| reqJob/.test(run.out) && /gear: 01302103 \| weapon \| Test Sword 3 \| 30 \| 1/.test(run.out), 'gear totals and table are logged');
+  ok(/gear preview Warrior stand1\/0: \d+ layers; wearing cap=\d+ .*shield=/.test(run.out) && /gear preview Thief/.test(run.out) && /--- Magician in a tier-3 set/.test(run.out), 'tier-3 set previews are logged for every class');
 
   // ---- no Character.wz: no avatar block, everything else unchanged -------------------------------------------------
   const fxNo = join(root, 'wz-nochar');

@@ -11,6 +11,9 @@ import { defaultLook, sanitizeLook } from './maple/avatar-core.ts';
 import type { AvatarManifest, Look } from './maple/avatar-core.ts';
 import { Bgm } from './maple/audio.ts';
 import { Sfx, playSimEvents } from './maple/sfx.ts';
+import { GearPool } from './game/gear.ts';
+import { GearIcons } from './render/gear-icons.ts';
+import { GearUi, lookGearOf } from './ui/gear.ts';
 import { Renderer } from './render/renderer.ts';
 import { CreateScreen } from './ui/create.ts';
 import type { CreateResult } from './ui/create.ts';
@@ -57,11 +60,16 @@ async function boot() {
   host.appendChild(app.canvas);
 
   const art = await loadArt();
+  const gearPool = GearPool.fromManifest(avatarManifest?.gear);
+  const gearIcons = new GearIcons(avatarManifest?.gear ?? null);
+  await gearIcons.load();
+  console.info(`maple gear: ${gearPool.items.size} ${gearPool.real ? 'extracted' : 'placeholder'} items`);
   const avatar = avatarManifest ? new Avatar(avatarManifest) : null;
   console.info(`maple avatar: ${avatar ? 'parts for the player character available' : 'no character art, placeholder hero'}`);
   applyUiTheme(art?.ui ?? null);
   const renderer = new Renderer(app, art);
   app.renderer.on('resize', () => renderer.resize());
+  renderer.setGearIcons(gearIcons);
 
   const save = loadSave();
   const bgm = art ? new Bgm(art.bgm, save.settings.volume, save.settings.muted, art.bgmRegions) : null;
@@ -90,13 +98,22 @@ async function boot() {
   hud.show(false);
   const input = new Input(uiRoot);
   const vec = { x: 0, y: 0 };
+  const gearUi = new GearUi(uiRoot, gearIcons, {
+    active: () => mode === 'playing',
+    autoEquip: (on) => { save.settings.autoEquip = on; sim.autoEquip = on; writeSave(save); },
+    sim: () => sim,
+  }, save.settings.autoEquip);
+  // the hero's look = creation look + equipped gear; re-composited when the equipped set changes
+  let seenGear = 0;
 
   function startRun(seed?: number, cls?: string, look?: Look) {
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls);
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip });
     sim.god = god;
+    gearUi.reset();
+    seenGear = 0;
     acc = 0;
     mode = 'playing';
     bgm?.setRegion(0);
@@ -226,6 +243,11 @@ async function boot() {
     renderer.render(sim, dt);
     if (mode !== 'title') {
       hud.update(sim);
+      gearUi.update(sim);
+      if (sim.gearVersion !== seenGear) {
+        seenGear = sim.gearVersion;
+        renderer.setLook({ ...hero.look, gear: lookGearOf(sim) });
+      }
       screens.syncLevelUp(sim);
     }
   });
@@ -256,6 +278,10 @@ async function boot() {
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
       hero: () => hero,
+      /** equipped item ids by slot and the summed bonus */
+      gear: () => sim.gearSummary(),
+      /** put an item (pool id) in the bag as if picked up; equips it when it is an upgrade */
+      giveGear: (id: string) => sim.giveGear(id),
       avatar: () => (avatar ? { ready: avatar.ready(hero.look) } : null),
       /** what real Maple art was loaded (null = placeholders) */
       region: () => sim.region,

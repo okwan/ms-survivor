@@ -206,6 +206,73 @@ export async function characterImages({ noBase = false, skip = () => false } = {
   return { Base, Character };
 }
 
+// ---- synthetic droppable equipment ----------------------------------------------------------------------------------
+// Items with the real id ranges and info keys (reqLevel, reqJob, cash, inc*, icon, islot, vslot) so that the gear extractor's
+// selection (tiers, classes, genders, skips) can be tested; they reuse the avatar part shapes above.
+
+const infoOf = (tree, extra) => ({ ...tree, info: { ...tree.info, ...extra } });
+const icon32 = (col) => canvas(32, 32, (x, y) => (x < 2 || y < 2 || x > 29 || y > 29 ? [0, 0, 0, 0] : [...col, 255]), { origin: vec(0, 32) });
+function capTree(col, vslot) {
+  return {
+    info: { islot: 'Cp', vslot, cash: 0 },
+    ...forFrames(() => ({ cap: cv(24, 8, box(24, 8, col), 12, 6, 'cap', { brow: [0, -5] }) })),
+  };
+}
+function gloveTree(col) {
+  return { info: { islot: 'Gv', vslot: 'Gv', cash: 0 }, ...forFrames((a, i) => ({ lGlove: cv(5, 4, box(5, 4, col), 2, 0, 'glove', { navel: [6 - swingOf(a, i), 17 + bobOf(a, i)] }) })) };
+}
+function capeTree(col) {
+  return { info: { islot: 'Sr', vslot: 'Sr', cash: 0 }, ...forFrames((a, i) => ({ cape: cv(14, 16, box(14, 16, col), 7, 0, 'cape', { navel: [3, -6 + bobOf(a, i)] }) })) };
+}
+function shieldTree(col) {
+  return { info: { islot: 'Si', vslot: 'Si', cash: 0 }, ...forFrames((a, i) => ({ shield: cv(10, 12, box(10, 12, col), 5, 6, 'shield', { navel: [-9 - swingOf(a, i), 2 + bobOf(a, i)] }) })) };
+}
+const LEVELS = [0, 10, 20, 30, 40, 50, 60];
+
+/** { Character: {'Cap/01002000.img': tree...}, Eqp: String.wz Eqp.img/Eqp tree } */
+export function gearImages() {
+  const Character = {};
+  const Eqp = {};
+  const add = (folder, cat, id, tree, name, info) => {
+    const full = String(id).padStart(8, '0');
+    Character[`${folder}/${full}.img`] = infoOf(tree, { icon: icon32(tint(id)), tuc: 7, ...info });
+    (Eqp[cat] ??= {})[String(id)] = { name };
+  };
+  LEVELS.forEach((lv, t) => {
+    const lvl = { reqLevel: lv, reqJob: 0, cash: 0 };
+    add('Cap', 'Cap', 1002000 + t, capTree(tint(t), 'CpH1H5'), `Test Cap ${t}`, { ...lvl, incPDD: 3 + t });
+    add('Cap', 'Cap', 1003000 + t, capTree(tint(t + 1), 'CpH1H2H3H4H5H6HfHsHb'), `Test Helm ${t}`, { ...lvl, reqJob: 1, incPDD: 6 + t, incMHP: 10 });
+    add('Coat', 'Top', 1040100 + t, coatTree(1040100 + t), `Test Shirt ${t}`, { ...lvl, incPDD: 5 + t });
+    add('Coat', 'Top', 1041100 + t, coatTree(1041100 + t), `Test Blouse ${t}`, { ...lvl, incPDD: 5 + t });
+    add('Pants', 'Bottom', 1060100 + t, pantsTree(1060100 + t), `Test Pants ${t}`, { ...lvl, incPDD: 4 + t });
+    add('Pants', 'Bottom', 1061100 + t, pantsTree(1061100 + t), `Test Skirt ${t}`, { ...lvl, incPDD: 4 + t });
+    add('Shoes', 'Shoes', 1072100 + t, shoesTree(1072100 + t), `Test Boots ${t}`, { ...lvl, incPDD: 2 + t, incSPEED: t });
+    add('Shoes', 'Shoes', 1072200 + t, shoesTree(1072200 + t), `Test Sandals ${t}`, { ...lvl, reqJob: 8, incPDD: 2, incSPEED: 2 * t });
+    add('Glove', 'Glove', 1082100 + t, gloveTree(tint(t + 2)), `Test Gloves ${t}`, { ...lvl, incPDD: 1 + t });
+    add('Cape', 'Cape', 1102100 + t, capeTree(tint(t + 3)), `Test Cape ${t}`, { ...lvl, incPDD: 2 + t, incMDD: t });
+    add('Shield', 'Shield', 1092100 + t, shieldTree(tint(t + 4)), `Test Shield ${t}`, { ...lvl, reqJob: 1, incPDD: 5 + t });
+    add('Weapon', 'Weapon', 1302100 + t, weaponTree('sword'), `Test Sword ${t}`, { ...lvl, reqJob: 1, incPAD: 15 + 3 * t });
+    add('Weapon', 'Weapon', 1372100 + t, weaponTree('wand'), `Test Wand ${t}`, { ...lvl, reqJob: 2, incMAD: 20 + 3 * t, incINT: t });
+    add('Weapon', 'Weapon', 1452100 + t, weaponTree('bow'), `Test Bow ${t}`, { ...lvl, reqJob: 4, incPAD: 15 + 3 * t });
+    add('Weapon', 'Weapon', 1332100 + t, weaponTree('dagger'), `Test Dagger ${t}`, { ...lvl, reqJob: 8, incPAD: 12 + 3 * t });
+  });
+  // one-piece coat for the Magician at tier 3, in Longcoat/
+  add('Longcoat', 'Overall', 1052000, coatTree(1052000), 'Test Robe', { reqLevel: 30, reqJob: 2, cash: 0, incPDD: 12, incMDD: 12, vslot: 'MaPn' });
+  // items the selection must skip
+  add('Cap', 'Cap', 1009998, capTree(tint(1), 'CpH1H5'), 'Cash Cap', { reqLevel: 0, reqJob: 0, cash: 1 });
+  add('Cap', 'Cap', 1009997, capTree(tint(2), 'CpH1H5'), 'Pirate Cap', { reqLevel: 0, reqJob: 16, cash: 0 });
+  // novelty items the drop filters must reject: no tuc, an event flag, no stats
+  add('Cap', 'Cap', 1002999, capTree(tint(3), 'CpH1H5'), 'No Slots Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, tuc: 0 });
+  add('Cap', 'Cap', 1002998, capTree(tint(3), 'CpH1H5'), 'Event Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, timeLimited: 1 });
+  add('Cap', 'Cap', 1002997, capTree(tint(3), 'CpH1H5'), 'Statless Cap', { reqLevel: 30, reqJob: 0, cash: 0 });
+  add('Weapon', 'Weapon', 1432000, weaponTree('sword'), 'Test Spear', { reqLevel: 0, reqJob: 1, cash: 0, incPAD: 99 });
+  add('Shield', 'Shield', 1092002, shieldTree(tint(1)), 'Mage Shield', { reqLevel: 0, reqJob: 2, cash: 0, incPDD: 3 });
+  const noWalk = capTree(tint(5), 'CpH1H5');
+  for (const a of ['walk1', 'walk2']) delete noWalk[a];
+  add('Cap', 'Cap', 1009999, noWalk, 'Unwalkable Cap', { reqLevel: 0, reqJob: 0, cash: 0 });
+  return { Character, Eqp };
+}
+
 /**
  * Writes Mob.wz, Skill.wz, String.wz and Sound.wz into `dir`.
  * Default: a handful of entries that exercise links, fly, UOL frames, big frames, name mismatches and missing nodes.
@@ -301,8 +368,10 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
   writeFileSync(join(dir, 'Sound.wz'), buildWz(sounds));
   if (character) {
     const { Base, Character } = await characterImages();
+    const gear = gearImages();
     writeFileSync(join(dir, 'Base.wz'), buildWz(Base));
-    writeFileSync(join(dir, 'Character.wz'), buildWz(Character));
+    writeFileSync(join(dir, 'Character.wz'), buildWz({ ...Character, ...gear.Character }));
+    writeFileSync(join(dir, 'String.wz'), buildWz({ ...strings, 'Eqp.img': { Eqp: gear.Eqp } }));
   }
 }
 

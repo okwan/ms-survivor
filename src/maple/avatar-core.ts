@@ -13,10 +13,13 @@
  */
 import { CLASSES } from '../game/data.ts';
 import type { Stance } from '../game/data.ts';
+import type { GearManifest, GearSlot } from '../game/gear.ts';
 
-export type Slot = 'body' | 'head' | 'face' | 'hair' | 'coat' | 'pants' | 'shoes' | 'weapon';
-/** draw/placement stages, in dependency order */
-export const SLOTS: Slot[] = ['body', 'head', 'face', 'hair', 'coat', 'pants', 'shoes', 'weapon'];
+export type Slot = 'body' | 'head' | 'face' | 'hair' | 'coat' | 'pants' | 'shoes' | 'weapon' | 'cap' | 'glove' | 'cape' | 'shield';
+/** draw/placement stages, in dependency order (cap, glove, cape and shield only ever come from equipped gear) */
+export const SLOTS: Slot[] = ['body', 'head', 'face', 'hair', 'coat', 'pants', 'shoes', 'weapon', 'cap', 'glove', 'cape', 'shield'];
+/** a record with an empty list for every slot */
+export const emptyItems = (): Record<Slot, string[]> => ({ body: [], head: [], face: [], hair: [], coat: [], pants: [], shoes: [], weapon: [], cap: [], glove: [], cape: [], shield: [] });
 export type Vec = [number, number];
 
 /** One canvas of a frame inside the item's atlas. */
@@ -60,6 +63,8 @@ export interface AvatarManifest {
   actions: string[];
   /** folder under maple/ */
   dir: string;
+  /** droppable equipment (their frame files are listed in `items` too); absent when none could be extracted */
+  gear?: GearManifest;
 }
 
 /** Actions the extractor keeps (only those that exist in a part are written). */
@@ -82,7 +87,11 @@ export interface Look {
   shoes: number;
   /** Character.wz weapon id; set from the class */
   weapon: number;
+  /** equipped gear (8-digit item ids per slot) drawn over the creation look; not saved with the character */
+  gear?: LookGear;
 }
+/** `longcoat`: a one-piece coat is worn, so the pants are not drawn */
+export type LookGear = Partial<Record<GearSlot, string>> & { longcoat?: boolean };
 
 export const LOOK_OPTIONS = {
   skins: 5,
@@ -144,6 +153,23 @@ export function sanitizeLook(v: unknown, weapon: number): Look {
 
 /** Item ids (8 digits, the .img names) a look is made of. */
 export function lookItems(l: Look): Record<Slot, string> {
+  const g = l.gear;
+  if (g) {
+    return {
+      body: pad8(2000 + l.skin),
+      head: pad8(12000 + l.skin),
+      face: pad8(l.face),
+      hair: pad8(l.hair + l.hairColor),
+      coat: g.coat ?? pad8(l.top),
+      pants: g.longcoat ? '' : (g.pants ?? pad8(l.bottom)),
+      shoes: g.shoes ?? pad8(l.shoes),
+      weapon: g.weapon ?? pad8(l.weapon),
+      cap: g.cap ?? '',
+      glove: g.glove ?? '',
+      cape: g.cape ?? '',
+      shield: g.shield ?? '',
+    };
+  }
   return {
     body: pad8(2000 + l.skin),
     head: pad8(12000 + l.skin),
@@ -153,13 +179,17 @@ export function lookItems(l: Look): Record<Slot, string> {
     pants: pad8(l.bottom),
     shoes: pad8(l.shoes),
     weapon: pad8(l.weapon),
+    cap: '',
+    glove: '',
+    cape: '',
+    shield: '',
   };
 }
 
 /** Every item the extractor should produce. */
 export function wantedItems(): Record<Slot, string[]> {
   const o = LOOK_OPTIONS;
-  const out: Record<Slot, string[]> = { body: [], head: [], face: [], hair: [], coat: [], pants: [], shoes: [], weapon: [] };
+  const out = emptyItems();
   for (let s = 0; s < o.skins; s++) {
     out.body.push(pad8(2000 + s));
     out.head.push(pad8(12000 + s));
@@ -185,6 +215,10 @@ export const SLOT_FOLDERS: Record<Slot, string[]> = {
   pants: ['Pants'],
   shoes: ['Shoes'],
   weapon: ['Weapon'],
+  cap: ['Cap'],
+  glove: ['Glove'],
+  cape: ['Cape'],
+  shield: ['Shield'],
 };
 
 export const itemFile = (slot: Slot, id: string, ext: 'json' | 'png') => `${slot}-${id}.${ext}`;
@@ -278,6 +312,22 @@ function partFrames(part: Part, action: string): FrameData[] | null {
 }
 
 /**
+ * Which hair layers a worn cap hides. A cap always covers the top of the hair (hairOverHead) and shows the rest; the cap's
+ * vslot is a run of two-letter codes ("CpH1H5"), where H5 also takes the hair behind the head and a cap that lists nearly every
+ * H code (a full helmet) hides all hair. The real meaning of each code is only partly known; the extractor logs the strings seen.
+ */
+export function hiddenHairLayers(cap: ItemJson | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!cap) return out;
+  out.add('hairOverHead');
+  const codes = String(cap.info?.vslot ?? '').match(/.{1,2}/g) ?? [];
+  const h = codes.filter((c) => /^H[0-9a-z]$/.test(c));
+  if (h.includes('H5')) out.add('backHair');
+  if (h.length >= 6) for (const n of ['hair', 'hairShade', 'backHair', 'hairBelowBody']) out.add(n);
+  return out;
+}
+
+/**
  * Places every layer of every part for one action and body-frame index. `parts` should hold at most one part per slot.
  * A part without the action (and without a 'default') contributes nothing; hair and faces use their 'default' pose.
  */
@@ -292,6 +342,7 @@ export function compose(parts: Part[], action: string, frame: number, z: ZTable)
   const placed: Placed[] = [];
   const bySlot = new Map<Slot, Part>();
   for (const p of parts) bySlot.set(p.slot, p);
+  const hideHair = hiddenHairLayers(bySlot.get('cap')?.item);
 
   for (const slot of SLOTS) {
     const part = bySlot.get(slot);
@@ -307,6 +358,7 @@ export function compose(parts: Part[], action: string, frame: number, z: ZTable)
     // layers named like the slot ("body", "head") go first so that the slot's own points are in the world before the rest
     const layers = [...fd.l].sort((a, b) => (b.n === slot ? 1 : 0) - (a.n === slot ? 1 : 0));
     for (const l of layers) {
+      if (slot === 'hair' && hideHair.size && (hideHair.has(l.n) || hideHair.has(l.z))) continue;
       let ox: number;
       let oy: number;
       let anchor: string | null = null;

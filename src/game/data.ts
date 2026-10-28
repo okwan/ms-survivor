@@ -323,3 +323,31 @@ export const CLASS_BY_KEY: Record<string, ClassDef> = Object.fromEntries(CLASSES
 export const DEFAULT_CLASS: ClassKey = 'magician';
 /** Start skill key of a class */
 export const startSkill = (c: ClassDef) => c.skills[0];
+
+// ---- gear (src/game/gear.ts) -------------------------------------------------------------------
+
+/** weapon attack (incPAD, or incMAD for the Magician) -> damage, per point; a weapon is capped at GEAR_TIER_DMG_CAP per item tier step */
+export const GEAR_DMG_PER_ATT = 0.02;
+export const GEAR_TIER_DMG_CAP = 0.1;
+/** the class's main stat (STR / INT / DEX / LUK) -> damage per point */
+export const GEAR_DMG_PER_STAT = 0.01;
+/** incPDD points per armor point */
+export const GEAR_PDD_PER_ARMOR = 10;
+/** incMHP points per max HP */
+export const GEAR_MHP_PER_HP = 5;
+/** incSPEED points -> move speed fraction per point */
+export const GEAR_SPEED_PER_POINT = 0.005;
+/** drop chances per kill: normal mobs, elite (big or high tier) mobs; bosses always drop GEAR_BOSS_DROPS items */
+export const GEAR_DROP_NORMAL = 0.004;
+export const GEAR_DROP_ELITE = 0.01;
+export const GEAR_BOSS_DROPS = 2;
+/** mobs from this ladder tier up count as elite for gear drops */
+export const GEAR_ELITE_TIER = 18;
+/** chance that a drop is one item tier above the run's current tier */
+export const GEAR_UPTIER_CHANCE = 0.15;
+/** run seconds per item tier step (tier 0 for the first step, max tier 6) */
+export const GEAR_TIER_SECONDS = 120;
+export const GEAR_MAX_TIER = 6;
+/** seconds an "Equip? press E" offer stays up */
+export const GEAR_OFFER_SECONDS = 6;
+export const GEAR_PICKUP_LIFE = 90;

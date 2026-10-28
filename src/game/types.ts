@@ -1,4 +1,5 @@
 import type { SkillKind } from './data.ts';
+import type { GearItem } from './gear.ts';
 
 export interface Enemy {
   x: number;
@@ -36,8 +37,8 @@ export interface Enemy {
   idx: number;
 }
 
-export type PickupKind = 0 | 1 | 2 | 3 | 4;
-export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4;
+export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5;
+export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5;
 
 export interface Pickup {
   kind: PickupKind;
@@ -46,6 +47,8 @@ export interface Pickup {
   value: number;
   life: number;
   pulled: boolean;
+  /** the item of a GEAR pickup */
+  item: GearItem | null;
 }
 
 export interface Projectile {
@@ -104,6 +107,8 @@ export type SimEvent =
   | { type: 'cast'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number; r: number; pts: number[] | null }
   | { type: 'novaHit'; x: number; y: number; r: number; hit: boolean }
   | { type: 'pickup'; kind: PickupKind; x: number; y: number; value: number }
+  | { type: 'drop'; x: number; y: number; id: string; name: string; boss: boolean }
+  | { type: 'equip'; id: string; slot: string; auto: boolean }
   | { type: 'raid'; text: string }
   | { type: 'bossSpawn'; boss: number; name: string; x: number; y: number }
   | { type: 'bossDeath'; boss: number; name: string; x: number; y: number }
