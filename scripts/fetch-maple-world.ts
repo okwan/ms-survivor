@@ -212,6 +212,8 @@ export class World {
   /** `file` is the PNG path under maple/ (regions write one ground per region) */
   /** `lift`: grounds darker than that target luminance (but not nearly black, < 10) are gamma-lifted to it; the unlifted luma is left in lastLuma */
   lastLuma = 0;
+  /** mean opaque share (%) of the bsc tiles of the last buildGround */
+  lastOpaque = 100;
   buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>, file = 'map/ground.png', lift = 0): MapSection['ground'] {
     const { log, warn } = this.d;
     const img = wz.image(`Tile/${tileSet}.img`);
@@ -252,6 +254,7 @@ export class World {
       for (let i = 0; i < t.w * t.h; i++) if (t.rgba[i * 4 + 3] >= 200) o++;
       return Math.round((100 * o) / (t.w * t.h));
     });
+    this.lastOpaque = cov.reduce((a, x) => a + x, 0) / cov.length;
     log(`ground: ${tiles.length} bsc tiles ${tiles.map((t) => `${t.w}x${t.h}`).join(',')}, opaque ${cov.join('/')}%, average colour rgb(${avg.join(',')})`);
 
     // 4 x 4 grid of weighted-random variants: tiles are drawn on a w x h grid in the game, so this repeats seamlessly

@@ -102,9 +102,10 @@ try {
   eq(rg.map((r) => r?.mapId ?? null), [104040000, 101010000, 102000100, 105040300, 107000200, null, null], 'candidates first, street-name scan next, null when nothing exists');
   const g0 = rg[0]!, g1 = rg[1]!;
   eq([g0.street, g0.name, g0.tileSet], ['Henesys', 'Hunting Ground I', 'grassySoil'], 'region 0 names and dominant tile set');
-  eq(g1.tileSet, 'darkMountain', 'region 1 uses its own dominant tile set (12 of 13 tiles)');
+  eq(g1.tileSet, 'forestGreen', 'tile-less Ellinia borrows the greenest opaque unused set (not the see-through blackTile)');
+  ok(/borrowing tile set forestGreen/.test(out) && /top 5 by greenness: forestGreen/.test(out) && /borrowed 2 from Obj\.wz/.test(out), 'log shows the borrowed set, the top 5 and the borrowed decor');
   eq(g0.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.flower.a.0:small', 'acc1.flower.b.0:small', 'acc1.nature.bush.0:small', 'acc1.nature.tree.0:big'], 'region 0 keeps nature decor only, with size classes');
-  eq(g1.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.flower.b.0:small', 'acc1.nature.bush.0:small', 'acc1.nature.tree.0:big', 'acc2.nature.rock.a:medium'], 'region 1 decor: nature only, signboard dropped');
+  eq(g1.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.nature.tree.0:big', 'acc2.nature.rock.a:medium', 'acc3.forestGreen.nature.a:medium', 'acc3.forestGreen.nature.b:small'], 'region 1 decor: its own nature objects plus the borrowed acc3 set, signboard dropped');
   ok(existsSync(maple(g0.ground!.image)) && existsSync(maple(g0.objects!.atlas)) && g0.ground!.image !== g1.ground!.image, 'per-region ground and atlas PNGs');
   eq(png(maple(g1.objects!.atlas)).w, g1.objects!.size[0], 'region atlas size matches');
   eq([g0.bgm, g1.bgm, rg[2]!.bgm], ['bgm/region-0.mp3', 'bgm/region-1.mp3', 'bgm/region-0.mp3'], 'regions sharing a track share the file');

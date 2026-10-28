@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { BIG, Placements, clusterAt } from '../src/render/cluster.ts';
-import { BIG_MIN_H, DECOR_CAP, DECOR_DARK, DECOR_EXCLUDE, DECOR_FALLBACK_EXCLUDE, DECOR_FALLBACK_INCLUDE, DECOR_INCLUDE, DECOR_LIFT_TO, GROUND_LIFT_TO, MIN_DECOR, MIN_GROUND_LUMA, REGION_WANTS, SCAN_CAP, SMALL_MAX_H, mapImagePath } from '../src/maple/region-data.ts';
+import { BIG_MIN_H, DECOR_CAP, DECOR_DARK, DECOR_EXCLUDE, DECOR_FALLBACK_EXCLUDE, DECOR_FALLBACK_INCLUDE, DECOR_INCLUDE, DECOR_LIFT_TO, GREEN_NAME, GREEN_NAME_BONUS, GROUND_LIFT_TO, MIN_DECOR, MIN_GROUND_OPAQUE, NATURE_SET_NAME, MIN_GROUND_LUMA, REGION_WANTS, SCAN_CAP, SMALL_MAX_H, TILE_SET_OPAQUE, mapImagePath } from '../src/maple/region-data.ts';
 import type { DecorSize, RegionEntry, RegionObj, RegionsSection } from '../src/maple/region-types.ts';
 import { asciiPreview } from './png.mjs';
 import { worldTools } from './fetch-maple-world.ts';
@@ -146,6 +146,8 @@ export function buildRegions(d: RegionDeps): RegionsResult {
   const bgmFiles = new Map<string, string | null>();
   /** dominant tile sets taken by earlier regions: two regions never share one */
   const usedSets = new Set<string>();
+  /** Tile sets of Map.wz that could carry a tile-less map (computed on first use) */
+  let tileSets: { name: string; green: number; opaque: number; rgb: number[] }[] | null = null;
 
   REGION_WANTS.forEach((want, index) => {
     try {
@@ -155,6 +157,53 @@ export function buildRegions(d: RegionDeps): RegionsResult {
       list.push(null);
     }
   });
+
+  function allTileSets() {
+    if (tileSets) return tileSets;
+    tileSets = [];
+    for (const n of wz!.names().filter((x) => /^tile\/[^/]+\.img$/i.test(x))) {
+      try {
+        const im = wz!.image(n);
+        const tiles = im ? d.canvasList(im.root.get('bsc')).map((c: Any) => tools.px(c, im.key)).filter((p: Px | null): p is Px => !!p) : [];
+        if (!tiles.length) continue;
+        let o = 0, tot = 0, r = 0, g = 0, b = 0, k = 0;
+        for (const t of tiles) for (let i = 0; i < t.w * t.h; i++) { tot++; if (t.rgba[i * 4 + 3] >= 200) { o++; r += t.rgba[i * 4]; g += t.rgba[i * 4 + 1]; b += t.rgba[i * 4 + 2]; k++; } }
+        if (!k) continue;
+        const name = n.slice(5, -4);
+        const rgb = [r / k, g / k, b / k];
+        tileSets.push({ name, green: rgb[1] - (rgb[0] + rgb[2]) / 2 + (GREEN_NAME.test(name) ? GREEN_NAME_BONUS : 0), opaque: (100 * o) / tot, rgb });
+      } catch { /* skip this set */ }
+    }
+    return tileSets;
+  }
+  /** best green, opaque tile set that no region uses yet; the top 5 are logged */
+  function greenestSet(index: number): string | null {
+    const all = allTileSets();
+    const ok = all.filter((t) => t.opaque >= TILE_SET_OPAQUE && !usedSets.has(t.name)).sort((a, b) => b.green - a.green);
+    d.log(`region ${index}: ${all.length} tile sets, ${ok.length} opaque (>= ${TILE_SET_OPAQUE}%) and unused; top 5 by greenness: ${ok.slice(0, 5).map((t) => `${t.name}=${t.green.toFixed(0)} rgb(${t.rgb.map(Math.round).join(',')})`).join(' ') || 'none'}`);
+    return ok[0]?.name ?? null;
+  }
+  // decor for a tile-less map: objects of Obj.wz acc* images under a node named like the borrowed tile set (or wood/forest/tree/leaf), l1 = nature, added to the map own object list
+  function supplement(index: number, inf: MapInfo, tileSet: string) {
+    const added: string[] = [];
+    for (const n of wz!.names().filter((x) => /^obj\/acc\d*\.img$/i.test(x))) {
+      const im = wz!.image(n);
+      if (!im) continue;
+      const oS = n.slice(4, -4);
+      for (const l0 of im.root.keys()) {
+        if (l0 !== tileSet && !NATURE_SET_NAME.test(l0)) continue;
+        const nat = im.root.get(`${l0}/nature`);
+        for (const l2 of nat?.keys() ?? []) {
+          if (added.length >= 24) break;
+          const key = `${oS}/${l0}/nature/${l2}`;
+          if (inf.objs.has(key)) continue;
+          inf.objs.set(key, { oS, l0, l1: 'nature', l2, n: 1 });
+          added.push(key);
+        }
+      }
+    }
+    d.log(`region ${index}: map has too few nature objects; borrowed ${added.length} from Obj.wz acc*/(${tileSet}|${NATURE_SET_NAME})/nature: ${added.slice(0, 12).join(' ') || 'none'}`);
+  }
 
   function region(index: number): RegionEntry | null {
     const want = REGION_WANTS[index];
@@ -168,10 +217,18 @@ export function buildRegions(d: RegionDeps): RegionsResult {
       let im = cheap?.img ?? wz!.image(path);
       if (!im) return { reason: 'absent', decor: 0 };
       const inf = cheap?.info ?? analyse(im.root);
-      const decor = cheap?.decor ?? passing(inf).length;
-      if (!inf.tiles) return { reason: `no tiles (keys ${im.root.keys().slice(0, 10).join(',')})`, decor };
-      const ranked = [...inf.tileSets].sort((a, b) => b[1] - a[1]);
-      if (ranked[0] && usedSets.has(ranked[0][0])) return { reason: `tile set ${ranked[0][0]} already used by an earlier region`, decor };
+      let decor = cheap?.decor ?? passing(inf).length;
+      let ranked = [...inf.tileSets].sort((a, b) => b[1] - a[1]);
+      let tileless: string | null = null;
+      if (!inf.tiles) {
+        // platforms made of objects: only a map named like the region may borrow another tile set for its ground
+        if (!(hasNames && inArea(c))) return { reason: `no tiles (keys ${im.root.keys().slice(0, 10).join(',')})`, decor };
+        tileless = greenestSet(index);
+        if (!tileless) return { reason: 'no tiles and no opaque unused tile set to borrow', decor };
+        d.log(`region ${index}: ${c} has no tiles; borrowing tile set ${tileless}`);
+        ranked = [[tileless, 0]];
+        if (decor < MIN_DECOR) { supplement(index, inf, tileless); decor = passing(inf).length; }
+      } else if (ranked[0] && usedSets.has(ranked[0][0])) return { reason: `tile set ${ranked[0][0]} already used by an earlier region`, decor };
       if (decor < MIN_DECOR) return { reason: `only ${decor} decor objects pass the filter`, decor };
       let luma0 = 0;
       let ground: Pick['ground'] = null, tileSet = ranked[0]?.[0] ?? 'grassySoil';
@@ -181,6 +238,7 @@ export function buildRegions(d: RegionDeps): RegionsResult {
         if (ground) { tileSet = ts; luma0 = tools.lastLuma; break; }
       }
       if (!ground) return { reason: 'no usable ground tile set', decor };
+      if (tools.lastOpaque < MIN_GROUND_OPAQUE) return { reason: `ground is see-through (${tools.lastOpaque.toFixed(0)}% opaque, tile set ${tileSet})`, decor };
       if (luma0 < MIN_GROUND_LUMA) return { reason: `ground too dark (luma ${luma0.toFixed(0)}, tile set ${tileSet})`, decor };
       return { reason: null, decor, pick: { id: c, img: im, info: inf, tileSet, ground } };
     };
@@ -207,7 +265,7 @@ export function buildRegions(d: RegionDeps): RegionsResult {
         if (!im) return [];
         const info = analyse(im.root);
         return [{ ...h, img: im, info, decor: passing(info).length }];
-      }).filter((h) => h.info.tiles && h.decor >= MIN_DECOR).sort((a, b) => b.decor - a.decor || b.info.tiles - a.info.tiles);
+      }).filter((h) => !h.info.tiles || h.decor >= MIN_DECOR).sort((a, b) => Number(!!b.info.tiles) - Number(!!a.info.tiles) || b.decor - a.decor || b.info.tiles - a.info.tiles);
       let built = 0;
       for (const h of scored) {
         if (built++ >= 8) break;
@@ -215,7 +273,7 @@ export function buildRegions(d: RegionDeps): RegionsResult {
         verdict(h.id, r);
         if (r.pick) { chosen = r.pick; break; }
       }
-      if (!scored.length) d.log(`region ${index} ${want.label}: the scan found no map with tiles and ${MIN_DECOR}+ decor objects`);
+      if (!scored.length) d.log(`region ${index} ${want.label}: the scan found no usable map`);
     }
     if (!chosen) {
       d.warn(`region ${index} ${want.label}: no acceptable map found; the game reuses another region here`);

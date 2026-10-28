@@ -66,3 +66,11 @@ export const GAME_SOUNDS: Record<string, [string, string[]]> = {
 
 /** a single sound larger than this is skipped */
 export const MAX_SFX_BYTES = 400 * 1024;
+
+/** Grounds whose bsc tiles are less than this % opaque are rejected (an invisible ground); a tile-less map may borrow a set that is at least TILE_SET_OPAQUE % opaque. */
+export const MIN_GROUND_OPAQUE = 90;
+export const TILE_SET_OPAQUE = 95;
+export const GREEN_NAME = /wood|forest|tree|green|grass|leaf/i;
+export const GREEN_NAME_BONUS = 40;
+/** tile-less maps: supplementary decor sets (acc nodes, l0 = name, l1 = nature) whose name matches, besides one named like the borrowed tile set */
+export const NATURE_SET_NAME = /wood|forest|tree|leaf/i;
