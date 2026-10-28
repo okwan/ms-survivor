@@ -85,6 +85,8 @@ export interface GearEntry {
   /** info/tuc, the number of upgrade slots */
   tuc?: number;
   stats: GearStats;
+  /** the stats were derived from slot and reqLevel by deriveGearStats (the client's Character.wz has no inc* keys for this item) */
+  derived?: true;
   /** rectangle in the icon atlas and the icon's origin inside it; absent when the item has no info/icon */
   icon?: { x: number; y: number; w: number; h: number; ox: number; oy: number };
 }
@@ -93,6 +95,37 @@ export interface GearManifest {
   items: Record<string, GearEntry>;
   /** icon atlas png, relative to maple/ */
   iconAtlas: string;
+}
+
+// ---- derived stats ------------------------------------------------------------------------------
+
+/** armor (PDD) per required level by slot, in the proportions of the classic equipment (overall > pants > cap > shoes > cape/glove) */
+const PDD_PER_LEVEL: Record<GearSlot, number> = { cap: 0.35, coat: 0.6, pants: 0.45, shoes: 0.2, glove: 0.16, cape: 0.16, shield: 0.4, weapon: 0 };
+/** weapon attack factor by weapon type (id / 10000): sword, dagger, wand, staff, bow */
+const WEAPON_ATT: Record<number, number> = { 130: 1, 133: 0.85, 137: 1, 138: 1.1, 145: 0.95 };
+
+/**
+ * Stats for an equip whose Character.wz info node has no inc* keys (most of them, in the GMS client the game is built from).
+ * Weapon attack ~ (8 + L) * type factor (magic attack for wands and staves), armor ~ slot weight * L, +1 of every required main stat per 25 levels,
+ * boots speed up to +10. Everything stays at or below what the real classic items of that level carry, and the weapon is capped per tier by
+ * itemBonus anyway, so derived items cannot move the balance past the real ones.
+ * `req` holds the item's reqSTR / reqDEX / reqINT / reqLUK.
+ */
+export function deriveGearStats(slot: GearSlot, level: number, opts: { weaponType?: number; long?: boolean; req?: Partial<Record<'str' | 'dex' | 'int' | 'luk', number>> } = {}): GearStats {
+  const L = Math.max(0, Math.min(MAX_GEAR_LEVEL, level));
+  const out: GearStats = {};
+  if (slot === 'weapon') {
+    const att = Math.max(1, Math.round((8 + L) * (WEAPON_ATT[opts.weaponType ?? 130] ?? 1)));
+    if (opts.weaponType === 137 || opts.weaponType === 138) out.mad = att; else out.pad = att;
+  } else {
+    const pdd = Math.max(1, Math.round(PDD_PER_LEVEL[slot] * L * (opts.long ? 1.25 : 1)) + 1);
+    out.pdd = pdd;
+    if (slot !== 'glove' && slot !== 'cape') out.mdd = Math.max(0, Math.round(pdd / 2));
+  }
+  const st = Math.floor(L / 25) + (L >= 8 ? 1 : 0);
+  if (st > 0) for (const k of ['str', 'dex', 'int', 'luk'] as const) if ((opts.req?.[k] ?? 0) > 0) out[k] = st;
+  if (slot === 'shoes') out.speed = Math.min(10, Math.round(L / 9));
+  return out;
 }
 
 // ---- stat mapping ------------------------------------------------------------------------------

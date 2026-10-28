@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLASSES } from '../src/game/data.ts';
 import type { ClassKey } from '../src/game/data.ts';
-import { GEAR_SLOTS, JOB_BIT, MAX_GEAR_LEVEL, TIER_LEVELS, tierOfLevel } from '../src/game/gear.ts';
+import { GEAR_SLOTS, JOB_BIT, deriveGearStats, MAX_GEAR_LEVEL, TIER_LEVELS, tierOfLevel } from '../src/game/gear.ts';
 import type { GearEntry, GearManifest, GearSlot, GearStats } from '../src/game/gear.ts';
 import { compose, defaultLook, itemFile, lookItems, rasterize, stanceActions } from '../src/maple/avatar-core.ts';
 import type { Part, Slot, ZTable } from '../src/maple/avatar-core.ts';
@@ -36,7 +36,7 @@ const PER_BUCKET = 3;
 /** items kept per tier t0..t7 (sums to ~MAX_GEAR_ITEMS): the late tiers get the biggest share so the cool gear exists for every class */
 const TIER_QUOTA = [24, 30, 34, 46, 46, 46, 46, 46];
 /** gear frame files and icons stay under this many bytes (the manifest and the atlases are small next to it); lowest-priority picks are dropped first */
-export const GEAR_BYTE_BUDGET = 2_000_000;
+export const GEAR_BYTE_BUDGET = Number(process.env.MAPLE_GEAR_BYTES) > 0 ? Number(process.env.MAPLE_GEAR_BYTES) : 2_000_000;
 /** highest reqLevel that may stand in for an empty tier window (the normal cap is MAX_GEAR_LEVEL) */
 const BORROW_MAX_LEVEL = 120;
 /** selection order inside a tier: scarce slots first */
@@ -74,6 +74,8 @@ interface Candidate {
   stats: GearStats;
   where: string;
   tuc: number;
+  /** stats came from deriveGearStats (the item has no inc* keys) */
+  derived: boolean;
   /** why the item is a worse drop candidate (it is only picked when a bucket has nothing cleaner): tuc0, flag:<key>, nowalk */
   bad: string[];
   /** tier the item is offered at (tierOfLevel(level) unless it stands in for an empty tier window) */
@@ -138,7 +140,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     // ---- scan every equip image's info node ----
     const names = equipNames(strings, lg);
     const cands: Candidate[] = [];
-    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, tooHigh: 0, timeLimited: 0 };
+    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, derived: 0, tooHigh: 0, timeLimited: 0 };
     const infoKeys = new Map<string, number>();
     const vslots = new Map<string, number>();
     const islots = new Map<string, number>();
@@ -219,11 +221,22 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
         const v = intOf(val(k));
         if (v) stats[to] = v;
       }
-      const hasStat = f.slot === 'weapon' ? !!(stats.pad || (stats.mad && [137, 138].includes(Math.floor(n / 10000)))) : Object.keys(stats).length > 0;
+      const wtype = Math.floor(n / 10000);
+      const hasStat = f.slot === 'weapon' ? !!(stats.pad || (stats.mad && [137, 138].includes(wtype))) : Object.keys(stats).length > 0;
+      let derived = false;
       if (!hasStat) {
-        seen.noStats++;
-        hard('noStat');
-        continue;
+        // this client's Character.wz carries no inc* keys for most equips: a real wearable (reqLevel present, upgrade slots or a price) gets derived stats
+        const wearable = info.get('reqLevel') !== undefined && (intOf(val('tuc')) > 0 || intOf(val('price')) > 1);
+        if (!wearable) {
+          seen.noStats++;
+          hard('noStat');
+          continue;
+        }
+        const d = deriveGearStats(f.slot, level, { weaponType: wtype, long: f.long, req: { str: intOf(val('reqSTR')), dex: intOf(val('reqDEX')), int: intOf(val('reqINT')), luk: intOf(val('reqLUK')) } });
+        for (const [k, v] of Object.entries(d)) if (stats[k as keyof GearStats] === undefined) stats[k as keyof GearStats] = v;
+        derived = true;
+        seen.derived++;
+        bump(reasonOf(f.slot), 'derivedStats');
       }
       if (intOf(val('timeLimited')) !== 0) {
         seen.timeLimited++;
@@ -243,9 +256,9 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       if (level > MAX_GEAR_LEVEL) bad.push('level>' + MAX_GEAR_LEVEL);
       for (const b of bad) bump(reasonOf(f.slot), b);
       if (bad.length) sample(f.slot, `${m[2]} L${level} soft ${bad.join(',')}: ${[...info.keys()].filter((k: string) => k !== 'icon' && k !== 'iconRaw').map((k: string) => `${k}=${val(k)}`).slice(0, 14).join(' ')}`);
-      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')), bad, tier: tierOfLevel(Math.min(level, MAX_GEAR_LEVEL)) });
+      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')), derived, bad, tier: tierOfLevel(Math.min(level, MAX_GEAR_LEVEL)) });
     }
-    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable, ${seen.noStats} without a usable inc* stat, ${seen.timeLimited} timeLimited, ${seen.tooHigh} above reqLevel ${BORROW_MAX_LEVEL}; kept ${cands.length} candidates, of which soft-flagged (picked only when nothing cleaner): ${seen.noTuc} tuc <= 0, ${seen.flagged} notSale/exItem/setItemID/charmEXP/tradeBlock`);
+    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable, ${seen.noStats} without inc* stats and not a real wearable, ${seen.derived} kept with DERIVED stats (no inc* keys), ${seen.timeLimited} timeLimited, ${seen.tooHigh} above reqLevel ${BORROW_MAX_LEVEL}; kept ${cands.length} candidates, of which soft-flagged (picked only when nothing cleaner): ${seen.noTuc} tuc <= 0, ${seen.flagged} notSale/exItem/setItemID/charmEXP/tradeBlock`);
     {
       const clean = (slot: string, t: number) => cands.filter((c) => c.slot === slot && tierOfLevel(Math.min(c.level, MAX_GEAR_LEVEL)) === t && !c.bad.length).length;
       const any = (slot: string, t: number) => cands.filter((c) => c.slot === slot && tierOfLevel(Math.min(c.level, MAX_GEAR_LEVEL)) === t).length;
@@ -276,7 +289,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       if (slot === 'weapon') return WEAPON_TYPES[cls].includes(Math.floor(c.n / 10000));
       return gender === 2 || c.gender === 2 || c.gender === gender;
     };
-    const order = (a: Candidate, b: Candidate) => a.bad.length - b.bad.length || classic(a.n) - classic(b.n) || b.level - a.level || a.n - b.n;
+    const order = (a: Candidate, b: Candidate) => a.bad.length - b.bad.length || +a.derived - +b.derived || classic(a.n) - classic(b.n) || b.level - a.level || a.n - b.n;
     const picksByTier: Pick[][] = TIER_LEVELS.map(() => []);
     const borrowed = { up: 0, down: 0, buckets: 0 };
     /** empty buckets: resolved after every tier took its own items, so a borrowed item never steals another tier's natural one */
@@ -349,8 +362,35 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     const failed: string[] = [];
     let noIcon = 0;
     let overBudget = 0;
+    // the icon atlas is written after the frames: read every chosen icon first and pack them once to learn what the atlas costs, then
+    // whatever is left of the budget is for frame files (in priority order; a pick whose frames would not fit is trimmed)
+    const iconOf = new Map<string, { id: string; w: number; h: number; rgba: Buffer; ox: number; oy: number } | null>();
     for (const c of chosen) {
-      if (bytes > GEAR_BYTE_BUDGET) {
+      let got: { id: string; w: number; h: number; rgba: Buffer; ox: number; oy: number } | null = null;
+      try {
+        const ic = character.image(c.where)?.root.get('info/icon');
+        if (ic?.type === 'canvas') {
+          const [w, h, rgba] = canvasRgba(ic, character.image(c.where)!.key);
+          const o = ic.get('origin')?.value;
+          if (w > 0 && h > 0) got = { id: c.id, w, h, rgba, ox: o?.x ?? 0, oy: o?.y ?? 0 };
+        }
+      } catch (e) {
+        warn(`gear icon ${c.where}: ${(e as Error).message}`);
+      }
+      iconOf.set(c.id, got);
+    }
+    let atlasEstimate = 0;
+    {
+      const all = [...iconOf.values()].filter((x): x is NonNullable<typeof x> => !!x);
+      if (all.length) {
+        const a = tools.shelfPack(all);
+        atlasEstimate = encodePng(a.w, a.h, a.rgba).length;
+      }
+    }
+    const frameBudget = GEAR_BYTE_BUDGET - atlasEstimate;
+    log(`gear: icon atlas for all ${chosen.length} picks would be ${atlasEstimate} bytes; ${Math.max(0, frameBudget)} bytes left of the budget for frame files`);
+    for (const c of chosen) {
+      if (bytes >= frameBudget) {
         overBudget++;
         continue;
       }
@@ -368,6 +408,10 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
           failed.push(`${c.id} (no frames)`);
           continue;
         }
+        if (!old && bytes + it.bytes > frameBudget) {
+          overBudget++;
+          continue;
+        }
         if (!old) {
           writeFileSync(join(dir, itemFile(c.slot, c.id, 'png')), encodePng(it.atlas.w, it.atlas.h, it.atlas.rgba));
           writeFileSync(join(dir, itemFile(c.slot, c.id, 'json')), JSON.stringify(it.json));
@@ -376,31 +420,20 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
           (ids[c.slot] ??= []).push(c.id);
         }
         const entry: GearEntry = {
-          slot: c.slot, name: names.get(c.n) ?? `Item ${c.n}`, level: c.level, ...(c.tier !== tierOfLevel(c.level) ? { tier: c.tier } : {}), job: c.job, ...(c.gender !== 2 ? { g: c.gender } : {}), ...(c.long ? { long: true } : {}), tuc: c.tuc, stats: c.stats,
+          slot: c.slot, name: names.get(c.n) ?? `Item ${c.n}`, level: c.level, ...(c.tier !== tierOfLevel(c.level) ? { tier: c.tier } : {}), job: c.job, ...(c.gender !== 2 ? { g: c.gender } : {}), ...(c.long ? { long: true } : {}), tuc: c.tuc, stats: c.stats, ...(c.derived ? { derived: true as const } : {}),
         };
         entries[c.id] = entry;
         // the icon (info/icon, 32x32-ish) with its origin
-        const ic = img.root.get('info/icon');
-        let hadIcon = false;
-        if (ic?.type === 'canvas') {
-          try {
-            const [w, h, rgba] = canvasRgba(ic, img.key);
-            if (w > 0 && h > 0) {
-              const o = ic.get('origin')?.value;
-              icons.push({ id: c.id, w, h, rgba, ox: o?.x ?? 0, oy: o?.y ?? 0 });
-              hadIcon = true;
-            }
-          } catch (e) {
-            warn(`gear icon ${c.where}: ${(e as Error).message}`);
-          }
-        }
+        const icon = iconOf.get(c.id);
+        if (icon) icons.push(icon);
+        const hadIcon = !!icon;
         if (!hadIcon) noIcon++;
       } catch (e) {
         warn(`gear ${c.where}: ${(e as Error).stack}`);
         failed.push(`${c.id} (error)`);
       }
     }
-    if (overBudget) warn(`gear: byte budget ${GEAR_BYTE_BUDGET} reached: ${overBudget} lowest-priority items were left out`);
+    if (overBudget) log(`gear: byte budget ${(GEAR_BYTE_BUDGET / 1e6).toFixed(1)} MB: ${overBudget} lowest-priority picks (second and third choices of the lowest tiers first) were trimmed to fit`);
     if (failed.length) log(`gear: ${failed.length} chosen items could not be extracted: ${failed.slice(0, 30).join('; ')}`);
     if (!Object.keys(entries).length) {
       warn('gear: none of the chosen items could be extracted; drops use placeholder items');
@@ -416,7 +449,8 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       writeFileSync(join(dir, 'gear-icons.png'), png);
       bytes += png.length;
       iconAtlas = 'avatar/gear-icons.png';
-      log(`gear: icon atlas ${atlas.w}x${atlas.h} with ${icons.length} icons`);
+      log(`gear: icon atlas ${atlas.w}x${atlas.h} with ${icons.length} icons (${png.length} bytes)`);
+      if (bytes > GEAR_BYTE_BUDGET) warn(`gear: ${bytes} bytes written, over the ${GEAR_BYTE_BUDGET} byte budget (icon atlas larger than its reserve)`);
     }
     if (noIcon) log(`gear: ${noIcon} items have no info/icon (shown as plain squares)`);
 
@@ -432,13 +466,15 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       const cl = (cls: ClassKey) => TIER_LEVELS.map((_, t) => Object.entries(entries).filter(([id, e]) => tierOf(e) === t && jobFits(e.job, cls) && (e.slot !== 'weapon' || WEAPON_TYPES[cls].includes(Math.floor(Number(id) / 10000))) && (e.slot !== 'shield' || cls === 'warrior')).length);
       for (const cls of classes) log(`gear:   wearable by ${cls.padEnd(8)} per tier: ${cl(cls).join(' ')}`);
       const t7 = Object.values(entries).filter((e) => tierOf(e) === TIER_LEVELS.length - 1).length;
+      const nd = Object.values(entries).filter((e) => e.derived).length;
+      log(`gear: ${nd} of ${Object.keys(entries).length} kept items have DERIVED stats (no inc* keys in Character.wz), ${Object.keys(entries).length - nd} have real ones`);
       if (t7 < 10) warn(`gear: only ${t7} items at the top tier`);
     }
     log(`gear: ${Object.keys(entries).length} items extracted (${perSlot}), ${bytes} bytes (${(bytes / 1e6).toFixed(2)} MB of the ${(GEAR_BYTE_BUDGET / 1e6).toFixed(1)} MB budget), cap ${MAX_GEAR_ITEMS}`);
-    log('gear: id | slot | name | reqLevel | reqJob | gender | stats');
+    log('gear: id | slot | name | reqLevel | reqJob | gender | stats (derived = computed from slot and reqLevel)');
     const rows = Object.entries(entries).sort((a, b) => a[0].localeCompare(b[0]));
     for (const [id, e] of rows) {
-      log(`gear: ${id} | ${e.slot}${e.long ? '(long)' : ''} | ${e.name} | ${e.level} | ${e.job} | ${e.g ?? '-'} | ${Object.entries(e.stats).map(([k, v]) => `${k}${v}`).join(' ') || '-'}`);
+      log(`gear: ${id} | ${e.slot}${e.long ? '(long)' : ''} | ${e.name} | ${e.level} | ${e.job} | ${e.g ?? '-'} | ${Object.entries(e.stats).map(([k, v]) => `${k}${v}`).join(' ') || '-'}${e.derived ? ' derived' : ''}`);
     }
     const manifest: GearManifest = { items: entries as Record<string, GearEntry>, iconAtlas };
     return { manifest, bytes, items, ids };

@@ -271,9 +271,16 @@ export function gearImages() {
   // novelty items the drop filters must reject: no tuc, an event flag, no stats
   add('Cap', 'Cap', 1002999, capTree(tint(3), 'CpH1H5'), 'No Slots Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, tuc: 0 });
   add('Cap', 'Cap', 1002998, capTree(tint(3), 'CpH1H5'), 'Event Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, timeLimited: 1 });
-  add('Cap', 'Cap', 1002997, capTree(tint(3), 'CpH1H5'), 'Statless Cap', { reqLevel: 30, reqJob: 0, cash: 0 });
+  add('Cap', 'Cap', 1002997, capTree(tint(3), 'CpH1H5'), 'Statless Cap', { reqLevel: 30, reqJob: 0, cash: 0, tuc: 0 });
   add('Weapon', 'Weapon', 1432000, weaponTree('sword'), 'Test Spear', { reqLevel: 0, reqJob: 1, cash: 0, incPAD: 99 });
   add('Shield', 'Shield', 1092002, shieldTree(tint(1)), 'Mage Shield', { reqLevel: 0, reqJob: 2, cash: 0, incPDD: 3 });
+  // equips without any inc* key (most of the real client): wearable ones (tuc or price) get derived stats
+  add('Glove', 'Glove', 1082400, gloveTree(tint(5)), 'Plain Gloves', { reqLevel: 60, reqJob: 0, cash: 0, reqDEX: 50, price: 800 });
+  add('Cape', 'Cape', 1102400, capeTree(tint(4)), 'Plain Cape', { reqLevel: 50, reqJob: 0, cash: 0, price: 500 });
+  add('Cape', 'Cape', 1102401, capeTree(tint(2)), 'Plainer Cape', { reqLevel: 60, reqJob: 0, cash: 0, tuc: 5 });
+  add('Weapon', 'Weapon', 1332400, weaponTree('dagger'), 'Plain Dagger', { reqLevel: 60, reqJob: 8, cash: 0, reqDEX: 50, reqLUK: 30, price: 5000 });
+  add('Shoes', 'Shoes', 1072400, shoesTree(1072400), 'Plain Boots', { reqLevel: 50, reqJob: 0, cash: 0, price: 900 });
+  add('Cap', 'Cap', 1002996, capTree(tint(6), 'CpH1H5'), 'Worthless Cap', { reqLevel: 30, reqJob: 0, cash: 0, tuc: 0 });
   const noWalk = capTree(tint(5), 'CpH1H5');
   for (const a of ['walk1', 'walk2']) delete noWalk[a];
   add('Cap', 'Cap', 1009999, noWalk, 'Unwalkable Cap', { reqLevel: 0, reqJob: 0, cash: 0 });
