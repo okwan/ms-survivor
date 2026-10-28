@@ -17,6 +17,10 @@ export interface Enemy {
   alive: boolean;
   hitCd: number;
   slowT: number;
+  /** stun: no movement and no contact hits; root: no movement; weak: deals WEAKEN_FACTOR damage */
+  stunT: number;
+  rootT: number;
+  weakT: number;
   flash: number;
   /** 1 faces right, -1 faces left */
   facing: number;
@@ -59,6 +63,7 @@ export interface Projectile {
   hits: Enemy[];
   nHits: number;
   slow: boolean;
+  speed: number;
 }
 
 export interface Area {

@@ -140,7 +140,10 @@ export function mesoValue(tier: number): number {
 
 // ---- skills & passives -------------------------------------------------------------------------
 
-export type SkillKind = 'bolt' | 'pierce' | 'strike' | 'ground' | 'nova' | 'chain';
+/** seconds a Cold Beam slow lasts at level 1 */
+export const SLOW_DURATION = 2.5;
+
+export type SkillKind = 'bolt' | 'pierce' | 'strike' | 'ground' | 'nova' | 'chain' | 'melee' | 'cone' | 'orbit';
 export type Element = 'arcane' | 'fire' | 'ice' | 'lightning' | 'poison';
 
 export interface SkillDef {
@@ -154,19 +157,68 @@ export interface SkillDef {
   range: number;
   radius: number;
   count: number;
-  /** WZ image under Skill.wz, e.g. 'Skill/200.img' (job id). */
   desc: string;
+  /** missile speed in yd/s (bolt, pierce); default MISSILE_SPEED */
+  missile?: number;
+  /** melee / bolt: number of times each target is hit */
+  hits?: number;
+  /** pierce: enemies passed = pierceBase + level (default 3) */
+  pierceBase?: number;
+  /** ground: area duration in seconds (default POISON_DURATION) */
+  dur?: number;
+  /** status effects, base seconds (scaled like a duration by skill level) */
+  stun?: number;
+  root?: number;
+  slow?: number;
+  /** fraction of damage dealt healed to the hero, capped at DRAIN_CAP per hit */
+  drain?: number;
+  /** enemies hit deal WEAKEN_FACTOR damage for this many seconds */
+  weaken?: number;
 }
-export const SKILLS: SkillDef[] = [
+const S = (key: string, name: string, id: number, kind: SkillKind, element: Element, dmg: number, cd: number, range: number, radius: number, count: number, desc: string, extra: Partial<SkillDef> = {}): SkillDef =>
+  ({ key, name, id, kind, element, dmg, cd, range, radius, count, desc, ...extra });
+
+const MAGICIAN_SKILLS: SkillDef[] = [
   { key: 'magic_claw', name: 'Magic Claw', id: 2001005, kind: 'bolt', element: 'arcane', dmg: 10, cd: 1.2, range: 22, radius: 0, count: 2, desc: 'Fires magic claws at the nearest enemies.' },
   { key: 'energy_bolt', name: 'Energy Bolt', id: 2001004, kind: 'pierce', element: 'arcane', dmg: 14, cd: 2.0, range: 24, radius: 0, count: 1, desc: 'A bolt that pierces through enemies.' },
   { key: 'fire_arrow', name: 'Fire Arrow', id: 2101004, kind: 'bolt', element: 'fire', dmg: 20, cd: 2.4, range: 26, radius: 3.5, count: 1, desc: 'Explodes on impact for area damage.' },
-  { key: 'cold_beam', name: 'Cold Beam', id: 2201004, kind: 'strike', element: 'ice', dmg: 22, cd: 2.6, range: 20, radius: 2.5, count: 1, desc: 'Instant frost blast that slows enemies.' },
+  { key: 'cold_beam', name: 'Cold Beam', id: 2201004, kind: 'strike', element: 'ice', dmg: 22, cd: 2.6, range: 20, radius: 2.5, count: 1, desc: 'Instant frost blast that slows enemies.', slow: SLOW_DURATION },
   { key: 'thunder_bolt', name: 'Thunder Bolt', id: 2201005, kind: 'strike', element: 'lightning', dmg: 12, cd: 3.0, range: 10, radius: 0, count: 4, desc: 'Strikes the nearest enemies instantly.' },
   { key: 'poison_mist', name: 'Poison Mist', id: 2111003, kind: 'ground', element: 'poison', dmg: 7, cd: 8.0, range: 20, radius: 6, count: 1, desc: 'Poison cloud on the thickest crowd.' },
   { key: 'explosion', name: 'Explosion', id: 2111002, kind: 'nova', element: 'fire', dmg: 16, cd: 4.0, range: 0, radius: 7, count: 1, desc: 'Blasts everything around you.' },
   { key: 'chain_lightning', name: 'Chain Lightning', id: 2221006, kind: 'chain', element: 'lightning', dmg: 18, cd: 3.2, range: 18, radius: 8, count: 4, desc: 'Arcs between nearby enemies.' },
 ];
+const WARRIOR_SKILLS: SkillDef[] = [
+  S('power_strike', 'Power Strike', 1001004, 'melee', 'fire', 18, 0.9, 4.5, 0, 1, 'A heavy blow to the nearest enemy.'),
+  S('slash_blast', 'Slash Blast', 1001005, 'cone', 'fire', 14, 1.6, 0, 6, 1, 'Slashes everything in front of you.'),
+  S('charge_blow', 'Charged Blow', 1211002, 'melee', 'lightning', 30, 3.0, 5, 2.5, 1, 'A stunning blow with splash damage.', { stun: 1.0 }),
+  S('coma', 'Coma', 1111005, 'melee', 'arcane', 12, 1.4, 5, 0, 3, 'Stuns up to three nearby enemies.', { stun: 0.5 }),
+  S('panic', 'Panic', 1111003, 'cone', 'poison', 22, 3.5, 0, 8, 1, 'Weakens the hits of enemies in front.', { weaken: 4 }),
+  S('shout', 'Shout', 1111008, 'nova', 'lightning', 10, 5.0, 0, 7, 1, 'A roar that stuns everything around you.', { stun: 1.5 }),
+  S('dragon_roar', 'Dragon Roar', 1311006, 'nova', 'fire', 30, 7.0, 0, 10, 1, 'A mighty roar that blasts all around.'),
+  S('spear_crusher', 'Spear Crusher', 1311001, 'melee', 'arcane', 9, 1.0, 5.5, 0, 3, 'Thrusts twice into nearby enemies.', { hits: 2 }),
+];
+const BOWMAN_SKILLS: SkillDef[] = [
+  S('arrow_blow', 'Arrow Blow', 3001004, 'bolt', 'arcane', 12, 1.0, 24, 0, 1, 'Shoots the nearest enemy.', { missile: 36 }),
+  S('double_shot', 'Double Shot', 3001005, 'bolt', 'arcane', 8, 1.3, 24, 0, 2, 'Fires arrows at the nearest enemies.'),
+  S('arrow_bomb', 'Arrow Bomb', 3101005, 'bolt', 'fire', 16, 2.6, 24, 3.5, 1, 'An exploding arrow that stuns.', { stun: 0.8 }),
+  S('iron_arrow', 'Iron Arrow', 3201005, 'pierce', 'arcane', 18, 2.2, 26, 0, 1, 'An arrow that pierces many enemies.'),
+  S('strafe', 'Strafe', 3111006, 'bolt', 'arcane', 7, 2.0, 24, 0, 4, 'A volley at the nearest enemies.'),
+  S('arrow_rain', 'Arrow Rain', 3111004, 'ground', 'arcane', 8, 8.0, 22, 6, 1, 'Rains arrows on the thickest crowd.', { dur: 4 }),
+  S('silver_hawk', 'Silver Hawk', 3111005, 'orbit', 'lightning', 14, 1.2, 14, 0, 1, 'A hawk circles you and strikes enemies.'),
+  S('blizzard', 'Blizzard', 3211003, 'strike', 'ice', 24, 4.0, 20, 4, 1, 'Freezing storm that slows enemies.', { slow: 2 }),
+];
+const THIEF_SKILLS: SkillDef[] = [
+  S('lucky_seven', 'Lucky Seven', 4001344, 'bolt', 'arcane', 9, 0.9, 22, 0, 2, 'Throws stars at the nearest enemies.'),
+  S('double_stab', 'Double Stab', 4001334, 'melee', 'arcane', 10, 0.8, 4, 0, 1, 'Two quick stabs.', { hits: 2 }),
+  S('savage_blow', 'Savage Blow', 4201005, 'melee', 'fire', 6, 1.2, 4.5, 0, 1, 'Six savage strikes.', { hits: 6 }),
+  S('avenger', 'Avenger', 4111005, 'pierce', 'arcane', 20, 2.0, 26, 0, 1, 'A star that pierces through enemies.', { pierceBase: 4 }),
+  S('shadow_web', 'Shadow Web', 4111003, 'strike', 'poison', 6, 6.0, 12, 5, 1, 'Roots enemies in a web.', { root: 3 }),
+  S('meso_explosion', 'Meso Explosion', 4211006, 'nova', 'fire', 20, 5.0, 0, 8, 1, 'Mesos explode around you.'),
+  S('band_of_thieves', 'Band of Thieves', 4211004, 'cone', 'poison', 16, 3.0, 0, 8, 1, 'Your band rushes the enemies ahead.'),
+  S('drain', 'Drain', 4101005, 'melee', 'poison', 14, 2.0, 4.5, 0, 2, 'Steals life from nearby enemies.', { drain: 0.2 }),
+];
+export const SKILLS: SkillDef[] = [...MAGICIAN_SKILLS, ...WARRIOR_SKILLS, ...BOWMAN_SKILLS, ...THIEF_SKILLS];
 export const SKILL_BY_KEY: Record<string, SkillDef> = Object.fromEntries(SKILLS.map((s) => [s.key, s]));
 
 export type PassiveStat = 'might' | 'maxHp' | 'speed' | 'haste' | 'armor' | 'area' | 'magnet' | 'growth' | 'regen' | 'crit';
@@ -177,6 +229,8 @@ export interface PassiveDef {
   stat: PassiveStat;
   per: number;
   desc: string;
+  /** class-named passives are only offered to that class */
+  cls?: ClassKey;
 }
 export const PASSIVES: PassiveDef[] = [
   { key: 'int', name: 'Intelligence', id: 2000000, stat: 'might', per: 0.1, desc: '+10% damage' },
@@ -189,7 +243,16 @@ export const PASSIVES: PassiveDef[] = [
   { key: 'holy_symbol', name: 'Holy Symbol', id: 2311003, stat: 'growth', per: 0.08, desc: '+8% experience' },
   { key: 'recovery', name: 'Recovery', id: 1001, stat: 'regen', per: 0.5, desc: '+0.5 HP per second' },
   { key: 'sharp_eyes', name: 'Sharp Eyes', id: 3121002, stat: 'crit', per: 0.05, desc: '+5% crit chance' },
+  // class-named copies of the stat and armor passives (same effects as Intelligence and Magic Guard)
+  { key: 'str', name: 'Strength', id: 1000000, stat: 'might', per: 0.1, desc: '+10% damage', cls: 'warrior' },
+  { key: 'iron_body', name: 'Iron Body', id: 1001003, stat: 'armor', per: 1, desc: '+1 armor', cls: 'warrior' },
+  { key: 'dex', name: 'Dexterity', id: 3000000, stat: 'might', per: 0.1, desc: '+10% damage', cls: 'bowman' },
+  { key: 'focus', name: 'Focus', id: 3001003, stat: 'armor', per: 1, desc: '+1 armor', cls: 'bowman' },
+  { key: 'luk', name: 'Luck', id: 4000000, stat: 'might', per: 0.1, desc: '+10% damage', cls: 'thief' },
+  { key: 'dark_sight', name: 'Dark Sight', id: 4001003, stat: 'armor', per: 1, desc: '+1 armor', cls: 'thief' },
 ];
+// the Magician's own: Intelligence and Magic Guard
+for (const p of PASSIVES) if (p.key === 'int' || p.key === 'magic_guard') p.cls = 'magician';
 export const PASSIVE_BY_KEY: Record<string, PassiveDef> = Object.fromEntries(PASSIVES.map((p) => [p.key, p]));
 
 // Level scaling (Azeroth `Owned`)
@@ -201,10 +264,51 @@ export const skillCount = (def: SkillDef, L: number) => def.count + (L >= 3 ? 1 
 export const skillRadius = (def: SkillDef, L: number, area: number) => def.radius * (1 + 0.08 * (L - 1)) * area;
 export const skillDuration = (base: number, L: number) => base * (1 + 0.1 * (L - 1));
 
-// Tuning constants for the skill kinds
+// Tuning constants for the skill kinds (SLOW_DURATION is declared above SKILLS)
 export const MISSILE_SPEED = 30;
 export const POISON_DURATION = 5;
 export const POISON_TICK = 0.5;
-export const SLOW_DURATION = 2.5;
 export const SLOW_FACTOR = 0.5;
 export const CHAIN_FALLOFF = 0.1;
+export const DRAIN_CAP = 2;
+export const WEAKEN_FACTOR = 0.7;
+export const ORBIT_RADIUS = 3;
+/** radians per second of an orbiting summon */
+export const ORBIT_SPIN = 2.4;
+export const CONE_ANGLE = (100 * Math.PI) / 180;
+
+// ---- classes (docs/CLASSES.md) -----------------------------------------------------------------
+
+export type ClassKey = 'warrior' | 'magician' | 'bowman' | 'thief';
+/** weapon stance: which character action plays when a skill fires */
+export type Stance = 'swing' | 'shoot' | 'stab';
+export interface ClassDef {
+  key: ClassKey;
+  name: string;
+  hp: number;
+  speed: number;
+  crit: number;
+  /** Character.wz weapon id */
+  weapon: number;
+  weaponName: string;
+  stance: Stance;
+  /** skill keys in card order; the first is the start skill */
+  skills: string[];
+  /** keys of the class-named stat and armor passives */
+  statPassive: string;
+  armorPassive: string;
+  blurb: string;
+  /** bot flees enemies closer than this (yd): short for melee classes */
+  botReach: number;
+}
+const skillsOf = (list: SkillDef[]) => list.map((s) => s.key);
+export const CLASSES: ClassDef[] = [
+  { key: 'warrior', name: 'Warrior', hp: 160, speed: 6.8, crit: 0.05, weapon: 1302000, weaponName: 'Sword', stance: 'swing', skills: skillsOf(WARRIOR_SKILLS), statPassive: 'str', armorPassive: 'iron_body', blurb: 'Tough front-liner. Cuts, stuns and roars.', botReach: 2.6 },
+  { key: 'magician', name: 'Magician', hp: 120, speed: 7.0, crit: 0.05, weapon: 1372005, weaponName: 'Wand', stance: 'swing', skills: skillsOf(MAGICIAN_SKILLS), statPassive: 'int', armorPassive: 'magic_guard', blurb: 'Fragile but deadly spells from afar.', botReach: 6.5 },
+  { key: 'bowman', name: 'Bowman', hp: 120, speed: 7.2, crit: 0.1, weapon: 1452002, weaponName: 'Bow', stance: 'shoot', skills: skillsOf(BOWMAN_SKILLS), statPassive: 'dex', armorPassive: 'focus', blurb: 'Fast and precise. Arrows, hawks and blizzards.', botReach: 6.5 },
+  { key: 'thief', name: 'Thief', hp: 120, speed: 7.5, crit: 0.08, weapon: 1332005, weaponName: 'Dagger', stance: 'stab', skills: skillsOf(THIEF_SKILLS), statPassive: 'luk', armorPassive: 'dark_sight', blurb: 'Quickest hero. Stars, stabs and stolen life.', botReach: 3.4 },
+];
+export const CLASS_BY_KEY: Record<string, ClassDef> = Object.fromEntries(CLASSES.map((c) => [c.key, c]));
+export const DEFAULT_CLASS: ClassKey = 'magician';
+/** Start skill key of a class */
+export const startSkill = (c: ClassDef) => c.skills[0];

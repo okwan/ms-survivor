@@ -7,7 +7,9 @@
     "Sound.wz",
     "Map.wz",
     "Effect.wz",
-    "UI.wz"
+    "UI.wz",
+    "Base.wz",
+    "Character.wz"
   ],
   "mirrors": [
     {

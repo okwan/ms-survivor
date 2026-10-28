@@ -5,7 +5,10 @@ import type { SaveData } from './save.ts';
 import { theme } from './theme.ts';
 
 export interface ScreenHandlers {
+  /** opens character creation */
   start(): void;
+  /** starts straight away with the last created character */
+  quick(): void;
   resume(): void;
   quit(): void;
   retry(): void;
@@ -46,6 +49,7 @@ export class Screens {
   private offerSig = '';
   private h: ScreenHandlers;
   private icons: Record<string, string>;
+  private quickBtn!: HTMLButtonElement;
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
   private volEl!: HTMLInputElement;
@@ -89,6 +93,9 @@ export class Screens {
     stats.children[0].appendChild(this.bestEl);
     stats.children[1].appendChild(this.mesoEl);
     body.appendChild(stats);
+    this.quickBtn = this.btn('Quick start', 'quick-start', () => this.h.quick());
+    this.quickBtn.classList.add('hidden');
+    body.appendChild(this.quickBtn);
     body.appendChild(this.btn('START', 'primary big', () => this.h.start()));
     const vol = el('label', 'volume', 'Volume ');
     this.volEl = el('input', '');
@@ -139,6 +146,9 @@ export class Screens {
   showTitle(save: SaveData) {
     this.bestEl.textContent = save.bestTime > 0 ? fmtTime(save.bestTime) : '-';
     this.mesoEl.textContent = String(save.mesos);
+    const ch = save.character;
+    this.quickBtn.classList.toggle('hidden', !ch);
+    if (ch) this.quickBtn.textContent = `Quick start: ${ch.name} the ${ch.cls[0].toUpperCase()}${ch.cls.slice(1)}`;
     this.volEl.value = String(save.settings.volume);
     this.setMuted(save.settings.muted);
     this.hideAll();

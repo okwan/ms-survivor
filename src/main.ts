@@ -1,13 +1,18 @@
 import './ui/style.css';
 import { Application } from 'pixi.js';
 import { botInput } from './game/bot.ts';
-import { RUN_LENGTH, TICK } from './game/data.ts';
+import { CLASS_BY_KEY, DEFAULT_CLASS, RUN_LENGTH, TICK } from './game/data.ts';
 import { Sim } from './game/sim.ts';
 import { buildArt } from './maple/art.ts';
 import type { MapleArt } from './maple/art.ts';
 import { loadManifest } from './maple/assets.ts';
+import { Avatar } from './maple/avatar.ts';
+import { defaultLook, sanitizeLook } from './maple/avatar-core.ts';
+import type { AvatarManifest, Look } from './maple/avatar-core.ts';
 import { Bgm } from './maple/audio.ts';
 import { Renderer } from './render/renderer.ts';
+import { CreateScreen } from './ui/create.ts';
+import type { CreateResult } from './ui/create.ts';
 import { Hud } from './ui/hud.ts';
 import { applyUiTheme } from './ui/theme.ts';
 import { Input } from './ui/input.ts';
@@ -17,11 +22,13 @@ import { Screens } from './ui/screens.ts';
 type Mode = 'title' | 'playing' | 'paused' | 'ended';
 
 /** Real Maple art from maple/manifest.json (written by the deploy step). Null on any failure or after 12 s: the game then uses placeholder art. */
+let avatarManifest: AvatarManifest | null = null;
 async function loadArt(): Promise<MapleArt | null> {
   try {
     const run = async () => {
       const m = await loadManifest();
       if (!m) return null;
+      avatarManifest = m.avatar ?? null;
       const art = await buildArt(m);
       console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, ${art.counts.objects} map objects, ${art.counts.digitSets} damage sets, ${art.counts.uiPieces} ui pieces, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
       return art;
@@ -48,6 +55,8 @@ async function boot() {
   host.appendChild(app.canvas);
 
   const art = await loadArt();
+  const avatar = avatarManifest ? new Avatar(avatarManifest) : null;
+  console.info(`maple avatar: ${avatar ? 'parts for the player character available' : 'no character art, placeholder hero'}`);
   applyUiTheme(art?.ui ?? null);
   const renderer = new Renderer(app, art);
   app.renderer.on('resize', () => renderer.resize());
@@ -56,6 +65,10 @@ async function boot() {
   const bgm = art ? new Bgm(art.bgm, save.settings.volume, save.settings.muted) : null;
   let mode: Mode = 'title';
   let sim = new Sim(1);
+  // the character of the current/next run: the saved one, or a Magician with the default look
+  let hero: CreateResult = save.character
+    ? { cls: save.character.cls as CreateResult['cls'], look: save.character.look, name: save.character.name }
+    : { cls: DEFAULT_CLASS, look: defaultLook(CLASS_BY_KEY[DEFAULT_CLASS].weapon), name: 'Maple' };
   let god = false;
   let speed = 1;
   let autopick = false;
@@ -68,8 +81,11 @@ async function boot() {
   const input = new Input(uiRoot);
   const vec = { x: 0, y: 0 };
 
-  function startRun(seed?: number) {
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0);
+  function startRun(seed?: number, cls?: string, look?: Look) {
+    if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
+    renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
+    avatar?.prefetch(hero.look);
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls);
     sim.god = god;
     acc = 0;
     mode = 'playing';
@@ -108,7 +124,15 @@ async function boot() {
   const screens = new Screens(
     uiRoot,
     {
-      start: () => startRun(),
+      start: () => { screens.hideAll(); create.show(save.character ?? { ...hero }); },
+      quick: () => {
+        const ch = save.character;
+        if (!ch) return;
+        hero = { cls: ch.cls as CreateResult['cls'], look: ch.look, name: ch.name };
+        const go = () => startRun();
+        if (!avatar) return go();
+        void Promise.race([avatar.ensureLook(hero.look), new Promise((r) => setTimeout(r, 2500))]).then(go);
+      },
       resume: () => setPaused(false),
       quit: () => { bank(true); toTitle(); },
       retry: () => startRun(),
@@ -121,6 +145,18 @@ async function boot() {
     },
     renderer.tex.icons,
   );
+  const create = new CreateScreen(uiRoot, {
+    avatar,
+    icons: renderer.tex.icons,
+    onBack: () => { create.hide(); screens.showTitle(save); },
+    onStart: (r) => {
+      hero = r;
+      save.character = { cls: r.cls, look: r.look, name: r.name };
+      writeSave(save);
+      create.hide();
+      startRun();
+    },
+  });
   function setMuted(m: boolean) {
     save.settings.muted = m;
     writeSave(save);
@@ -167,7 +203,9 @@ async function boot() {
   if (import.meta.env.DEV || /[?&]bot\b/.test(location.search)) {
     const api = {
       get sim() { return sim; },
-      start: (seed?: number) => startRun(seed),
+      start: (seed?: number, cls?: string) => startRun(seed, cls),
+      /** open the New Character window, or (with a class) pick it and jump to the customisation step */
+      create: () => { screens.hideAll(); create.show(save.character ?? { ...hero }); },
       step(seconds: number) {
         const n = Math.round(seconds * 60);
         for (let i = 0; i < n && !sim.over; i++) {
@@ -187,6 +225,8 @@ async function boot() {
       autopick(on: boolean) { autopick = on; },
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
+      hero: () => hero,
+      avatar: () => (avatar ? { ready: avatar.ready(hero.look) } : null),
       /** what real Maple art was loaded (null = placeholders) */
       maple: () => (art ? { ...art.counts, bgm: art.bgm, ground: !!art.map?.ground, levelUp: !!art.levelUp } : null),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),

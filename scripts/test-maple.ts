@@ -149,6 +149,36 @@ try {
   ok(/totals: mobs 4\/36 .*bgm run=bgm\/run.mp3 title=bgm\/title.mp3/.test(run.out), 'totals line');
   ok(/first bytes 49 44 33/.test(run.out) && /ID3 tag/.test(run.out) && /MPEG frame sync/.test(run.out), 'bgm sniff is logged');
 
+  // ---- avatar (Character.wz / Base.wz) ---------------------------------------------------------------------------
+  const av = m.avatar!;
+  ok(!!av, 'manifest has the avatar block');
+  eq([av.items.body.length, av.items.head.length, av.items.face.length, av.items.hair.length, av.items.coat.length, av.items.pants.length, av.items.shoes.length, av.items.weapon.length], [5, 5, 6, 48, 4, 4, 2, 4], 'all avatar items extracted');
+  ok(av.zmap.indexOf('face') < av.zmap.indexOf('head') && av.zmap.indexOf('head') < av.zmap.indexOf('body'), 'zmap order kept (front-most first)');
+  const bodyJson = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'body-00002000.json'), 'utf8'));
+  eq(Object.keys(bodyJson.actions).sort(), ['alert', 'shoot1', 'stabO1', 'stabO2', 'stand1', 'stand2', 'swingO1', 'swingO2', 'swingO3', 'walk1', 'walk2'], 'body actions');
+  eq(bodyJson.actions.walk1.length, 4, 'walk1 has 4 frames');
+  const l0 = bodyJson.actions.stand1[0].l.find((l: { n: string }) => l.n === 'body');
+  eq([l0.z, l0.ox, l0.oy, l0.m.navel, l0.m.neck], ['body', 7, 20, [0, -9], [0, -18]], 'layer z, origin and map points');
+  const headJson = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'head-00012000.json'), 'utf8'));
+  eq(headJson.actions.walk1[0].l[0].n, 'head', 'head frames resolve the UOL to front/head');
+  const hairJson = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'hair-00030003.json'), 'utf8'));
+  eq(hairJson.actions.default[0].l.map((l: { n: string }) => l.n).sort(), ['hair', 'hairOverHead'], 'hair default layers');
+  const ap = decodePng(join(run.dist, 'maple', 'avatar', 'body-00002000.png'));
+  ok(ap.w <= 1024 && ap.rgba.some((v, i) => i % 4 === 3 && v > 0), 'avatar atlas PNG has pixels');
+  ok(existsSync(join(run.dist, 'maple', 'avatar', 'coat-01041006.png')), 'a coat stored in Longcoat/ is found');
+  ok(/maple: avatar: zmap.img has 31 layers, front-most first/.test(run.out), 'zmap log line');
+  ok(/avatar: 78\/78 items extracted/.test(run.out), 'avatar totals line');
+  ok(/avatar preview Warrior stand1\/0: 11 layers/.test(run.out), 'composite preview log');
+  ok(/--- warrior look stand1\/0 \d+x\d+ \(feet at/.test(run.out), 'ASCII preview of the composited character');
+
+  // ---- no Character.wz: no avatar block, everything else unchanged -------------------------------------------------
+  const fxNo = join(root, 'wz-nochar');
+  await writeFixture(fxNo, { character: false });
+  const runNo = extract('dist-nochar', fxNo);
+  eq(runNo.status, 0, 'extractor exits 0 without Character.wz');
+  eq(manifestOf(runNo.dist).avatar, undefined, 'no avatar block without Character.wz');
+  ok(/Character.wz not available/.test(runNo.out), 'missing Character.wz is logged');
+
   // ---- missing Title node: logged with the available names, manifest still valid -------------------------------------
   const fx2 = join(root, 'wz2');
   await writeFixture(fx2, { noTitle: true });
