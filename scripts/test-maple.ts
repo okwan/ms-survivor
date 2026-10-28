@@ -93,6 +93,8 @@ try {
   const snail = m.mobs['100100'];
   eq(snail.name, 'Snail', 'name from String.wz');
   eq([snail.info.maxHP, snail.info.speed, snail.info.level, snail.info.bodyAttack], [8, -10, 1, 1], 'info values');
+  eq(snail.speed, 0.9, 'speed factor from info/speed -10 (1 + speed / 100)');
+  ok(/mob speed 100100 Snail: speed=-10 flySpeed=- fs=- .*factor 0\.90/.test(run.out), 'the log shows speed / flySpeed / fs of every wanted mob');
   const count = (frames: FrameRec[], a: string) => frames.filter((f) => f.action === a).length;
   eq(['stand', 'move', 'hit1', 'die1', 'attack1'].map((a) => count(snail.frames, a)), [3, 4, 1, 3, 0], 'Snail frame counts per action');
   const s0 = snail.frames.find((f) => f.action === 'stand' && f.index === 0)!;
@@ -110,6 +112,7 @@ try {
   eq(blue.name, 'Blue Snail', 'linked mob keeps its own name');
   eq(blue.frames.length, snail.frames.length, 'linked mob resolves the target animations');
   eq([blue.info.maxHP, blue.info.level, blue.info.speed], [10, 2, -10], 'own info overrides, missing info comes from the link');
+  eq(blue.speed, 0.9, 'a linked mob gets a speed factor too');
   ok(blue.atlas !== snail.atlas && existsSync(join(run.dist, 'maple', blue.atlas)), 'linked mob gets its own atlas file');
 
   // Shroom: flying mob (fly stands in for move) with attack1

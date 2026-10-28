@@ -49,3 +49,22 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
   out.y = y / l;
   return out;
 }
+
+/** Card the bot takes from an open offer: a job (first branch), then skills, passives, Masteries (damage first), and only then fillers. */
+export function botPick(sim: Sim): number {
+  const o = sim.offer;
+  if (!o || o.length === 0) return 0;
+  const rank = (c: (typeof o)[number]) => {
+    switch (c.kind) {
+      case 'job': return 0;
+      case 'skill': return 1;
+      case 'passive': return 2;
+      case 'mastery': return c.key === 'mastery' || c.key.startsWith('skill_mastery:') ? 3 : 4;
+      case 'elixir': return sim.hp < sim.maxHp * 0.5 ? 3.5 : 6;
+      default: return 5;
+    }
+  };
+  let best = 0;
+  for (let i = 1; i < o.length; i++) if (rank(o[i]) < rank(o[best])) best = i;
+  return best;
+}

@@ -2,6 +2,7 @@
 // Region decor layout rules: clusters, one big per cluster, 60 px gaps, determinism.
 import assert from 'node:assert/strict';
 import { BIG, CLUSTER_CELL, MEDIUM, MIN_GAP, Placements, SMALL, TUFT_CELL, clusterAt, tuftAt } from '../src/render/cluster.ts';
+import { FADE, advanceFade, fadeView } from '../src/render/fade.ts';
 import { REGION_COUNT, regionAt } from '../src/game/regions.ts';
 
 let checks = 0;
@@ -67,5 +68,18 @@ ok(JSON.stringify(a) === JSON.stringify([...cl.x.slice(0, cl.n)]), 'layout is de
 for (let cx = 0; cx < 40; cx++) {
   clusterAt(cx, 0, salt, { big: false, medium: true, small: true }, cl);
   if (cl.n) { ok(cl.cls[0] === MEDIUM, 'no big objects: a medium one is the centre'); break; }
+}
+// region cross-fade (regression: after a boss the front ground stayed hidden and the whole map showed only the clear colour)
+{
+  let f = 0;
+  for (let i = 0; i < 100; i++) {
+    const v = fadeView(f);
+    ok(v.frontVisible && v.frontAlpha >= 0 && v.frontAlpha <= 1, `front ground is always visible (fade ${f.toFixed(2)})`);
+    ok(v.backVisible === (f < 1) && v.backGroundAlpha === 1, 'the leaving ground stays opaque beneath while fading');
+    f = advanceFade(f, FADE / 20);
+  }
+  ok(f === 1 && fadeView(f).frontAlpha === 1 && !fadeView(f).backVisible, 'the fade settles with only the front region visible and opaque');
+  ok(fadeView(NaN).frontVisible && fadeView(NaN).frontAlpha === 1 && advanceFade(0, NaN) === 1, 'a broken fade value settles instead of hiding the map');
+  ok(advanceFade(0.5, -10) === 0 && advanceFade(0.5, 100) === 1, 'the fade is clamped to 0..1');
 }
 console.log(`test-decor: ok (${checks} checks, ${clusters} clusters, ${tufts} tufts, closest ${worst.toFixed(0)} px)`);

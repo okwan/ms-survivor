@@ -2,8 +2,8 @@
 // Gear in the pure sim (src/game/gear.ts): pool, stat mapping, drops, auto-equip / offers, the look overlay and the cap-hair rule.
 import assert from 'node:assert/strict';
 import { botInput } from '../src/game/bot.ts';
-import { BOSS_EVERY, GEAR_BOSS_DROPS, PLAYER_BASE } from '../src/game/data.ts';
-import { GEAR_SLOTS, GearPool, itemBonus, itemScore, runTier, tierOfLevel } from '../src/game/gear.ts';
+import { BOSS_EVERY, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_MAX_TIER, PLAYER_BASE } from '../src/game/data.ts';
+import { GEAR_SLOTS, GearPool, TIER_COLORS, itemBonus, itemScore, runTier, tierColor, tierOfLevel } from '../src/game/gear.ts';
 import type { GearManifest } from '../src/game/gear.ts';
 import { Rng } from '../src/game/rng.ts';
 import { Sim } from '../src/game/sim.ts';
@@ -17,8 +17,11 @@ const eq = (a: unknown, b: unknown, m: string) => { checks++; assert.deepEqual(a
 const near = (a: number, b: number, m: string) => { checks++; assert.ok(Math.abs(a - b) < 1e-9, `${m} (got ${a}, want ${b})`); };
 
 // ---- tiers ----
-eq([0, 9, 10, 29, 30, 59, 60, 120].map(tierOfLevel), [0, 0, 1, 2, 3, 5, 6, 6], 'level -> item tier');
-eq([0, 119, 120, 239, 240, 700, 900].map(runTier), [0, 0, 1, 1, 2, 5, 6], 'run clock -> item tier (0 for two minutes, +1 per two, max 6)');
+eq([0, 9, 10, 29, 30, 59, 60, 79, 80, 99, 120].map(tierOfLevel), [0, 0, 1, 2, 3, 5, 6, 6, 7, 7, 7], 'level -> item tier (tier 7 is level 80+)');
+eq([0, 89, 90, 179, 180, 539, 540, 900].map(runTier), [1, 1, 2, 2, 3, 6, 7, 7], 'run clock -> item tier (starts at 1, +1 per 90 s, max 7 from 540 s)');
+eq(GEAR_MAX_TIER, 7, 'item tiers go up to 7');
+eq(TIER_COLORS.length, GEAR_MAX_TIER + 1, 'one drop colour per item tier');
+eq([tierColor(0), tierColor(2), tierColor(4), tierColor(6), tierColor(7), tierColor(99)], [0x9aa0a6, 0xffffff, 0x4aa3ff, 0xb35cff, 0xffd23a, 0xffd23a], 'tier colours: grey, white, blue, purple, gold');
 
 // ---- placeholder pool ----
 const ph = GearPool.placeholder();
@@ -41,7 +44,9 @@ for (const cls of ['warrior', 'magician', 'bowman', 'thief'] as const) {
 // ---- stat mapping ----
 const sword0 = ph.get('phweapon1t0')!;
 const sword6 = ph.get('phweapon1t6')!;
+const sword7 = ph.get('phweapon1t7')!;
 near(itemBonus(sword0, 'warrior').dmg, 0.1, 'tier 0 weapon: 12 att = 24% capped at +10%');
+near(itemBonus(sword7, 'warrior').dmg, 0.8 + 0.14, 'tier 7 weapon: capped at +80%, plus 14 STR');
 near(itemBonus(sword6, 'warrior').dmg, 0.7 + 0.12, 'tier 6 weapon: capped at +70%, plus 12 STR at 1% each');
 const wand = ph.get('phweapon2t2')!;
 near(itemBonus(wand, 'magician').dmg, Math.min(0.02 * wand.stats.mad!, 0.3) + 0.04, 'magician reads incMAD (and INT)');
@@ -109,7 +114,7 @@ near(itemBonus(ph.get('phcape0t5')!, 'warrior').dmg, 0.05, 'main stat: STR count
 
 // ---- drops ----
 {
-  // boss kills always drop two items, which are picked up like the other drops
+  // boss kills always drop three items, which are picked up like the other drops
   const s = new Sim(9, 'bowman');
   const boss = { x: 3, y: 0, hp: 5, maxHp: 5, speed: 0, dmg: 0, r: 1, xp: 1, tier: 29, boss: 0, big: true, add: false, alive: true, hitCd: 9, slowT: 0, stunT: 0, rootT: 0, weakT: 0, flash: 0, facing: 1, phase: 0, moving: false, berserk: false, age: 0, novaT: 0, castT: 0, summonT: 0, idx: -1 };
   s.enemies.push(boss);
@@ -117,14 +122,16 @@ near(itemBonus(ph.get('phcape0t5')!, 'warrior').dmg, 0.05, 'main stat: STR count
   s.hit(boss, 1e6);
   const gearPickups = s.pickups.filter((p) => p.kind === GEAR);
   ok(gearPickups.length >= GEAR_BOSS_DROPS, `a boss drops ${GEAR_BOSS_DROPS} items (got ${gearPickups.length})`);
-  ok(s.events.filter((e) => e.type === 'drop' && e.boss).length === GEAR_BOSS_DROPS, 'boss drops announce their names');
+  const bossDrops = s.events.filter((e) => e.type === 'drop' && e.boss) as { tier: number }[];
+  ok(bossDrops.length === GEAR_BOSS_DROPS, 'boss drops announce their names');
+  ok(bossDrops.some((d) => d.tier >= runTier(0) + 1), 'one boss drop is above the run tier (a rare)');
   ok(gearPickups.every((p) => p.item && p.item.job === 0 || p.item!.job === 4), 'drops fit the bowman');
   for (let i = 0; i < 240; i++) s.tick();
   ok(Object.keys(s.equipped).length >= 1, 'the dropped items were picked up and worn');
 }
 {
-  // rate over a seeded run: ~0.4% of normal kills, ~1% of big ones
-  let kills = 0, drops = 0, bosses = 0;
+  // rate over a seeded run: ~0.8% of normal kills, ~2% of big ones
+  let kills = 0, drops = 0, bosses = 0, bossDropsTotal = 0;
   for (const seed of [11, 12]) {
     const s = new Sim(seed, 'warrior');
     s.god = true;
@@ -135,11 +142,14 @@ near(itemBonus(ph.get('phcape0t5')!, 'warrior').dmg, 0.05, 'main stat: STR count
       s.tick();
     }
     kills += s.kills; drops += s.gearDrops; bosses += s.bossKills;
+    // boss waves drop more as bosses fall: 3 for the first four, 4 for the next four
+    for (let k = 1; k <= s.bossKills; k++) bossDropsTotal += Math.min(5, GEAR_BOSS_DROPS + Math.floor((k - 1) / 4));
   }
-  const normal = drops - GEAR_BOSS_DROPS * bosses;
+  const normal = drops - bossDropsTotal;
   const rate = normal / (kills - bosses);
   ok(kills > 500, `enough kills to measure (${kills})`);
-  ok(rate > 0.0015 && rate < 0.02, `drop rate ${(rate * 100).toFixed(2)}% of ${kills} kills is within 0.15%..2% (${normal} drops)`);
+  ok(rate > GEAR_DROP_NORMAL * 0.8 && rate < GEAR_DROP_ELITE * 1.2, `drop rate ${(rate * 100).toFixed(2)}% of ${kills} kills is within ${(GEAR_DROP_NORMAL * 80).toFixed(2)}%..${(GEAR_DROP_ELITE * 120).toFixed(2)}% (${normal} drops)`);
+  ok(rate > 0.007 && rate < 0.02, `and above the old 0.4% by a wide margin (${(rate * 100).toFixed(2)}%)`);
 }
 {
   // determinism and independence from the run's other random draws

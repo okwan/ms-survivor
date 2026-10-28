@@ -3,7 +3,9 @@ import {
   CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY,
   JOB2_LEVEL, JOB3_LEVEL, JOB_BY_CODE, PASSIVES, jobOfId, unlockedJobs, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
-  ENEMY_DMG_GROWTH, ENEMY_HP_GROWTH, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
+  enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
+  BOSS_COMPANION_HP, BOSS_WAVES, BOSS_BARS, GEAR_BOSS_DROP_STEP, GEAR_BOSS_DROPS_MAX, GEAR_RARE_CHANCE, MASTERIES, MASTERY_BY_KEY, MASTERY_FILLER_CHANCE, SKILL_MASTERY_PER,
+  SKILL_MASTERY_PREFIX, VITALITY_HEAL, enemySpeed, masteryMax,
 } from './data.ts';
 import { regionAt } from './regions.ts';
 import { SpatialGrid } from './grid.ts';
@@ -12,7 +14,7 @@ import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
 import { GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
 import type { GearItem, GearSlot } from './gear.ts';
 import { BAG, ELIXIR, GEAR, GEM, MESO, POTION } from './types.ts';
-import type { ClassDef, SkillDef } from './data.ts';
+import type { ClassDef, MasteryKey, SkillDef } from './data.ts';
 import type { Area, Card, Enemy, PassiveState, Pickup, PickupKind, Projectile, SimEvent, SkillState } from './types.ts';
 
 export { TICK };
@@ -65,6 +67,9 @@ export class Sim {
 
   skills: SkillState[];
   passives: PassiveState[] = [];
+  /** Mastery stacks (endless upgrades once nothing else is on offer) and the per-skill Skill Mastery stacks */
+  masteryLv: Record<MasteryKey, number> = { mastery: 0, vitality: 0, swiftness: 0, focus: 0, haste: 0, reach: 0, magnet: 0 };
+  skillMastery: Record<string, number> = {};
 
   // gear (src/game/gear.ts): drops come from their own seeded stream so that they never shift the run's other random draws
   gearPool: GearPool;
@@ -79,6 +84,9 @@ export class Sim {
   autoEquip = true;
   gearDrops = 0;
   private gearRng: Rng;
+  /** enemy move speed (yd/s) by ladder tier and boss index, from the Mob.wz speeds when the constructor got any */
+  private tierSpeed: number[];
+  private bossSpeed: number[];
 
   offer: Card[] | null = null;
   pendingLevels = 0;
@@ -113,7 +121,7 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; mobSpeeds?: Record<number, number> } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
@@ -126,6 +134,9 @@ export class Sim {
     this.speed = this.cls.speed;
     this.crit = this.cls.crit;
     this.hp = this.maxHp = this.cls.hp;
+    const ms = opts.mobSpeeds;
+    this.tierSpeed = LADDER.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
+    this.bossSpeed = BOSSES.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
   }
 
   // ---- events ----------------------------------------------------------------------------------
@@ -158,6 +169,14 @@ export class Sim {
         case 'crit': crit += v; break;
       }
     }
+    const ml = this.masteryLv;
+    might += MASTERY_BY_KEY.mastery.per * ml.mastery;
+    hpMul += MASTERY_BY_KEY.vitality.per * ml.vitality;
+    speed += Math.min(MASTERY_BY_KEY.swiftness.cap, MASTERY_BY_KEY.swiftness.per * ml.swiftness);
+    crit += Math.min(MASTERY_BY_KEY.focus.cap, MASTERY_BY_KEY.focus.per * ml.focus);
+    haste += Math.min(MASTERY_BY_KEY.haste.cap, MASTERY_BY_KEY.haste.per * ml.haste);
+    area += MASTERY_BY_KEY.reach.per * ml.reach;
+    magnet += MASTERY_BY_KEY.magnet.per * ml.magnet;
     const g = totalBonus(Object.values(this.equipped), this.cls.key);
     might += g.dmg;
     armor += g.armor;
@@ -223,7 +242,7 @@ export class Sim {
   // ---- damage ----------------------------------------------------------------------------------
   hit(e: Enemy, base: number) {
     if (!e.alive) return;
-    let amt = base * this.might;
+    let amt = base * this.might * (1 + SKILL_MASTERY_PER * (this.skillMastery[this.curSkill] ?? 0));
     const crit = this.rng.next() < this.crit;
     if (crit) amt *= PLAYER_BASE.critMult;
     amt = Math.max(1, Math.round(amt));
@@ -279,7 +298,12 @@ export class Sim {
       this.dropPickup(GEM, e.x, e.y, gv);
       this.dropPickup(ELIXIR, e.x + 1.2, e.y + 0.6, 1);
       this.dropPickup(BAG, e.x - 1.2, e.y + 0.6, 50 * (e.boss + 1));
-      for (let k = 0; k < GEAR_BOSS_DROPS; k++) this.dropGear(e.x + (k === 0 ? 1.8 : -1.8), e.y - 0.4, true);
+      // the first item is a tier above the run tier (rarely two); a boss wave gets bigger loot as more bosses fall
+      const n = Math.min(GEAR_BOSS_DROPS_MAX, GEAR_BOSS_DROPS + Math.floor((this.bossKills - 1) / GEAR_BOSS_DROP_STEP));
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + 0.6;
+        this.dropGear(e.x + Math.cos(a) * 1.9, e.y + Math.sin(a) * 1.3 - 0.4, true, k === 0 ? (this.gearRng.next() < GEAR_RARE_CHANCE ? 2 : 1) : -1);
+      }
       return;
     }
     this.dropPickup(GEM, e.x, e.y, gv);
@@ -289,8 +313,8 @@ export class Sim {
   }
 
   /** Drops a piece of gear for this class at the current run tier. */
-  private dropGear(x: number, y: number, boss: boolean) {
-    const it = this.gearPool.roll(this.gearRng, this.cls.key, this.gender, this.t);
+  private dropGear(x: number, y: number, boss: boolean, boost = -1) {
+    const it = this.gearPool.roll(this.gearRng, this.cls.key, this.gender, this.t, boost);
     if (!it) return;
     this.placeGear(it, x, y, boss);
   }
@@ -301,7 +325,7 @@ export class Sim {
     p.item = it;
     p.life = GEAR_PICKUP_LIFE;
     this.pickups.push(p);
-    this.emit({ type: 'drop', x, y, id: it.id, name: it.name, boss });
+    this.emit({ type: 'drop', x, y, id: it.id, name: it.name, boss, tier: it.tier });
   }
 
   /** Test / bot hook: the item appears in the hero's bag as if picked up. Returns what happened. */
@@ -423,9 +447,9 @@ export class Sim {
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = x; e.y = y;
-    e.maxHp = e.hp = d.hp * (1 + ENEMY_HP_GROWTH * p);
-    e.speed = d.speed;
-    e.dmg = d.dmg * (1 + ENEMY_DMG_GROWTH * p);
+    e.maxHp = e.hp = d.hp * enemyHpMult(p);
+    e.speed = this.tierSpeed[tier];
+    e.dmg = d.dmg * enemyDmgMult(p);
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
     e.tier = tier; e.boss = -1; e.big = d.big; e.add = add; e.alive = true;
@@ -435,16 +459,15 @@ export class Sim {
     return e;
   }
 
-  private spawnBoss(n: number) {
+  /** One boss at angle `a` / distance `dist` from the hero; `hpFrac` scales its health (companions of a boss wave have BOSS_COMPANION_HP). */
+  private spawnBoss(n: number, a: number, dist: number, hpFrac: number) {
     const def = BOSSES[n];
     const p = progress(this.t);
-    const a = this.rng.range(0, Math.PI * 2);
-    const dist = this.rng.range(SPAWN_RING_MIN, SPAWN_RING_MAX);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = this.px + Math.cos(a) * dist; e.y = this.py + Math.sin(a) * dist;
-    e.maxHp = e.hp = def.hp * (1 + ENEMY_HP_GROWTH * p);
-    e.speed = def.speed;
-    e.dmg = def.dmg * (1 + ENEMY_DMG_GROWTH * p);
+    e.maxHp = e.hp = def.hp * enemyHpMult(p) * hpFrac;
+    e.speed = this.bossSpeed[n];
+    e.dmg = def.dmg * enemyDmgMult(p);
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
     e.tier = LADDER.length - 1; e.boss = n; e.big = true; e.add = false; e.alive = true;
@@ -452,7 +475,20 @@ export class Sim {
     e.novaT = NOVA_EVERY; e.castT = 0; e.summonT = SUMMON_EVERY; e.idx = -1;
     this.enemies.push(e);
     this.emit({ type: 'bossSpawn', boss: n, name: def.name, x: e.x, y: e.y });
-    this.raid(`${def.name} approaches!`);
+  }
+
+  /** The boss of schedule slot n, plus BOSS_WAVES[n] - 1 companions (the bosses just below it on the ladder) spread around the screen edge. */
+  private spawnBossWave(n: number) {
+    const size = Math.min(BOSS_WAVES[n] ?? 1, n + 1);
+    const a0 = this.rng.range(0, Math.PI * 2);
+    const dist = this.rng.range(SPAWN_RING_MIN, SPAWN_RING_MAX);
+    const names: string[] = [];
+    for (let k = 0; k < size; k++) {
+      const idx = n - k;
+      this.spawnBoss(idx, a0 + (k / size) * Math.PI * 2, k === 0 ? dist : this.rng.range(SPAWN_RING_MIN, SPAWN_RING_MAX), k === 0 ? 1 : BOSS_COMPANION_HP);
+      names.push(BOSSES[idx].name);
+    }
+    this.raid(size > 1 ? `Boss wave! ${names.join(', ')}` : `${names[0]} approaches!`);
   }
 
   /** Seconds until the next boss spawns, or -1 when all six are out. */
@@ -467,6 +503,15 @@ export class Sim {
       if (e.alive && e.boss >= 0) return e;
     }
     return null;
+  }
+  /** Up to BOSS_BARS living bosses, oldest first (the HUD stacks one health bar each). */
+  activeBosses(max = BOSS_BARS): Enemy[] {
+    const out: Enemy[] = [];
+    for (let i = 0; i < this.enemies.length && out.length < max; i++) {
+      const e = this.enemies[i];
+      if (e.alive && e.boss >= 0) out.push(e);
+    }
+    return out;
   }
 
   private spawner(dt: number) {
@@ -727,15 +772,54 @@ export class Sim {
     ];
   }
 
+  /**
+   * Every Mastery the hero can still take: the stat Masteries below their cap and "Skill Mastery: <skill>" for each owned skill.
+   * Cards show the icon of an owned skill (different ones in turn).
+   */
+  private masteryCandidates(exclude: Card[] | null): Card[] {
+    const out: Card[] = [];
+    const skip = (k: string) => exclude !== null && exclude.some((c) => c.key === k);
+    const icon = (i: number) => this.skills[i % this.skills.length].key;
+    MASTERIES.forEach((m, i) => {
+      const lv = this.masteryLv[m.key];
+      if (lv >= masteryMax(m) || skip(m.key)) return;
+      out.push({ kind: 'mastery', key: m.key, icon: icon(i), name: m.name, isNew: false, from: lv, to: lv + 1, desc: m.desc });
+    });
+    this.skills.forEach((o) => {
+      const key = SKILL_MASTERY_PREFIX + o.key;
+      if (skip(key)) return;
+      const lv = this.skillMastery[o.key] ?? 0;
+      out.push({ kind: 'mastery', key, icon: o.key, name: `Skill Mastery: ${SKILL_BY_KEY[o.key].name}`, isNew: false, from: lv, to: lv + 1, desc: `+${Math.round(SKILL_MASTERY_PER * 100)}% damage for ${SKILL_BY_KEY[o.key].name}. Stacks forever.` });
+    });
+    return out;
+  }
+
+  /** n Mastery cards; each one after the first has a small chance (MASTERY_FILLER_CHANCE) to be an Elixir or Meso Bag instead. */
+  private masteryCards(n: number, have: Card[]): Card[] {
+    const pool = this.masteryCandidates(have);
+    const out: Card[] = [];
+    const fill = this.fillers();
+    while (out.length < n && pool.length > 0) {
+      if (out.length > 0 && this.rng.next() < MASTERY_FILLER_CHANCE) {
+        const f = fill[this.rng.int(fill.length)];
+        if (!have.some((c) => c.key === f.key) && !out.some((c) => c.key === f.key)) { out.push(f); continue; }
+      }
+      out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    }
+    return out;
+  }
+
   private drawOffer(): Card[] {
     const pool = this.candidates(null);
-    if (pool.length === 0) return this.fillers();
     const out: Card[] = [];
     // a job has few skills, so one of the three cards is always a skill (new or an upgrade) while any is left
     const skillIdx: number[] = [];
     for (let i = 0; i < pool.length; i++) if (pool[i].kind === 'skill') skillIdx.push(i);
     if (skillIdx.length > 0) out.push(pool.splice(skillIdx[this.rng.int(skillIdx.length)], 1)[0]);
     while (out.length < 3 && pool.length > 0) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    // nothing left to upgrade (or fewer than three things): Masteries fill the cards, so a level-up always makes the hero stronger
+    // (the first Mastery card is always real; later ones are sometimes an Elixir or Meso Bag)
+    if (out.length < 3) out.push(...this.masteryCards(3 - out.length, out));
     for (let i = out.length - 1; i > 0; i--) {
       const j = this.rng.int(i + 1);
       const c = out[i]; out[i] = out[j]; out[j] = c;
@@ -761,7 +845,7 @@ export class Sim {
   banish(i: number): boolean {
     if (!this.offer || this.banishes <= 0 || i < 0 || i >= this.offer.length) return false;
     const c = this.offer[i];
-    if (c.kind === 'elixir' || c.kind === 'meso' || c.kind === 'job') return false;
+    if (c.kind === 'elixir' || c.kind === 'meso' || c.kind === 'job' || c.kind === 'mastery') return false;
     this.banishes--;
     this.banished.add(c.key);
     const pool = this.candidates(this.offer);
@@ -769,6 +853,19 @@ export class Sim {
     else this.offer.splice(i, 1);
     if (this.offer.length === 0) this.offer = this.drawOffer();
     return true;
+  }
+
+  /** Applies a Mastery card by key (a stat Mastery or "skill_mastery:<skill>"). */
+  private takeMastery(key: string) {
+    if (key.startsWith(SKILL_MASTERY_PREFIX)) {
+      const sk = key.slice(SKILL_MASTERY_PREFIX.length);
+      this.skillMastery[sk] = (this.skillMastery[sk] ?? 0) + 1;
+      return;
+    }
+    if (!(key in this.masteryLv)) return;
+    this.masteryLv[key as MasteryKey]++;
+    this.recalc();
+    if (key === 'vitality') this.hp = Math.min(this.maxHp, this.hp + this.maxHp * VITALITY_HEAL);
   }
 
   pick(i: number): boolean {
@@ -790,6 +887,8 @@ export class Sim {
       if (own) own.level++;
       else this.passives.push({ key: c.key, level: 1 });
       this.recalc();
+    } else if (c.kind === 'mastery') {
+      this.takeMastery(c.key);
     } else if (c.kind === 'elixir') {
       this.hp = this.maxHp;
     } else {
@@ -847,7 +946,7 @@ export class Sim {
 
     // bosses on the clock
     while (this.bossesSpawned < BOSSES.length && this.t >= BOSS_EVERY * (this.bossesSpawned + 1)) {
-      this.spawnBoss(this.bossesSpawned);
+      this.spawnBossWave(this.bossesSpawned);
       this.bossesSpawned++;
     }
     this.spawner(dt);
@@ -889,12 +988,15 @@ export class Sim {
       x: this.px,
       y: this.py,
       boss: b ? { index: b.boss, name: BOSSES[b.boss].name, hp: b.hp, maxHp: b.maxHp, x: b.x, y: b.y, casting: b.castT > 0, berserk: b.berserk } : null,
+      bosses: this.activeBosses().map((x) => ({ index: x.boss, name: BOSSES[x.boss].name, hp: x.hp, maxHp: x.maxHp })),
       bossesSpawned: this.bossesSpawned,
       bossKills: this.bossKills,
       nextBossIn: this.nextBossIn(),
       skills: this.skills.map((s) => ({ key: s.key, level: s.level })),
       passives: this.passives.map((s) => ({ key: s.key, level: s.level })),
       offer: this.offer ? this.offer.map((c) => ({ key: c.key, name: c.name, isNew: c.isNew, from: c.from, to: c.to })) : null,
+      mastery: { ...this.masteryLv },
+      skillMastery: { ...this.skillMastery },
       rerolls: this.rerolls,
       banishes: this.banishes,
       over: this.over,

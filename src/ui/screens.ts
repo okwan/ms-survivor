@@ -1,3 +1,4 @@
+import { BOSS_TOTAL } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import type { Card } from '../game/types.ts';
 import { fmtTime } from './hud.ts';
@@ -198,9 +199,9 @@ export class Screens {
         this.cardsEl.appendChild(card);
         return;
       }
-      const tag = c.isNew ? '<span class="tag new">NEW</span>' : c.kind === 'skill' || c.kind === 'passive' ? `<span class="tag">Lv ${c.from} &gt; ${c.to}</span>` : '';
-      card.innerHTML = `<div class="key">${i + 1}</div><img src="${this.icons[c.key] ?? ''}" alt=""><h3>${c.name}</h3>${tag}<p>${c.desc}</p>`;
-      const kind = el('div', 'kind', c.kind === 'skill' ? 'Skill' : c.kind === 'passive' ? 'Passive' : 'Bonus');
+      const tag = c.isNew ? '<span class="tag new">NEW</span>' : c.kind === 'skill' || c.kind === 'passive' ? `<span class="tag">Lv ${c.from} &gt; ${c.to}</span>` : c.kind === 'mastery' ? `<span class="tag">x${c.from} &gt; x${c.to}</span>` : '';
+      card.innerHTML = `<div class="key">${i + 1}</div><img src="${this.icons[c.icon ?? c.key] ?? ''}" alt=""><h3>${c.name}</h3>${tag}<p>${c.desc}</p>`;
+      const kind = el('div', 'kind', c.kind === 'skill' ? 'Skill' : c.kind === 'passive' ? 'Passive' : c.kind === 'mastery' ? 'Mastery' : 'Bonus');
       card.appendChild(kind);
       card.addEventListener('click', () => this.h.pick(i));
       if (c.kind === 'skill' || c.kind === 'passive') {
@@ -226,7 +227,7 @@ export class Screens {
       <tr><td>Time survived</td><td>${fmtTime(r.time)}${r.best ? ' <em>NEW BEST</em>' : ''}</td></tr>
       <tr><td>Level</td><td>${r.level}</td></tr>
       <tr><td>Monsters slain</td><td>${r.kills}</td></tr>
-      <tr><td>Bosses slain</td><td>${r.bosses} / 6</td></tr>
+      <tr><td>Bosses slain</td><td>${r.bosses} / ${BOSS_TOTAL}</td></tr>
       <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>`));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));

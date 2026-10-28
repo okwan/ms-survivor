@@ -8,6 +8,7 @@ import { frameAt } from '../maple/art.ts';
 import { AvatarPlayer } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import type { Look } from '../maple/avatar-core.ts';
+import { tierColor } from '../game/gear.ts';
 import type { GearIcons } from './gear-icons.ts';
 import type { Anim, MapleArt, MobArt } from '../maple/art.ts';
 import { DamageNumbers } from './damage.ts';
@@ -68,7 +69,10 @@ export class Renderer {
   private decoSprites: Sprite[] = [];
   private enemyViews = new Map<Enemy, EnemyView>();
   private viewPool: EnemyView[] = [];
-  private pickupViews = new Map<Pickup, { sp: Sprite; stamp: number }>();
+  private pickupViews = new Map<Pickup, { sp: Sprite; stamp: number; glow: Sprite | null }>();
+  /** tier-coloured glow under dropped gear */
+  private glowFx = new Container();
+  private glowPool: Sprite[] = [];
   private pickupPool: Sprite[] = [];
   private projViews = new Map<Projectile, { sp: Sprite; stamp: number; t: number }>();
   private projPool: Sprite[] = [];
@@ -117,7 +121,7 @@ export class Renderer {
       this.world.addChild(this.scenery.decorLayer);
     }
     if (this.decor) this.world.addChild(this.decor.layer);
-    this.world.addChild(this.groundFx, this.entities, this.fxLayer, this.topLayer);
+    this.world.addChild(this.glowFx, this.groundFx, this.entities, this.fxLayer, this.topLayer);
 
     for (let i = 0; i < MAX_DECOS; i++) {
       const s = new Sprite(tx.decos[0]);
@@ -397,7 +401,9 @@ export class Renderer {
         this.ringFx(tx.ring, sim.px, sim.py, 6, 0.9, 0xffd23a, 0.8);
         break;
       case 'drop':
-        if (e.boss) this.number(e.x, e.y - 1.4, e.name.toUpperCase(), 0xffe9a0, 15, 2.2);
+        // the item's name floats up in its tier colour (grey, white, blue, purple, gold); a boss drop stays up longer
+        this.number(e.x, e.y - 1.4, e.name.toUpperCase(), tierColor(e.tier), e.boss ? 15 : 13, e.boss ? 2.2 : 1.6);
+        if (e.tier >= 4) this.ringFx(tx.ring, e.x, e.y, 2.2, 0.6, tierColor(e.tier), 0.9);
         break;
       case 'pickup':
         if (e.kind === MESO || e.kind === BAG) this.number(e.x, e.y - 0.6, '+' + e.value, 0xffd23a, 15, 0.7);
@@ -564,7 +570,7 @@ export class Renderer {
       if (!v) {
         const sp = this.pickupPool.pop() ?? this.topSprite(this.groundFx);
         sp.visible = true;
-        v = { sp, stamp };
+        v = { sp, stamp, glow: null };
         this.pickupViews.set(p, v);
       }
       v.stamp = stamp;
@@ -581,9 +587,25 @@ export class Renderer {
       if (sp.texture !== t) sp.texture = t;
       sp.scale.set(p.kind === GEAR ? 1 : SCALE);
       sp.position.set(p.x * PX, p.y * PX - 8 + Math.sin(this.time * 4 + p.x) * 2);
+      if (p.kind === GEAR && p.item) {
+        let g = v.glow;
+        if (!g) {
+          g = this.glowPool.pop() ?? this.glowSprite();
+          v.glow = g;
+        }
+        g.visible = true;
+        g.tint = tierColor(p.item.tier);
+        g.position.set(sp.x, sp.y + 4);
+        g.scale.set(0.9 + 0.08 * p.item.tier + 0.08 * Math.sin(this.time * 5 + p.x));
+      }
     }
     for (const [k, v] of this.pickupViews) {
-      if (v.stamp !== stamp) { this.pickupViews.delete(k); v.sp.visible = false; this.pickupPool.push(v.sp); }
+      if (v.stamp !== stamp) {
+        this.pickupViews.delete(k);
+        v.sp.visible = false;
+        this.pickupPool.push(v.sp);
+        if (v.glow) { v.glow.visible = false; this.glowPool.push(v.glow); v.glow = null; }
+      }
     }
 
     // projectiles
@@ -720,6 +742,14 @@ export class Renderer {
     if (v.sp.texture !== t) v.sp.texture = t;
     v.sp.anchor.set(a.ax[i], a.ay[i]);
     return a.ay[i] * t.frame.height;
+  }
+
+  private glowSprite(): Sprite {
+    const sp = new Sprite(this.tex.glow);
+    sp.anchor.set(0.5);
+    sp.alpha = 1;
+    this.glowFx.addChild(sp);
+    return sp;
   }
 
   private topSprite(layer: Container): Sprite {

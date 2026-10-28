@@ -21,12 +21,12 @@ World units are yards (Azeroth's unit). `PX_PER_YD = 20` at zoom 1. Player speed
 
 | Knob | Value |
 |---|---|
-| Run length | 900 s. Boss every 135 s: six bosses at 2:15, 4:30, 6:45, 9:00, 11:15, 13:30. Win at 15:00. |
+| Run length | 900 s. A boss wave every 135 s at 2:15, 4:30, 6:45, 9:00, 11:15, 13:30 (see Boss waves). Win at 15:00. |
 | Enemy ladder | 30 tiers. `step = floor(p*30)`, `span = tiers-3`, `lo = min(span, max(0,step-1)*span/27)` (integer math), pool = tiers lo, lo+1, lo+2 |
 | Alive target | `min(220, floor(14 + 225p))` |
 | Spawner | every 0.12 s, if alive < target spawn a pack of up to 4 (never above target); ring 34 to 42 yd from the player at a random angle |
 | Recycling | enemies farther than 60 yd from the player are moved back onto the spawn ring (ahead of the player's movement if moving) |
-| Scaling | enemy HP x(1 + 3p) at spawn, damage x(1 + 0.9p); hero damage x(1 + 0.2·sqrt(level - 1)), +3 max HP per level to 60 |
+| Scaling | enemy HP x(1 + 2.5p + 4.5p^2) at spawn, damage x(1 + 0.9p + 0.6p^2); hero damage x(1 + 0.2·sqrt(level - 1) + 0.02·max(0, level - 40)), +3 max HP per level to 90. See Balance curve |
 | Contact | an enemy touching the player hits for `max(1, dmg - armor)`, then waits 1.3 s (boss 1.0 s) |
 | Player | HP 120, speed 7 yd/s, magnet 4.5 yd, hit radius 0.7 yd, crit 5% for x2 |
 | XP | gem value = mob xp x 2.0 x growth. To next level: L<20: `5 + 10(L-1)`; L<40: `195 + 13(L-20)`; else `455 + 16(L-40)` |
@@ -79,14 +79,29 @@ of the ladder, so no later tier is softer (Azeroth's `ladder()`).
 
 | # | Name | mob id | HP | speed | dmg | xp | scale | mechanics |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Mano | 2220000 | 700 | 5.2 | 20 | 60 | 1.6 | nova |
-| 2 | Mushmom | 6130101 | 1800 | 5.4 | 32 | 120 | 1.6 | nova, summon |
-| 3 | King Slime | 9300003 | 4200 | 4.0 | 45 | 200 | 1.7 | summon, berserk |
-| 4 | Zombie Mushmom | 6300005 | 7000 | 5.6 | 55 | 300 | 1.7 | nova, summon, berserk |
-| 5 | Jr. Balrog | 8130100 | 12000 | 5.0 | 70 | 400 | 1.8 | nova, summon, berserk |
-| 6 | Zakum | 8800000 | 20000 | 4.8 | 90 | 500 | 1.8 | nova, summon, berserk |
+| 1 | Mano | 2220000 | 900 | 5.2 | 20 | 60 | 1.6 | nova |
+| 2 | Mushmom | 6130101 | 2400 | 5.4 | 32 | 120 | 1.6 | nova, summon |
+| 3 | King Slime | 9300003 | 6000 | 4.0 | 45 | 200 | 1.7 | summon, berserk |
+| 4 | Zombie Mushmom | 6300005 | 11000 | 5.6 | 55 | 300 | 1.7 | nova, summon, berserk |
+| 5 | Jr. Balrog | 8130100 | 20000 | 5.0 | 70 | 400 | 1.8 | nova, summon, berserk |
+| 6 | Zakum | 8800000 | 42000 | 4.8 | 90 | 500 | 1.8 | nova, summon, berserk |
 
 Boss radius `1.6 * scale` yd. A boss spawns on the ring with a raid warning. A NEXT BOSS countdown is always visible.
+
+### Boss waves
+
+The six boss times bring waves of 1, 1, 2, 2, 3 and 3 bosses (twelve in a run). A wave is the scheduled boss at full HP plus companions: the bosses
+just below it on the ladder (wave 3: King Slime + Mushmom; wave 6: Zakum + Jr. Balrog + Zombie Mushmom) at 70% HP, spread evenly around the
+spawn ring, with a "Boss wave!" banner. Every boss has its own HP bar; the HUD stacks the bars of the (up to) three oldest living ones, and
+earlier bosses that are still alive stay in play. A boss drops 3 items (the first one tier above the run's item tier, 5% two above), one more
+for every four bosses slain before it (max 5). The win condition is unchanged: survive 15:00.
+
+### Enemy speed
+
+Mob.wz `info/speed` is a percent offset (0 normal, -100 slowest); flyers use `info/flySpeed`; `info/fs` (a float multiplier) is the fallback.
+The extractor writes `speed = clamp(1 + speed/100, 0.3, 2)` per mob in the manifest and logs `speed / flySpeed / fs` of every wanted mob; the Sim takes
+`mobSpeeds: Record<mobId, factor>` and moves an enemy at `min(4.4 * factor, 0.95 * hero base speed)` yd/s. Without a table (or for a mob not in it) the
+hand-tuned ladder speeds above apply.
 
 Raid mechanics (each boss runs its own timers; a cast bar shows on the HUD while it casts):
 - **nova**: every 10 s the boss stops, casts for 2.0 s and shows a growing danger circle of radius 9 yd centred on itself. When the cast ends, the player takes 35% of max HP if inside. Raid warning: "<Boss> is casting Ground Slam! Get out!".
@@ -106,7 +121,7 @@ count +1 at levels 3, 5 and 7; radius x(1 + 0.08(L-1)) x area; duration x(1 + 0.
 
 Every level opens a 3-card choice and pauses the run until a card is picked. Several pending levels open one after another.
 Level 30 first opens a job card choice (docs/CLASSES.md). Offers come from the skills and passives of the jobs unlocked so far: new skills (while fewer than 6), upgrades of owned skills below max, new passives (while fewer than 6),
-upgrades of owned passives below max; one of the three is always a skill card while any is available. Banished keys never return. If nothing is left, offer "Elixir" (full heal) and "Meso bag" (+25 mesos).
+upgrades of owned passives below max; one of the three is always a skill card while any is available. Banished keys never return. When fewer than three cards are left, the rest are Masteries, so levelling never ends: Mastery (+8% damage), Vitality (+10% max HP, heals 25%), Swiftness (+4% move speed, up to +40%), Focus (+3% crit, up to +60%), Haste (+4% cooldown speed, up to +40%), Reach (+6% area), Magnet (+10% pickup range) and "Skill Mastery: <owned skill>" (+10% damage of that skill, no cap). Masteries stack, show an owned skill's icon, and cannot be banished; later Mastery slots sometimes (10%) turn into an Elixir (full heal) or Meso bag (+25 mesos), the first one never does.
 Each run has 2 rerolls and 2 banishes (banish removes that card's key from the run and redraws the slot).
 Cards show icon placeholder, name, "NEW" or "Lv N > N+1", and a one-line effect.
 
@@ -170,3 +185,27 @@ String.wz name for the map banner. The renderer cross-fades ground and decor ove
 Sound effects come from Sound.wz (`scripts/fetch-maple-sfx.ts`, keys in `src/maple/region-types.ts`) and play through
 `src/maple/sfx.ts`, which maps the sim's events to sounds; the sim itself stays free of audio. Everything degrades to the old look
 and silence when the manifest lacks `regions` / `sfx`.
+
+## Gear drops
+
+Items come in 8 tiers by reqLevel (0-9, 10-19, ..., 60-79, 80-99; the extractor keeps classic items up to level 99, at most ~320 items). The run starts at item tier 1 and goes up one
+tier every 90 s to tier 7 (at 9:00). A drop is the run's tier, 15% of the time one higher. Normal kills drop gear 0.8% of the time, big mobs and tier 18+ 2%.
+Bosses drop 3 items (see Boss waves). Dropped gear glows and prints its name in a tier colour: grey (tiers 0-1), white (2-3), blue (4-5), purple (6), gold (7).
+
+## Balance curve (scripts/balance-probe.ts)
+
+`node --experimental-strip-types scripts/balance-probe.ts [seeds] [class]` plays the kiting bot (always card 0) over seeds and prints, per class, the win rate, the
+average time to kill each boss and the hero and mob numbers at minutes 1, 3, 5, 8, 12, 15. "dmg/hit" is the average base damage of the owned skills times the hero's damage
+multiplier (level, passives, gear, Masteries). Targets and results (12 seeds x 4 classes, placeholder gear):
+
+| minute | hero damage per hit vs minute 1 | mob HP (mid-ladder tier) | mob contact damage |
+|---|---|---|---|
+| 1 | x1 (24-45) | 19 | 3 |
+| 3 | x2.3 | 60 | 12 |
+| 5 | x4-6 | 163 | 19 |
+| 8 | x9-12 | 343 | 30 |
+| 12 | x23-33 | 1411 | 63 |
+| 15 | x33-44 (850-1590) | 3360 | 110 |
+
+Enemy HP and damage use a quadratic ramp so the first minutes stay as before and the late game keeps up with the hero (hits to kill a mob: 0.6 at minute 1, 1.5 at 8, 3 at 15). Bosses take 10-30 s of
+fighting at the end for the ranged classes (the melee bot rarely stays next to a boss, so the Warrior takes longer). The bot wins about 96% of runs (it won 100% before).

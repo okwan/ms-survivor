@@ -1,4 +1,4 @@
-import { BOSSES, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY } from '../game/data.ts';
+import { BOSSES, BOSS_BARS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import { Radar } from './radar.ts';
 import { theme } from './theme.ts';
@@ -30,8 +30,10 @@ export class Hud {
         <div class="clock" data-k="clock">0:00</div>
         <div class="nextboss" data-k="next">NEXT BOSS 2:15</div>
         <div class="bosspanel" data-k="bosspanel">
-          <div class="bossname" data-k="bossname"></div>
-          <div class="bar boss"><div class="fill" data-k="bossfill"></div><span data-k="bosstext"></span></div>
+          ${[0, 1, 2].map((i) => `<div class="bossrow" data-k="bossrow${i}">
+            <div class="bossname" data-k="bossname${i}"></div>
+            <div class="bar boss"><div class="fill" data-k="bossfill${i}"></div><span data-k="bosstext${i}"></span></div>
+          </div>`).join('')}
           <div class="bar cast" data-k="castbar"><div class="fill" data-k="castfill"></div><span>Ground Slam</span></div>
         </div>
       </div>
@@ -141,15 +143,21 @@ export class Hud {
       this.fillSlot(this.passiveSlots[i], s ? s.key : null, s ? s.level : 0);
     }
 
-    const b = sim.activeBoss();
-    this.disp(this.el.bosspanel, !!b);
-    if (b) {
-      this.text(this.el.bossname, BOSSES[b.boss].name + (b.berserk ? '  (ENRAGED)' : ''));
-      this.width(this.el.bossfill, (Math.max(0, b.hp) / b.maxHp) * 100);
-      this.text(this.el.bosstext, `${Math.max(0, Math.ceil(b.hp))} / ${Math.ceil(b.maxHp)}`);
-      this.disp(this.el.castbar, b.castT > 0);
-      if (b.castT > 0) this.width(this.el.castfill, (1 - b.castT / NOVA_CAST) * 100);
+    // one health bar per living boss (oldest first, at most BOSS_BARS); the ground-slam cast bar follows the first one that is casting
+    const bs = sim.activeBosses(BOSS_BARS);
+    this.disp(this.el.bosspanel, bs.length > 0);
+    let casting: (typeof bs)[number] | null = null;
+    for (let i = 0; i < BOSS_BARS; i++) {
+      const b = bs[i];
+      this.disp(this.el['bossrow' + i], !!b);
+      if (!b) continue;
+      this.text(this.el['bossname' + i], BOSSES[b.boss].name + (b.berserk ? '  (ENRAGED)' : ''));
+      this.width(this.el['bossfill' + i], (Math.max(0, b.hp) / b.maxHp) * 100);
+      this.text(this.el['bosstext' + i], `${Math.max(0, Math.ceil(b.hp))} / ${Math.ceil(b.maxHp)}`);
+      if (!casting && b.castT > 0) casting = b;
     }
+    this.disp(this.el.castbar, !!casting);
+    if (casting) this.width(this.el.castfill, (1 - casting.castT / NOVA_CAST) * 100);
 
     const raidOn = sim.raidUntil > sim.t && sim.raidText !== '' && !sim.over;
     this.disp(this.el.raid, raidOn);

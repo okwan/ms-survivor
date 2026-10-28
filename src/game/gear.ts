@@ -4,7 +4,7 @@
  * built-in placeholder pool keeps drops, equipping and the stat effects working (the hero just does not change look).
  */
 import {
-  GEAR_DMG_PER_ATT, GEAR_DMG_PER_STAT, GEAR_MAX_TIER, GEAR_MHP_PER_HP, GEAR_PDD_PER_ARMOR, GEAR_SPEED_PER_POINT, GEAR_TIER_DMG_CAP, GEAR_TIER_SECONDS,
+  GEAR_DMG_PER_ATT, GEAR_DMG_PER_STAT, GEAR_MAX_TIER, GEAR_MHP_PER_HP, GEAR_PDD_PER_ARMOR, GEAR_SPEED_PER_POINT, GEAR_START_TIER, GEAR_TIER_DMG_CAP, GEAR_TIER_SECONDS,
   GEAR_UPTIER_CHANCE,
 } from './data.ts';
 import type { ClassKey } from './data.ts';
@@ -17,8 +17,10 @@ export const GEAR_SLOT_NAMES: Record<GearSlot, string> = { cap: 'Cap', coat: 'To
 export const JOB_BIT: Record<ClassKey, number> = { warrior: 1, magician: 2, bowman: 4, thief: 8 };
 /** the stat that counts as "main" for each class */
 export const MAIN_STAT: Record<ClassKey, 'str' | 'int' | 'dex' | 'luk'> = { warrior: 'str', magician: 'int', bowman: 'dex', thief: 'luk' };
-/** reqLevel lower bounds of the item tiers 0..6 */
-export const TIER_LEVELS = [0, 10, 20, 30, 40, 50, 60];
+/** reqLevel lower bounds of the item tiers 0..7 (the last one is 80-99; the extractor skips classic items from level 100 up) */
+export const TIER_LEVELS = [0, 10, 20, 30, 40, 50, 60, 80];
+/** highest reqLevel of an item the extractor keeps */
+export const MAX_GEAR_LEVEL = 99;
 export const tierOfLevel = (level: number) => {
   let t = 0;
   for (let i = 0; i < TIER_LEVELS.length; i++) if (level >= TIER_LEVELS[i]) t = i;
@@ -132,10 +134,15 @@ export function describeBonus(b: GearBonus): string {
 
 // ---- pool --------------------------------------------------------------------------------------
 
-/** Item tier of a run clock: 0 for the first two minutes, then +1 every GEAR_TIER_SECONDS, at most 6. */
+/** Item tier of a run clock: GEAR_START_TIER at the start, then +1 every GEAR_TIER_SECONDS, at most GEAR_MAX_TIER. */
 export function runTier(t: number): number {
-  return Math.max(0, Math.min(GEAR_MAX_TIER, Math.floor(t / GEAR_TIER_SECONDS)));
+  return Math.max(0, Math.min(GEAR_MAX_TIER, GEAR_START_TIER + Math.floor(t / GEAR_TIER_SECONDS)));
 }
+
+/** Drop glow / name colour by item tier: grey (tiers 0-1), white (2-3), blue (4-5), purple (6), gold (7). */
+export const TIER_COLORS = [0x9aa0a6, 0x9aa0a6, 0xffffff, 0xffffff, 0x4aa3ff, 0x4aa3ff, 0xb35cff, 0xffd23a];
+export const TIER_COLOR_NAMES = ['grey', 'grey', 'white', 'white', 'blue', 'blue', 'purple', 'gold'];
+export const tierColor = (tier: number) => TIER_COLORS[Math.max(0, Math.min(TIER_COLORS.length - 1, tier | 0))];
 
 export class GearPool {
   readonly items = new Map<string, GearItem>();
@@ -165,7 +172,7 @@ export class GearPool {
   /** A few invented items per class, slot and tier, for play without extracted art. */
   static placeholder(): GearPool {
     const list: GearItem[] = [];
-    const mats = ['Bronze', 'Iron', 'Steel', 'Silver', 'Mithril', 'Gold', 'Orihalcon'];
+    const mats = ['Bronze', 'Iron', 'Steel', 'Silver', 'Mithril', 'Gold', 'Orihalcon', 'Dragon'];
     const wnames: Record<ClassKey, string> = { warrior: 'Sword', magician: 'Wand', bowman: 'Bow', thief: 'Dagger' };
     for (let t = 0; t <= GEAR_MAX_TIER; t++) {
       const level = TIER_LEVELS[t];
@@ -210,12 +217,13 @@ export class GearPool {
   }
 
   /**
-   * Draws a drop: a slot (uniformly among the slots that have items), then an item of it. The tier is the run tier, one higher
-   * with chance GEAR_UPTIER_CHANCE; if that tier has nothing for this class the next lower one is used.
+   * Draws a drop: a slot (uniformly among the slots that have items), then an item of it. The tier is the run tier plus `boost`
+   * (default: one higher with chance GEAR_UPTIER_CHANCE); if that tier has nothing for this class the next lower one is used.
    */
-  roll(rng: Rng, cls: ClassKey, gender: 0 | 1, runT: number): GearItem | null {
+  roll(rng: Rng, cls: ClassKey, gender: 0 | 1, runT: number, boost = -1): GearItem | null {
     let tier = runTier(runT);
-    if (rng.next() < GEAR_UPTIER_CHANCE) tier = Math.min(GEAR_MAX_TIER, tier + 1);
+    if (boost >= 0) tier = Math.min(GEAR_MAX_TIER, tier + boost);
+    else if (rng.next() < GEAR_UPTIER_CHANCE) tier = Math.min(GEAR_MAX_TIER, tier + 1);
     for (let t = tier; t >= 0; t--) {
       const all = this.eligible(cls, gender, t);
       if (!all.length) continue;

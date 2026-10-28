@@ -93,8 +93,10 @@ export interface PassiveState {
 }
 
 export interface Card {
-  kind: 'skill' | 'passive' | 'elixir' | 'meso' | 'job';
+  kind: 'skill' | 'passive' | 'elixir' | 'meso' | 'job' | 'mastery';
   key: string;
+  /** mastery cards: key of an owned skill whose icon the card shows */
+  icon?: string;
   name: string;
   isNew: boolean;
   from: number;
@@ -111,7 +113,7 @@ export type SimEvent =
   | { type: 'cast'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number; r: number; pts: number[] | null }
   | { type: 'novaHit'; x: number; y: number; r: number; hit: boolean }
   | { type: 'pickup'; kind: PickupKind; x: number; y: number; value: number }
-  | { type: 'drop'; x: number; y: number; id: string; name: string; boss: boolean }
+  | { type: 'drop'; x: number; y: number; id: string; name: string; boss: boolean; tier: number }
   | { type: 'equip'; id: string; slot: string; auto: boolean }
   | { type: 'raid'; text: string }
   | { type: 'bossSpawn'; boss: number; name: string; x: number; y: number }
