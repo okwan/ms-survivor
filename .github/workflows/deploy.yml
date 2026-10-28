@@ -50,6 +50,15 @@ jobs:
         run: node --experimental-strip-types scripts/fetch-maple.ts dist
         env:
           MAPLE_ARCHIVE_URL: ${{ vars.MAPLE_ARCHIVE_URL }}
+      # Branch builds only: screenshots of the login screens with the real art, logged as base64 (scripts/shoot.mjs)
+      - name: Screenshots
+        if: github.ref != 'refs/heads/main'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          npm i --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node scripts/shoot.mjs dist
       - if: github.ref == 'refs/heads/main' && vars.PAGES_ENABLED == 'true'
         uses: actions/upload-pages-artifact@v3
         with:

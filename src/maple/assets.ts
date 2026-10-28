@@ -9,6 +9,7 @@ import { EVOLVED_SKILLS } from '../game/evolutions.ts';
 import type { AvatarManifest } from './avatar-core.ts';
 import type { RegionsSection, SfxSection } from './region-types.ts';
 import type { ItemsSection, NpcSection } from './items-types.ts';
+import type { LoginSection } from './login-scene.ts';
 import type { AtlasRef, EffectsSection, MapSection, UiSection } from './world-types.ts';
 
 export const pad7 = (n: number) => String(n).padStart(7, '0');
@@ -135,6 +136,8 @@ export interface MapleManifest {
   items?: ItemsSection;
   /** the Henesys shop keeper's portrait (scripts/fetch-maple-npc.ts) */
   npc?: NpcSection;
+  /** the v83 login map (UI.wz MapLogin.img), see src/maple/login-scene.ts */
+  login?: LoginSection;
 }
 
 /** Fetches maple/manifest.json. Returns null on any failure so the game falls back to placeholder art. */
@@ -159,6 +162,7 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       sfx: data.sfx && typeof data.sfx === 'object' ? data.sfx : undefined,
       items: data.items && typeof data.items === 'object' ? data.items : undefined,
       npc: data.npc && typeof data.npc === 'object' && Array.isArray(data.npc.frames) ? data.npc : undefined,
+      login: data.login && typeof data.login === 'object' && Array.isArray(data.login.backs) && Array.isArray(data.login.objs) && data.login.ui && typeof data.login.ui === 'object' ? data.login : undefined,
     };
   } catch {
     return null;

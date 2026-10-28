@@ -26,6 +26,9 @@ export interface CreateOptions {
   onBack(): void;
 }
 
+/** the name as the game stores it */
+export const sanitizeName = (n: string) => n.replace(/[<>&"]/g, '').trim().slice(0, 12);
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -33,7 +36,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''):
   return e;
 }
 
-interface Row {
+export interface Row {
   key: string;
   label: string;
   /** number of choices at the current look */
@@ -45,7 +48,7 @@ interface Row {
 }
 
 const opt = LOOK_OPTIONS;
-const ROWS: Row[] = [
+export const ROWS: Row[] = [
   {
     key: 'gender', label: 'Gender', count: () => 2, get: (l) => l.gender, text: (l) => (l.gender ? 'Female' : 'Male'),
     set(l, i) {
@@ -246,7 +249,7 @@ export class CreateScreen {
   }
 
   private start() {
-    const name = this.name.replace(/[<>&"]/g, '').trim().slice(0, 12) || 'Maple';
+    const name = sanitizeName(this.name) || 'Maple';
     this.o.onStart({ cls: this.cls, look: { ...sanitizeLook(this.look, CLASS_BY_KEY[this.cls].weapon) }, name });
   }
 

@@ -8,7 +8,11 @@ import { compact } from '../game/meter.ts';
 import type { MeterRow } from '../game/meter.ts';
 import { BAR_COLORS, sourceInfo } from './meter.ts';
 import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
+import type { LoginSection } from '../maple/login-scene.ts';
 import { LoginScreen, classic } from './login.ts';
+import type { LoginLike } from './login.ts';
+import type { CreateResult } from './create.ts';
+import { MapLogin, mapLoginOk } from './login-map.ts';
 import { difficultyPicker } from './difficulty.ts';
 import { CLASS_BY_KEY, JOB_BY_CODE, unlockedJobs } from '../game/data.ts';
 import type { SaveData, StoredRun } from './save.ts';
@@ -17,6 +21,8 @@ import { theme } from './theme.ts';
 export interface ScreenHandlers {
   /** opens character creation */
   start(): void;
+  /** the map creator finished */
+  created?(r: CreateResult): void;
   /** starts straight away with the last created character */
   quick(): void;
   resume(): void;
@@ -97,18 +103,20 @@ export class Screens {
   private sfxVolEl!: HTMLInputElement;
   private muteEl!: HTMLButtonElement;
   private muted = false;
-  /** the classic MapleStory login screen (null: the plain title window is used) */
-  readonly login: LoginScreen | null = null;
+  /** the MapleStory login map or the classic signboard screen (null: the plain title window is used) */
+  readonly login: LoginLike | null = null;
   private titleExtra!: HTMLDivElement;
   private diff = difficultyPicker((i) => this.h.difficulty(i));
 
-  constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null) {
+  constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null, loginScene: LoginSection | null = null) {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
-    // the difficulty picker: ONE element, mounted above the Play row of the classic signboard, else above START on the plain title
-    if (this.login) this.login.root.querySelector('.login-board')!.insertBefore(this.diff.el, this.login.root.querySelector('.login-btns'));
+    const lh = { create: () => h.start(), created: (r: CreateResult) => h.created?.(r), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
+    if (mapLoginOk(loginScene)) this.login = new MapLogin(parent, lh, avatar, loginScene);
+    else if (classic()) this.login = new LoginScreen(parent, lh, avatar);
+    // the difficulty picker: ONE element, mounted by the login screen (signboard / character select), else above START on the plain title
+    if (this.login) this.login.mountDifficulty(this.diff.el);
     else this.title.querySelector('.win-body')!.insertBefore(this.diff.el, this.title.querySelector('.btn.big'));
     this.login?.addButton('Monster Book', () => h.book());
     this.login?.addButton('Henesys Shop', () => h.shop());
@@ -183,6 +191,7 @@ export class Screens {
 
   private buildPause(): HTMLDivElement {
     const { root, body } = this.win('Paused', 'small');
+    root.classList.add('pause');
     body.append(this.btn('Resume', 'primary', () => this.h.resume()), this.btn('Save & Quit', '', () => this.h.saveQuit()), this.btn('Quit to menu', '', () => this.h.quit()));
     return root;
   }
@@ -218,7 +227,7 @@ export class Screens {
 
   /** which title screen is up: 'login' / 'select' (classic), 'title' (plain), or '' when none */
   titleState(): string {
-    if (this.login?.visible) return this.login.state === 'select' ? 'select' : 'login';
+    if (this.login?.visible) return this.login.state === 'select' ? 'select' : this.login.state === 'create' ? 'create' : 'login';
     return this.title.classList.contains('hidden') ? '' : 'title';
   }
 
@@ -244,7 +253,8 @@ export class Screens {
     this.volEl.value = String(save.settings.volume);
     this.sfxVolEl.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
-    this.hideAll();
+    // a visible login map stays up and pans back (its show() handles that)
+    this.hideAll({ keepLogin: !!this.login?.visible });
     if (this.login) this.login.show(save);
     else this.title.classList.remove('hidden');
   }
@@ -264,9 +274,10 @@ export class Screens {
     this.pause.classList.toggle('hidden', !on);
   }
 
-  hideAll() {
+  /** keepLogin: leave the login map up behind the character creator */
+  hideAll(o: { keepLogin?: boolean } = {}) {
     for (const s of [this.title, this.pause, this.levelup, this.results]) s.classList.add('hidden');
-    this.login?.hide();
+    if (!(o.keepLogin && this.login?.overlay)) this.login?.hide();
     this.offerRef = null;
     this.offerSig = '';
   }
@@ -350,11 +361,10 @@ export class Screens {
       <tr><td>Average DPS</td><td>${compact(r.damage.total / Math.max(1, r.damage.time))}</td></tr>`));
     if (r.hyperSp && r.hyperSp.sp > 0) b.appendChild(el('p', 'res-sp', `+${r.hyperSp.sp} Hyper SP for ${r.hyperSp.name}`));
     if (r.damage.rows.length) b.appendChild(this.breakdown(r.damage));
-    const row = el('div', 'btnrow');
-    row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    const more = el('div', 'btnrow res-more');
-    more.append(this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
-    b.append(row, more);
+    const row = el('div', 'btnrow res-btns');
+    row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()),
+      this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
+    b.appendChild(row);
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');

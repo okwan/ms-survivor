@@ -4,6 +4,7 @@
  * stage (last character with a name tag: name, level, job). Only used when the real button art was extracted (see classic()); without
  * it Screens keeps the plain title window.
  */
+import type { CreateResult } from './create.ts';
 import { CLASS_BY_KEY } from '../game/data.ts';
 import { frameIndexAt } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
@@ -15,6 +16,8 @@ import { theme } from './theme.ts';
 export interface LoginHandlers {
   /** open character creation */
   create(): void;
+  /** the map creator finished: start the run with this character */
+  created?(r: CreateResult): void;
   /** start the run with the saved character */
   select(): void;
   /** resume the saved run in progress */
@@ -42,7 +45,29 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''):
 
 export type LoginState = 'title' | 'select';
 
-export class LoginScreen {
+/** What Screens needs from a login screen: the classic LoginScreen or the map-based MapLogin (src/ui/login-map.ts). */
+export interface LoginLike {
+  readonly root: HTMLDivElement;
+  readonly state: string;
+  readonly visible: boolean;
+  /** frames the select stage drew (tests) */
+  drawn: number;
+  /** stays on screen behind the character creator (Screens.hideAll({ keepLogin })) */
+  readonly overlay?: boolean;
+  show(save: SaveData): void;
+  refresh(save: SaveData): void;
+  hide(): void;
+  showTitle(): void;
+  showSelect(): void;
+  setMuted(m: boolean): void;
+  addButton(label: string, fn: () => void): unknown;
+  /** Shows (label) or hides (null) the Continue button for a run in progress. */
+  setContinue(label: string | null): void;
+  /** places the difficulty picker */
+  mountDifficulty(el: HTMLElement): void;
+}
+
+export class LoginScreen implements LoginLike {
   readonly root: HTMLDivElement;
   state: LoginState = 'title';
   private stage: HTMLDivElement;
@@ -206,6 +231,10 @@ export class LoginScreen {
 
   get visible() {
     return this.shown;
+  }
+
+  mountDifficulty(el: HTMLElement) {
+    this.board.insertBefore(el, this.board.querySelector('.login-btns'));
   }
 
   /** Shows (label) or hides (null) the Continue button for a run in progress. */

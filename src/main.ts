@@ -211,7 +211,8 @@ async function boot() {
   const screens = new Screens(
     uiRoot,
     {
-      start: () => { screens.hideAll(); create.show(save.character ?? { ...hero }); },
+      created: (r) => finishCreate(r),
+      start: () => { screens.hideAll({ keepLogin: true }); create.show(save.character ?? { ...hero }); },
       quick: () => {
         const ch = save.character;
         if (!ch) return;
@@ -240,6 +241,7 @@ async function boot() {
     },
     renderer.tex.icons,
     avatar,
+    (mapleManifest as MapleManifest | null)?.login ?? null,
   );
   const bookPanel = new BookPanel(uiRoot, (mapleManifest as MapleManifest | null)?.mobs ?? {});
   const shopPanel = new ShopPanel(uiRoot, renderer.tex.icons, (mapleManifest as MapleManifest | null)?.npc ?? null, {
@@ -257,17 +259,18 @@ async function boot() {
   const noteUi = new NoteUi(uiRoot);
   const gachaUi = new GachaUi(uiRoot, renderer.tex.icons);
   gachaUi.onReveal = (_i, r) => sfx?.play(r.kind === 'evolve' ? 'game.levelup' : 'game.pickup', { volume: 0.5 });
+  function finishCreate(r: CreateResult) {
+    hero = r;
+    save.character = { cls: r.cls, look: r.look, name: r.name };
+    writeSave(save);
+    create.hide();
+    startRun();
+  }
   const create = new CreateScreen(uiRoot, {
     avatar,
     icons: renderer.tex.icons,
     onBack: () => { create.hide(); screens.showTitle(save, loadRun()); },
-    onStart: (r) => {
-      hero = r;
-      save.character = { cls: r.cls, look: r.look, name: r.name };
-      writeSave(save);
-      create.hide();
-      startRun();
-    },
+    onStart: (r) => finishCreate(r),
   });
   function setMuted(m: boolean) {
     save.settings.muted = m;
@@ -365,6 +368,8 @@ async function boot() {
       autopick(on: boolean) { autopick = on; },
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
+      /** pauses / resumes (no effect while a level-up offer is open) and returns the mode */
+      pause: (on = true) => { setPaused(on); return mode; },
       renderer,
       hero: () => hero,
       /** what is on screen: the screen name ('login', 'select', 'title', 'create', 'playing', 'paused', 'ended') and the open game windows */
