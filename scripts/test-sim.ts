@@ -2,7 +2,7 @@
 import { Sim } from '../src/game/sim.ts';
 import { EVOLUTION_PASSIVE_SLOTS, partnerSlotOpen } from '../src/game/evolutions.ts';
 import { botInput, botPick } from '../src/game/bot.ts';
-import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER } from '../src/game/data.ts';
+import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, ARMOR_CAP, ARMOR_K, armorReduction, mitigated, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER } from '../src/game/data.ts';
 
 let failed = 0;
 function ok(cond: boolean, msg: string) {
@@ -18,7 +18,10 @@ eq(xpToNext(20), 195, 'xp L20'); eq(xpToNext(39), 195 + 13 * 19, 'xp L39'); eq(x
 eq(LADDER.length, 30, 'ladder has 30 tiers');
 eq(poolLo(0), 0, 'pool lo @0s'); eq(poolLo(30), 0, 'pool lo @30s (step 1)'); eq(poolLo(60), 1, 'pool lo @60s (step 2)');
 eq(poolLo(450), 14, 'pool lo @450s (step 15)'); eq(poolLo(870), 27, 'pool lo @870s'); eq(poolLo(900), 27, 'pool lo @900s (tiers 27-29)');
-eq(aliveTarget(0), 14, 'alive target @0'); eq(aliveTarget(450), 126, 'alive target @450'); eq(aliveTarget(900), 220, 'alive target @900 capped');
+eq(armorReduction(0), 0, 'no armor, no reduction'); near(armorReduction(ARMOR_K), 0.5, 1e-9, 'armor = K halves hits');
+ok(armorReduction(20) < armorReduction(40) && armorReduction(40) - armorReduction(20) > armorReduction(80) - armorReduction(60), 'armor has diminishing returns');
+eq(armorReduction(1e6), ARMOR_CAP, 'reduction is capped'); near(mitigated(100, 20), 100 * (1 - 20 / 60), 1e-9, 'percent mitigation'); eq(mitigated(1, 1e6), 1, 'a hit never lands below 1');
+eq(aliveTarget(0), 24, 'alive target @0'); eq(aliveTarget(450), 204, 'alive target @450'); eq(aliveTarget(900), 280, 'alive target @900 capped');
 eq(LADDER[11].hp, 70, 'peak hp: Octopus reads Dark Stump peak');
 
 const lvlTimes: Record<string, number> = {};

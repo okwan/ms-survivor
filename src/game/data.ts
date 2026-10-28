@@ -4,7 +4,7 @@ export const PX_PER_YD = 20;
 export const RUN_LENGTH = 900;
 export const BOSS_EVERY = 135;
 export const TICK = 1 / 60;
-export const MAX_ALIVE = 220;
+export const MAX_ALIVE = 280;
 export const MAX_GEMS = 350;
 export const SPAWN_INTERVAL = 0.12;
 export const SPAWN_RING_MIN = 34;
@@ -26,12 +26,18 @@ export const LEVEL_HP = 3;
 export const LEVEL_HP_CAP = 90;
 /**
  * Enemy health and contact damage grow with run progress p (0..1): x(1 + a p + b p^2). The quadratic term keeps the first minutes as
- * gentle as before (x1.4 health at 2 minutes) and makes the late game bite: health x8 and damage x2.5 at 15 minutes.
+ * gentle as before (x1.4 health at 2 minutes) and makes the late game bite: health x11.5 and damage x12 at 15 minutes.
  */
 export const ENEMY_HP_GROWTH = 2.5;
-export const ENEMY_HP_GROWTH2 = 4.5;
-export const ENEMY_DMG_GROWTH = 0.9;
-export const ENEMY_DMG_GROWTH2 = 0.6;
+export const ENEMY_HP_GROWTH2 = 8.0;
+export const ENEMY_DMG_GROWTH = 3.0;
+export const ENEMY_DMG_GROWTH2 = 8.0;
+/** Armor is a percentage with diminishing returns: armor / (armor + ARMOR_K) of every hit is absorbed, at most ARMOR_CAP (34 armor = -46%, 20 = -33%) */
+export const ARMOR_K = 40;
+export const ARMOR_CAP = 0.6;
+export const armorReduction = (armor: number) => Math.min(ARMOR_CAP, Math.max(0, armor) / (Math.max(0, armor) + ARMOR_K));
+/** damage that lands after armor: never below 1 */
+export const mitigated = (dmg: number, armor: number) => Math.max(1, dmg * (1 - armorReduction(armor)));
 export const enemyHpMult = (p: number) => 1 + ENEMY_HP_GROWTH * p + ENEMY_HP_GROWTH2 * p * p;
 export const enemyDmgMult = (p: number) => 1 + ENEMY_DMG_GROWTH * p + ENEMY_DMG_GROWTH2 * p * p;
 /**
@@ -161,12 +167,12 @@ const B = (name: string, id: number, hp: number, speed: number, dmg: number, xp:
   nova: m.includes('nova'), summon: m.includes('summon'), berserk: m.includes('berserk'), ailments,
 });
 export const BOSSES: BossDef[] = [
-  B('Mano', 2220000, 900, 5.2, 20, 60, 1.6, 'nova', [AIL_WEAKNESS]),
-  B('Mushmom', 6130101, 2400, 5.4, 32, 120, 1.6, 'nova summon', [AIL_POISON]),
-  B('King Slime', 9300003, 6000, 4.0, 45, 200, 1.7, 'summon berserk', [AIL_WEAKNESS]),
-  B('Zombie Mushmom', 6300005, 11000, 5.6, 55, 300, 1.7, 'nova summon berserk', [AIL_CURSE]),
-  B('Jr. Balrog', 8130100, 20000, 5.0, 70, 400, 1.8, 'nova summon berserk', [AIL_SEAL]),
-  B('Zakum', 8800000, 42000, 4.8, 90, 500, 1.8, 'nova summon berserk', [AIL_DARKNESS, AIL_SEAL]),
+  B('Mano', 2220000, 1200, 5.2, 20, 60, 1.6, 'nova', [AIL_WEAKNESS]),
+  B('Mushmom', 6130101, 8000, 5.4, 32, 120, 1.6, 'nova summon', [AIL_POISON]),
+  B('King Slime', 9300003, 25000, 4.0, 45, 200, 1.7, 'summon berserk', [AIL_WEAKNESS]),
+  B('Zombie Mushmom', 6300005, 45000, 5.6, 55, 300, 1.7, 'nova summon berserk', [AIL_CURSE]),
+  B('Jr. Balrog', 8130100, 75000, 5.0, 70, 400, 1.8, 'nova summon berserk', [AIL_SEAL]),
+  B('Zakum', 8800000, 150000, 4.8, 90, 500, 1.8, 'nova summon berserk', [AIL_DARKNESS, AIL_SEAL]),
 ];
 /** bosses per boss time: from the 3rd boss on a wave brings companions (earlier-ladder bosses at BOSS_COMPANION_HP of their health) */
 export const BOSS_WAVES = [1, 1, 2, 2, 3, 3];
@@ -205,8 +211,9 @@ export function poolLo(elapsed: number): number {
   return Math.min(span, Math.floor((Math.max(0, step - 1) * span) / 27));
 }
 
+/** the alive target: 24 at the start, +360 over the run, capped at MAX_ALIVE (reached at 11:07) */
 export function aliveTarget(elapsed: number): number {
-  return Math.min(MAX_ALIVE, Math.floor(14 + 225 * progress(elapsed)));
+  return Math.min(MAX_ALIVE, Math.floor(24 + 360 * progress(elapsed)));
 }
 
 export function mesoValue(tier: number): number {
