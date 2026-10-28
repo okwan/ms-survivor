@@ -14,6 +14,11 @@ class Theme {
     return !!this.art;
   }
 
+  /** names of the pieces that start with a prefix, sorted (login backdrop layers by rank) */
+  names(prefix: string): string[] {
+    return Object.keys(this.art?.pieces ?? {}).filter((k) => k.startsWith(prefix)).sort();
+  }
+
   has(name: string): boolean {
     return !!this.art?.pieces[name];
   }
@@ -47,9 +52,10 @@ class Theme {
 
   /** The level as MapleStory's big level digits. */
   lv(n: number, scale = 2): string {
-    if (!this.art || !this.has('lv.0')) return String(n);
+    const set = this.has('sb.lvn.0') && this.has('sb.lvn.9') ? 'sb.lvn' : 'lv';
+    if (!this.art || !this.has(`${set}.0`)) return String(n);
     let out = '';
-    for (const ch of String(n)) out += this.has(`lv.${ch}`) ? this.img(`lv.${ch}`, scale) : ch;
+    for (const ch of String(n)) out += this.has(`${set}.${ch}`) ? this.img(`${set}.${ch}`, scale) : ch;
     return `<span class="mnum">${out}</span>`;
   }
 }
@@ -86,7 +92,17 @@ export function applyUiTheme(ui: UiArt | null) {
     set('ms-hp', !!P['sb.hp']);
     const exp = P['sb.exp'] ? 'sb.exp' : P['sb.expGreen'] ? 'sb.expGreen' : P['sb.tempExp'] ? 'sb.tempExp' : '';
     if (exp) { st.setProperty('--u-expfill', url(exp)); st.setProperty('--u-expfill-h', `${P[exp].h}px`); st.setProperty('--u-expfill-size', P[exp].w <= 2 ? '100% 100%' : 'auto 100%'); root.classList.add('ms-exp'); }
+    st.setProperty('--exp-base', exp === 'sb.expGreen' ? '110' : '50');
+    for (const n of ['hp', 'mp']) if (P[`sb.${n}`]) st.setProperty(`--u-${n}-size`, P[`sb.${n}`].w <= 2 ? '100% 100%' : 'auto 100%');
+    set('ms-mp', !!P['sb.mp']);
     set('ms-gray', !!P['sb.gray']);
+    set('ms-login', !!P['login.btLogin.normal'] || !!P['login.signboard'] || !!P['login.back.back0'] || Object.keys(P).some((k) => k.startsWith('login.back.')));
+    set('ms-loginbtn', !!P['login.btLogin.normal'] && !!P['login.btNew.normal']);
+    set('ms-csbtn', !!P['cs.btSelect.normal'] && !!P['cs.btNew.normal']);
+    set('ms-cstag', !!P['cs.info']);
+    set('ms-signboard', !!P['login.signboard']);
+    set('ms-btn-close', !!P['btn.close.normal']);
+    set('ms-tabs', !!P['item.tab.on.0'] && !!P['item.tab.off.0']);
     set('ms-num', !!P['sb.n.0'] && !!P['sb.n.9']);
     set('ms-lv', !!P['lv.0'] && !!P['lv.9']);
     set('ms-menu', !!P['sb.menu.normal']);

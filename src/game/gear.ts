@@ -13,6 +13,8 @@ import type { Rng } from './rng.ts';
 export type GearSlot = 'cap' | 'coat' | 'pants' | 'shoes' | 'glove' | 'cape' | 'shield' | 'weapon';
 export const GEAR_SLOTS: GearSlot[] = ['cap', 'coat', 'pants', 'shoes', 'glove', 'cape', 'shield', 'weapon'];
 export const GEAR_SLOT_NAMES: Record<GearSlot, string> = { cap: 'Cap', coat: 'Top', pants: 'Bottom', shoes: 'Shoes', glove: 'Gloves', cape: 'Cape', shield: 'Shield', weapon: 'Weapon' };
+/** unequipped items a hero can carry */
+export const BAG_SIZE = 24;
 /** job bit of a class in an item's reqJob (0 = every class) */
 export const JOB_BIT: Record<ClassKey, number> = { warrior: 1, magician: 2, bowman: 4, thief: 8 };
 /** the stat that counts as "main" for each class */

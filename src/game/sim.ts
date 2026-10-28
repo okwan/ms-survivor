@@ -9,7 +9,7 @@ import { regionAt } from './regions.ts';
 import { SpatialGrid } from './grid.ts';
 import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
-import { GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
+import { BAG_SIZE, GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
 import type { GearItem, GearSlot } from './gear.ts';
 import { BAG, ELIXIR, GEAR, GEM, MESO, POTION, SCROLL } from './types.ts';
 import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
@@ -81,6 +81,10 @@ export class Sim {
   gearToast: { seq: number; item: GearItem; kind: 'equipped' | 'offer'; until: number } | null = null;
   /** equipped set changed: the renderer re-composites the hero when this counts up */
   gearVersion = 0;
+  /** unequipped items the hero carries (newest last, at most BAG_SIZE; the oldest is dropped when full) */
+  bag: GearItem[] = [];
+  /** counts up on every bag change (the inventory window redraws on it) */
+  bagVersion = 0;
   autoEquip = true;
   gearDrops = 0;
   private gearRng: Rng;
@@ -418,18 +422,49 @@ export class Sim {
       this.equip(it, true);
       return 'equipped';
     }
+    this.addToBag(it);
     this.gearOffer = { item: it, until: this.t + GEAR_OFFER_SECONDS };
     this.gearToast = { seq: (this.gearToast?.seq ?? 0) + 1, item: it, kind: 'offer', until: this.t + GEAR_OFFER_SECONDS };
     return 'offered';
   }
 
+  private addToBag(it: GearItem) {
+    this.bag.push(it);
+    if (this.bag.length > BAG_SIZE) this.bag.shift();
+    this.bagVersion++;
+  }
+
+  /** Wear the item; the one it replaces goes to the bag, and the item leaves the bag if it came from there. */
   equip(it: GearItem, auto = false) {
+    const bi = this.bag.indexOf(it);
+    if (bi >= 0) { this.bag.splice(bi, 1); this.bagVersion++; }
+    const old = this.equipped[it.slot];
+    if (old && old !== it) this.addToBag(old);
     this.equipped[it.slot] = it;
     if (this.gearOffer?.item.slot === it.slot) this.gearOffer = null;
     this.gearVersion++;
     this.gearToast = { seq: (this.gearToast?.seq ?? 0) + 1, item: it, kind: 'equipped', until: this.t + 3 };
     this.recalc();
     this.emit({ type: 'equip', id: it.id, slot: it.slot, auto });
+  }
+
+  /** Inventory double-click: wear the bag item with this id. */
+  equipFromBag(id: string): boolean {
+    const it = this.bag.find((b) => b.id === id);
+    if (!it) return false;
+    this.equip(it, false);
+    return true;
+  }
+
+  /** Take a worn item off into the bag (false when the slot is empty or the bag is full). */
+  unequip(slot: GearSlot): boolean {
+    const it = this.equipped[slot];
+    if (!it || this.bag.length >= BAG_SIZE) return false;
+    delete this.equipped[slot];
+    this.addToBag(it);
+    this.gearVersion++;
+    this.recalc();
+    return true;
   }
 
   /** E: wear the offered item. */

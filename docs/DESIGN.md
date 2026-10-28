@@ -170,3 +170,10 @@ String.wz name for the map banner. The renderer cross-fades ground and decor ove
 Sound effects come from Sound.wz (`scripts/fetch-maple-sfx.ts`, keys in `src/maple/region-types.ts`) and play through
 `src/maple/sfx.ts`, which maps the sim's events to sounds; the sim itself stays free of audio. Everything degrades to the old look
 and silence when the manifest lacks `regions` / `sfx`.
+
+## Classic MapleStory UI (src/ui)
+
+- Title: `login.ts` builds the classic login screen (Map.wz `Back/login.img` sky, strip and drifting clouds, `Login.img` logo, signboard, `BtLogin`/`BtNew`) and the character select stage (name tag, level, job). It is used only when both real buttons were extracted; otherwise the plain title window stays. `Screens.addTitleButton(label, fn)` adds a button to either title (Monster Book slot).
+- Status bar: `hud.ts`, laid out at 800x71 and scaled by `--sbs` (`layout.ts statusScale`: whole multiples when wide, shrinks to fit when narrow). HP red, MP blue (= average skill cooldown readiness), EXP along the bottom, tinted by class (warrior red, magician blue, bowman green, thief purple; the real gauge image is hue-rotated from its own base hue). Quick slots show the active skills with a cooldown overlay and the passives small.
+- Windows: `windows.ts` Equip (Q), Inventory (I), Stats (C): draggable by the title, never pause, close with X or the key. Slot coordinates live in `layout.ts` (tested). The Inventory shows `sim.bag` (up to 24 unequipped items; `sim.equipFromBag(id)`, `sim.unequip(slot)`); double-click or right-click wears / takes off.
+- `window.game.ui()` returns `{screen, windows}` for bot tests.
