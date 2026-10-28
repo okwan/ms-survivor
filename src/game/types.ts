@@ -49,6 +49,44 @@ export interface Enemy {
   vy: number;
   /** event timer: seconds left of a treasure pig's run, the next fire patch of a Blazing elite */
   evT: number;
+  /** Mob behaviour (src/game/mobai.ts): BEH_* (0 for bosses and event mobs), flyers skip the crowding, an admitted ranged mob is a shooter */
+  behave: number;
+  fly: boolean;
+  shooter: boolean;
+  /** behaviour state (charge: CHARGE_* phase) and its timer: seconds to the next shot, or left in the phase / cooldown */
+  bS: number;
+  bT: number;
+  /** charge: locked dash direction; ranged: bd is the distance it stops at */
+  bx: number;
+  by: number;
+  bd: number;
+  /** seconds left of the attack pose (the renderer plays the mob's attack1) */
+  atk: number;
+  /** bosses: seconds to the next ailment cast and left of the current one (0 = not casting) */
+  ailT: number;
+  ailC: number;
+}
+
+/** Enemy.behave values */
+export const BEH_WALK = 0, BEH_RANGED = 1, BEH_CHARGE = 2;
+/** Enemy.bS values of a charging mob */
+export const CHARGE_IDLE = 0, CHARGE_TELEGRAPH = 1, CHARGE_DASH = 2;
+
+/** A projectile a ranged mob shot at the hero (pooled by src/game/mobai.ts) */
+export interface EnemyShot {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** seconds left */
+  life: number;
+  /** seconds since it was shot (the renderer animates the ball with it) */
+  age: number;
+  dmg: number;
+  /** ladder tier of the shooter (picks the art) */
+  tier: number;
+  /** AIL_* it applies on a hit, 0 for none */
+  ail: number;
 }
 
 export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -154,6 +192,8 @@ export type SimEvent =
   | { type: 'death'; x: number; y: number; tier: number; boss: number; big: boolean; facing: number }
   | { type: 'cast'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number; r: number; pts: number[] | null }
   | { type: 'novaHit'; x: number; y: number; r: number; hit: boolean }
+  | { type: 'ailHit'; x: number; y: number; r: number; hit: boolean }
+  | { type: 'ailment'; ail: number; name: string; text: string }
   | { type: 'pickup'; kind: PickupKind; x: number; y: number; value: number }
   | { type: 'drop'; x: number; y: number; id: string; name: string; boss: boolean; /** item tier of a gear drop; absent for scrolls */ tier?: number }
   | { type: 'equip'; id: string; slot: string; auto: boolean }

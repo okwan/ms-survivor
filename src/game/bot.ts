@@ -1,5 +1,6 @@
 import type { Sim } from './sim.ts';
-import { EV_BOX, EV_TREASURE, FIELD, GACHA, GEM, MASTERY } from './types.ts';
+import { AIL_RADIUS } from './mobai.ts';
+import { BEH_CHARGE, CHARGE_IDLE, EV_BOX, EV_TREASURE, FIELD, GACHA, GEM, MASTERY } from './types.ts';
 
 /**
  * Simple kiting bot: flee close enemies (with a sideways bias so it circles), otherwise
@@ -23,6 +24,36 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
     const w = (k * k * (e.boss >= 0 ? 3 : 1)) / d;
     fx += dx * w;
     fy += dy * w;
+  }
+  // step off the line of a charging mob, out of a casting boss's ailment circle, and aside from a shot that would hit
+  let sx = 0, sy = 0;
+  for (let i = 0; i < es.length; i++) {
+    const e = es[i];
+    if (!e.alive) continue;
+    const dx = px - e.x, dy = py - e.y;
+    if (e.behave === BEH_CHARGE && e.bS !== CHARGE_IDLE) {
+      const along = dx * e.bx + dy * e.by, side = dx * -e.by + dy * e.bx;
+      if (along > -1 && along < 14 && side > -2.4 && side < 2.4) {
+        const k = side >= 0 ? 1 : -1;
+        sx += -e.by * k; sy += e.bx * k;
+      }
+    } else if (e.ailC > 0) {
+      const d2 = dx * dx + dy * dy, r = AIL_RADIUS + 2.5;
+      if (d2 < r * r) { const d = Math.sqrt(d2) || 0.01; sx += (dx / d) * 3; sy += (dy / d) * 3; }
+    }
+  }
+  const shots = sim.mobs.shots;
+  for (let i = 0; i < shots.length; i++) {
+    const s = shots[i];
+    const rx = px - s.x, ry = py - s.y, v2 = s.vx * s.vx + s.vy * s.vy;
+    if (v2 < 0.01) continue;
+    const t = (rx * s.vx + ry * s.vy) / v2;
+    if (t < 0 || t > 0.9 || t > s.life) continue;
+    const cx = rx - s.vx * t, cy = ry - s.vy * t;
+    if (cx * cx + cy * cy > 2 * 2) continue;
+    // push to the side the hero is already on
+    const side = rx * -s.vy + ry * s.vx >= 0 ? 1 : -1, inv = 1 / Math.sqrt(v2);
+    sx += -s.vy * inv * side; sy += s.vx * inv * side;
   }
   // quiet enough to detour for a box or a Treasure Pig
   const calm = fx * fx + fy * fy < 0.04;
@@ -59,8 +90,8 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
     x = Math.cos(sim.t * 0.4) * 0.4;
     y = Math.sin(sim.t * 0.4) * 0.4;
   }
-  x += fx * 2.2 - fy * 0.6 * spin;
-  y += fy * 2.2 + fx * 0.6 * spin;
+  x += fx * 2.2 - fy * 0.6 * spin + sx;
+  y += fy * 2.2 + fx * 0.6 * spin + sy;
   const l = Math.hypot(x, y) || 1;
   out.x = x / l;
   out.y = y / l;

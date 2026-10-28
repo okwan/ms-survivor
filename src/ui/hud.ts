@@ -1,5 +1,6 @@
 import { EVOLUTION_PASSIVE_SLOTS } from '../game/evolutions.ts';
 import { BOSSES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
+import { AILMENTS } from '../game/ailments.ts';
 import { FIELD_ITEMS } from '../game/fieldItems.ts';
 import type { Sim } from '../game/sim.ts';
 import { Radar } from './radar.ts';
@@ -46,7 +47,9 @@ export class Hud {
     r.className = 'hud';
     r.innerHTML = `
       <div class="hud-tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div>
-        <div class="buffs">${BUFFS.map((b, i) => `<div class="buff" data-k="buff${i}" title="${FIELD_ITEMS[b.item].name}"><img alt="" data-k="bufficon${i}"><b data-k="bufftime${i}"></b></div>`).join('')}</div></div>
+        <div class="buffs">${BUFFS.map((b, i) => `<div class="buff" data-k="buff${i}" title="${FIELD_ITEMS[b.item].name}"><img alt="" data-k="bufficon${i}"><b data-k="bufftime${i}"></b></div>`).join('')}
+          ${AILMENTS.map((a) => `<div class="buff ail" data-k="ail${a.id}" title="${a.name}: ${a.desc}" style="border-color:${a.color}"><img alt="" data-k="ailicon${a.id}"><b data-k="ailtime${a.id}"></b></div>`).join('')}</div></div>
+      <div class="vignette" data-k="vignette"></div>
       <div class="hud-top">
         <div class="clock" data-k="clock">0:00</div>
         <div class="nextboss" data-k="next">NEXT BOSS 2:15</div>
@@ -257,6 +260,20 @@ export class Hud {
       this.text(this.el['bufftime' + i], String(Math.ceil(left)));
       this.el['buff' + i].classList.toggle('low', left < 5);
     }
+
+    // ailments: a chip with the seconds left each; Darkness also darkens the screen edges
+    for (const a of AILMENTS) {
+      const left = sim.ail.left[a.id];
+      const on = left > 0;
+      this.disp(this.el['ail' + a.id], on);
+      if (!on) continue;
+      const img = this.el['ailicon' + a.id] as HTMLImageElement;
+      const src = this.icons['ail' + a.id] ?? '';
+      if (this.cache.get(img) !== src) { this.cache.set(img, src); img.src = src; }
+      this.text(this.el['ailtime' + a.id], String(Math.ceil(left)));
+      this.el['ail' + a.id].classList.toggle('low', left < 1.5);
+    }
+    this.el.vignette.classList.toggle('on', sim.ail.dark);
 
     this.radar.draw(sim);
   }

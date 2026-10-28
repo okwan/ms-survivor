@@ -93,8 +93,8 @@ for (const seed of [3, 11, 29]) {
   ok(at.length >= 11 && at.length <= 18, `seed ${seed}: ${at.length} Elites in 15 minutes`);
   ok(at[0] >= ELITE_FIRST - 0.01 && at[0] < ELITE_FIRST + 12, `seed ${seed}: the first Elite at ${at[0]?.toFixed(1)} s (from 0:45)`);
   let gapsOk = true;
-  for (let i = 1; i < at.length; i++) { const g = at[i] - at[i - 1]; if (g < ELITE_GAP_MIN - 0.01 || g > ELITE_GAP_MAX + 20) gapsOk = false; }
-  ok(gapsOk, `seed ${seed}: gaps between Elites ${at.slice(1).map((t, i) => (t - at[i]).toFixed(0)).join(' ')} s are 50 to 70 s (plus the wait for a spawn)`);
+  for (let i = 1; i < at.length; i++) { const g = at[i] - at[i - 1]; if (g < ELITE_GAP_MIN - 0.01 || g > ELITE_GAP_MAX + 40) gapsOk = false; }
+  ok(gapsOk, `seed ${seed}: gaps between Elites ${at.slice(1).map((t, i) => (t - at[i]).toFixed(0)).join(' ')} s are 50 to 70 s (plus the wait for a spawn, or while two bosses live)`);
   eq(banners.length, at.length, `seed ${seed}: a banner for every Elite`);
   ok(banners.every((b) => /^An Elite .+ appears!$/.test(b)), `seed ${seed}: banner text "An Elite <Name> appears!" (${banners[0]})`);
 }

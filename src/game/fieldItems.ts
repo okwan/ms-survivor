@@ -6,6 +6,7 @@
  * draws. Pure (no DOM).
  */
 import { SPAWN_RING_MAX, SPAWN_RING_MIN } from './data.ts';
+import { cureAilments } from './ailments.ts';
 import { Rng } from './rng.ts';
 import type { Sim } from './sim.ts';
 import { EV_BOX, FIELD, GEM } from './types.ts';
@@ -124,6 +125,7 @@ export function useFieldItem(sim: Sim, item: number, x: number, y: number) {
   switch (item) {
     case FIELD_APPLE:
       sim.hp = Math.min(sim.maxHp, sim.hp + sim.maxHp * APPLE_HEAL);
+      cureAilments(sim);
       break;
     case FIELD_COUPON: {
       f.couponT = COUPON_SECONDS;

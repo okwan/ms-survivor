@@ -311,6 +311,15 @@ function extractMobs(mobs: WzSet | null, strings: WzSet | null, dist: string, re
           frames.push(...dec);
           counts.push(`${action}${from !== action ? `(${from})` : ''}:${dec.length}`);
         }
+        // the ball a ranged mob shoots (attack1/info/ball); most mobs have none, and the game then draws a placeholder
+        for (const img of chain) {
+          const list = canvasList(img.root.get('attack1/info/ball'));
+          if (!list.length) continue;
+          const dec = decodeFrames(list, img.key, 'ball', problems);
+          frames.push(...dec);
+          counts.push(`ball:${dec.length}`);
+          break;
+        }
         for (const p of problems.slice(0, 3)) warn(`mob ${want.id} ${want.name}: ${p}`);
         const { atlas, dropped } = packLimited(frames);
         if (dropped.length) warn(`mob ${want.id} ${want.name}: atlas too tall, dropped ${dropped.join(', ')}`);

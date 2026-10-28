@@ -1,5 +1,6 @@
 import { Texture } from 'pixi.js';
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
+import { AILMENTS } from '../game/ailments.ts';
 import { EVOLVED_SKILLS } from '../game/evolutions.ts';
 
 /** Textures are drawn at RES x and displayed at 1/RES. */
@@ -223,6 +224,8 @@ export interface Textures {
   /** field items (Apple, 2x EXP Coupon, Warrior Elixir, Ludibrium Clock, Powder Keg) and the breakable Maple box: placeholders for the extracted icons */
   field: Texture[];
   box: Texture;
+  /** projectiles of ranged mobs without extracted art: Lupin's banana and a purple orb for everyone else */
+  shots: { banana: Texture; orb: Texture };
   missiles: Record<string, Texture>;
   ring: Texture;
   disc: Texture;
@@ -436,6 +439,54 @@ export function fieldCanvas(item: number, S: number): HTMLCanvasElement {
   return c;
 }
 
+/** The five ailment chips (Seal, Darkness, Weakness, Curse, Poison) on an S pixel canvas: a coloured badge with a glyph, also the HUD chips */
+export function ailCanvas(id: number, S: number): HTMLCanvasElement {
+  const [c, ctx] = canvas(S, S);
+  ctx.scale(S / 28, S / 28);
+  const col = AILMENTS[id - 1].color;
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#1a1a2a'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.fillStyle = '#24284a'; ctx.beginPath(); ctx.roundRect(1, 1, 26, 26, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 2.6;
+  switch (id) {
+    case 1: // Seal: a lock
+      ctx.beginPath(); ctx.roundRect(7, 13, 14, 10, 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(14, 12, 4.5, Math.PI, 0); ctx.stroke();
+      break;
+    case 2: // Darkness: a crescent
+      ctx.beginPath(); ctx.arc(14, 14, 8, 0, 7); ctx.fill();
+      ctx.fillStyle = '#24284a'; ctx.beginPath(); ctx.arc(18, 11, 7, 0, 7); ctx.fill();
+      break;
+    case 3: // Weakness: a down arrow
+      ctx.beginPath(); ctx.moveTo(14, 5); ctx.lineTo(14, 18); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(7, 15); ctx.lineTo(14, 23); ctx.lineTo(21, 15); ctx.closePath(); ctx.fill();
+      break;
+    case 4: // Curse: a skull
+      ctx.beginPath(); ctx.arc(14, 12, 8, 0, 7); ctx.fill(); ctx.fillRect(10, 16, 8, 7);
+      ctx.fillStyle = '#24284a'; ctx.beginPath(); ctx.arc(11, 12, 2.2, 0, 7); ctx.arc(17, 12, 2.2, 0, 7); ctx.fill();
+      break;
+    default: // Poison: a drop
+      ctx.beginPath(); ctx.moveTo(14, 4); ctx.quadraticCurveTo(23, 14, 20, 20); ctx.quadraticCurveTo(14, 26, 8, 20); ctx.quadraticCurveTo(5, 14, 14, 4); ctx.fill();
+  }
+  return c;
+}
+
+/** Shots of ranged mobs: a banana (Lupin) and a purple orb */
+function drawShots(): { banana: Texture; orb: Texture } {
+  const S = 24 * RES;
+  let [c, ctx] = canvas(S, S);
+  ctx.scale(S / 24, S / 24);
+  ctx.lineWidth = 1.6; ctx.strokeStyle = '#6a4a08'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.fillStyle = '#ffe14a';
+  ctx.beginPath(); ctx.moveTo(3, 7); ctx.quadraticCurveTo(10, 24, 21, 15); ctx.quadraticCurveTo(12, 17, 7, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#7a5a1a'; ctx.fillRect(2.5, 3.5, 3, 3);
+  const banana = tex(c);
+  [c, ctx] = canvas(S, S);
+  const g = ctx.createRadialGradient(S / 2, S / 2, 1, S / 2, S / 2, S / 2);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#e0b0ff'); g.addColorStop(0.7, '#a040f0'); g.addColorStop(1, 'rgba(110,30,200,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  return { banana, orb: tex(c) };
+}
+
 /** The breakable Maple box: a wooden crate with metal corners */
 function drawBox(): Texture {
   const S = 34 * RES;
@@ -536,6 +587,7 @@ export function buildTextures(): Textures {
   icons.mesobag = iconDataUrl('$', '#c89020', 3);
   icons.gacha = gachaCanvas(48).toDataURL();
   for (let i = 0; i < 5; i++) icons['field' + i] = fieldCanvas(i, 48).toDataURL();
+  for (const a of AILMENTS) icons['ail' + a.id] = ailCanvas(a.id, 48).toDataURL();
   const [bc, bctx] = canvas(2, 2);
   bctx.fillStyle = '#fff'; bctx.fillRect(0, 0, 2, 2);
   return {
@@ -552,6 +604,7 @@ export function buildTextures(): Textures {
     book: drawBook(),
     field: [0, 1, 2, 3, 4].map((i) => tex(fieldCanvas(i, 28 * RES))),
     box: drawBox(),
+    shots: drawShots(),
     missiles: drawMissiles(),
     ring: drawRing(),
     disc: radial(64, [[0, 'rgba(255,255,255,1)'], [0.7, 'rgba(255,255,255,0.85)'], [1, 'rgba(255,255,255,0)']]),
