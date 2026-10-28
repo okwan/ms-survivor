@@ -16,16 +16,46 @@ export const MAX_PASSIVES = 6;
 export const SKILL_MAX_LEVEL = 8;
 export const PASSIVE_MAX_LEVEL = 5;
 /**
- * Character level makes every hit bigger, like stat points in MapleStory. Runs reach level 200+, so the bonus grows with the
- * square root of levels gained: x1.6 at level 10, x2.2 at 40, x3.8 at 200.
+ * Character level makes every hit bigger, like stat points in MapleStory. Runs reach level 200+: the bonus grows with the square
+ * root of levels gained (x1.6 at level 10, x2.2 at 40), and from level 40 on a steady +2% per level keeps every level band
+ * visibly stronger (x3.6 at 80, x6.8 at 190).
  */
-export const levelDamageMult = (level: number) => 1 + 0.2 * Math.sqrt(Math.max(0, level - 1));
+export const levelDamageMult = (level: number) => 1 + 0.2 * Math.sqrt(Math.max(0, level - 1)) + 0.02 * Math.max(0, level - 40);
 /** Max HP gained per character level, up to level LEVEL_HP_CAP */
 export const LEVEL_HP = 3;
-export const LEVEL_HP_CAP = 60;
-/** Enemy health and contact damage grow with run progress p (0..1): x(1 + GROWTH * p) */
-export const ENEMY_HP_GROWTH = 3;
+export const LEVEL_HP_CAP = 90;
+/**
+ * Enemy health and contact damage grow with run progress p (0..1): x(1 + a p + b p^2). The quadratic term keeps the first minutes as
+ * gentle as before (x1.4 health at 2 minutes) and makes the late game bite: health x8 and damage x2.5 at 15 minutes.
+ */
+export const ENEMY_HP_GROWTH = 2.5;
+export const ENEMY_HP_GROWTH2 = 4.5;
 export const ENEMY_DMG_GROWTH = 0.9;
+export const ENEMY_DMG_GROWTH2 = 0.6;
+export const enemyHpMult = (p: number) => 1 + ENEMY_HP_GROWTH * p + ENEMY_HP_GROWTH2 * p * p;
+export const enemyDmgMult = (p: number) => 1 + ENEMY_DMG_GROWTH * p + ENEMY_DMG_GROWTH2 * p * p;
+/**
+ * Mob.wz info/speed is an offset in percent (0 normal, -100 slowest, positive faster): move speed = BASE_ENEMY_SPEED * (1 + speed / 100),
+ * never below MIN_SPEED_FACTOR of the base and never above ENEMY_SPEED_CAP of the hero's base speed, so nothing outruns the hero.
+ */
+export const BASE_ENEMY_SPEED = 4.4;
+export const MIN_SPEED_FACTOR = 0.3;
+export const MAX_SPEED_FACTOR = 2;
+export const ENEMY_SPEED_CAP = 0.95;
+/** speed multiplier of a mob from its info/speed (or info/flySpeed for flyers) offset, and info/fs (a float multiplier) when no offset exists; undefined when the data has neither */
+export function mobSpeedFactor(info: { speed?: number; flySpeed?: number; fs?: number }, flies = false): number | undefined {
+  const off = flies && info.flySpeed !== undefined ? info.flySpeed : info.speed;
+  let f: number | undefined;
+  if (typeof off === 'number' && Number.isFinite(off)) f = 1 + off / 100;
+  else if (typeof info.fs === 'number' && Number.isFinite(info.fs) && info.fs > 0) f = info.fs;
+  if (f === undefined) return undefined;
+  return Math.max(MIN_SPEED_FACTOR, Math.min(MAX_SPEED_FACTOR, f));
+}
+/** yd/s of an enemy: the hand-tuned `fallback` unless the manifest gave a factor, always at most ENEMY_SPEED_CAP of the hero's base speed */
+export function enemySpeed(fallback: number, factor: number | undefined, heroSpeed: number): number {
+  const v = factor === undefined ? fallback : BASE_ENEMY_SPEED * factor;
+  return Math.min(v, ENEMY_SPEED_CAP * heroSpeed);
+}
 export const START_REROLLS = 2;
 export const START_BANISHES = 2;
 
@@ -104,13 +134,20 @@ const B = (name: string, id: number, hp: number, speed: number, dmg: number, xp:
   nova: m.includes('nova'), summon: m.includes('summon'), berserk: m.includes('berserk'),
 });
 export const BOSSES: BossDef[] = [
-  B('Mano', 2220000, 700, 5.2, 20, 60, 1.6, 'nova'),
-  B('Mushmom', 6130101, 1800, 5.4, 32, 120, 1.6, 'nova summon'),
-  B('King Slime', 9300003, 4200, 4.0, 45, 200, 1.7, 'summon berserk'),
-  B('Zombie Mushmom', 6300005, 7000, 5.6, 55, 300, 1.7, 'nova summon berserk'),
-  B('Jr. Balrog', 8130100, 12000, 5.0, 70, 400, 1.8, 'nova summon berserk'),
-  B('Zakum', 8800000, 20000, 4.8, 90, 500, 1.8, 'nova summon berserk'),
+  B('Mano', 2220000, 900, 5.2, 20, 60, 1.6, 'nova'),
+  B('Mushmom', 6130101, 2400, 5.4, 32, 120, 1.6, 'nova summon'),
+  B('King Slime', 9300003, 6000, 4.0, 45, 200, 1.7, 'summon berserk'),
+  B('Zombie Mushmom', 6300005, 11000, 5.6, 55, 300, 1.7, 'nova summon berserk'),
+  B('Jr. Balrog', 8130100, 20000, 5.0, 70, 400, 1.8, 'nova summon berserk'),
+  B('Zakum', 8800000, 42000, 4.8, 90, 500, 1.8, 'nova summon berserk'),
 ];
+/** bosses per boss time: from the 3rd boss on a wave brings companions (earlier-ladder bosses at BOSS_COMPANION_HP of their health) */
+export const BOSS_WAVES = [1, 1, 2, 2, 3, 3];
+export const BOSS_COMPANION_HP = 0.7;
+/** bosses in a full run: the sum of the waves */
+export const BOSS_TOTAL = BOSS_WAVES.reduce((a, b) => a + b, 0);
+/** most boss health bars shown at once */
+export const BOSS_BARS = 3;
 export const NOVA_EVERY = 10;
 export const NOVA_CAST = 2.0;
 export const NOVA_RADIUS = 9;
@@ -365,6 +402,37 @@ export const PASSIVES: PassiveDef[] = [
 ];
 export const PASSIVE_BY_KEY: Record<string, PassiveDef> = Object.fromEntries(PASSIVES.map((p) => [p.key, p]));
 
+// ---- Masteries: endless upgrades once the skill and passive slots are maxed or full -------------------------
+
+export type MasteryKey = 'mastery' | 'vitality' | 'swiftness' | 'focus' | 'haste' | 'reach' | 'magnet';
+export interface MasteryDef {
+  key: MasteryKey;
+  name: string;
+  /** stat gained per stack (fraction) */
+  per: number;
+  /** most the stacks can add in total (Infinity = no cap) */
+  cap: number;
+  desc: string;
+}
+export const MASTERIES: MasteryDef[] = [
+  { key: 'mastery', name: 'Mastery', per: 0.08, cap: Infinity, desc: '+8% damage. Stacks forever.' },
+  { key: 'vitality', name: 'Vitality', per: 0.1, cap: Infinity, desc: '+10% max HP and heals 25%.' },
+  { key: 'swiftness', name: 'Swiftness', per: 0.04, cap: 0.4, desc: '+4% move speed (max +40%).' },
+  { key: 'focus', name: 'Focus', per: 0.03, cap: 0.6, desc: '+3% crit chance (max +60%).' },
+  { key: 'haste', name: 'Haste', per: 0.04, cap: 0.4, desc: '+4% cooldown speed (max +40%).' },
+  { key: 'reach', name: 'Reach', per: 0.06, cap: Infinity, desc: '+6% area.' },
+  { key: 'magnet', name: 'Magnet', per: 0.1, cap: Infinity, desc: '+10% pickup range.' },
+];
+export const MASTERY_BY_KEY: Record<string, MasteryDef> = Object.fromEntries(MASTERIES.map((m) => [m.key, m]));
+/** most stacks of a mastery (Infinity when uncapped) */
+export const masteryMax = (m: MasteryDef) => (m.cap === Infinity ? Infinity : Math.round(m.cap / m.per));
+/** Skill Mastery: damage per stack for the one skill, uncapped */
+export const SKILL_MASTERY_PER = 0.1;
+export const SKILL_MASTERY_PREFIX = 'skill_mastery:';
+export const VITALITY_HEAL = 0.25;
+/** chance that a Mastery card slot after the first turns into an Elixir or Meso Bag instead */
+export const MASTERY_FILLER_CHANCE = 0.1;
+
 // Level scaling (Azeroth `Owned`)
 export const skillDmgMult = (L: number) => 1 + 0.3 * (L - 1);
 export function skillCooldown(def: SkillDef, L: number, haste: number): number {
@@ -491,17 +559,23 @@ export const GEAR_PDD_PER_ARMOR = 10;
 export const GEAR_MHP_PER_HP = 5;
 /** incSPEED points -> move speed fraction per point */
 export const GEAR_SPEED_PER_POINT = 0.005;
-/** drop chances per kill: normal mobs, elite (big or high tier) mobs; bosses always drop GEAR_BOSS_DROPS items */
-export const GEAR_DROP_NORMAL = 0.004;
-export const GEAR_DROP_ELITE = 0.01;
-export const GEAR_BOSS_DROPS = 2;
+/** drop chances per kill: normal mobs, elite (big or high tier) mobs; bosses always drop GEAR_BOSS_DROPS items (one tier above the run tier) */
+export const GEAR_DROP_NORMAL = 0.008;
+export const GEAR_DROP_ELITE = 0.02;
+export const GEAR_BOSS_DROPS = 3;
+/** a boss kill adds one more drop per this many bosses slain before it (bossKills 1..4: 3 drops, 5..8: 4, ...) */
+export const GEAR_BOSS_DROP_STEP = 4;
+export const GEAR_BOSS_DROPS_MAX = 5;
+/** chance that the guaranteed "rare" boss drop is two item tiers above the run tier instead of one */
+export const GEAR_RARE_CHANCE = 0.05;
 /** mobs from this ladder tier up count as elite for gear drops */
 export const GEAR_ELITE_TIER = 18;
-/** chance that a drop is one item tier above the run's current tier */
+/** chance that a normal drop is one item tier above the run's current tier */
 export const GEAR_UPTIER_CHANCE = 0.15;
-/** run seconds per item tier step (tier 0 for the first step, max tier 6) */
-export const GEAR_TIER_SECONDS = 120;
-export const GEAR_MAX_TIER = 6;
+/** run seconds per item tier step; the run starts at tier GEAR_START_TIER and the tier tops out at GEAR_MAX_TIER (after 540 s) */
+export const GEAR_TIER_SECONDS = 90;
+export const GEAR_START_TIER = 1;
+export const GEAR_MAX_TIER = 7;
 /** seconds an "Equip? press E" offer stays up */
 export const GEAR_OFFER_SECONDS = 6;
 export const GEAR_PICKUP_LIFE = 90;

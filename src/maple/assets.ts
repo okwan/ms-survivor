@@ -99,6 +99,8 @@ export interface MobEntry {
   frames: FrameRec[];
   /** maxHP, speed, level, bodyAttack... straight from info/, for reference */
   info: Record<string, number>;
+  /** move-speed factor (1 = the game's base enemy speed) from info/speed or info/flySpeed, clamped; absent when Mob.wz had neither */
+  speed?: number;
 }
 
 export interface SkillEntry {

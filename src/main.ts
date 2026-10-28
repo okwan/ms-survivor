@@ -1,6 +1,6 @@
 import './ui/style.css';
 import { Application } from 'pixi.js';
-import { botInput } from './game/bot.ts';
+import { botInput, botPick } from './game/bot.ts';
 import { CLASS_BY_KEY, DEFAULT_CLASS, RUN_LENGTH, TICK } from './game/data.ts';
 import { Sim } from './game/sim.ts';
 import { buildArt } from './maple/art.ts';
@@ -33,6 +33,8 @@ type Mode = 'title' | 'playing' | 'paused' | 'ended';
 
 /** Real Maple art from maple/manifest.json (written by the deploy step). Null on any failure or after 12 s: the game then uses placeholder art. */
 let avatarManifest: AvatarManifest | null = null;
+/** move-speed factor per mob id from Mob.wz (info/speed), empty without a manifest: the sim then keeps its hand-tuned speeds */
+let mobSpeeds: Record<number, number> = {};
 let mapleManifest: MapleManifest | null = null;
 async function loadArt(): Promise<MapleArt | null> {
   try {
@@ -40,6 +42,8 @@ async function loadArt(): Promise<MapleArt | null> {
       const m = await loadManifest();
       if (!m) return null;
       avatarManifest = m.avatar ?? null;
+      mobSpeeds = {};
+      for (const [id, e] of Object.entries(m.mobs)) if (typeof e.speed === 'number' && Number.isFinite(e.speed)) mobSpeeds[Number(id)] = e.speed;
       mapleManifest = m;
       const art = await buildArt(m);
       console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, ${art.counts.objects} map objects, ${art.counts.digitSets} damage sets, ${art.counts.uiPieces} ui pieces, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
@@ -121,7 +125,7 @@ async function boot() {
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book });
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds });
     sim.god = god;
     gearUi.reset();
     hud.setHero(hero.name, hero.cls);
@@ -240,11 +244,11 @@ async function boot() {
   app.ticker.add((ticker) => {
     const dt = Math.min(0.1, ticker.deltaMS / 1000);
     if (mode === 'playing') {
-      if (autopick && sim.offer) sim.pick(0);
+      if (autopick && sim.offer) sim.pick(botPick(sim));
       acc = Math.min(acc + dt * speed, 0.25 * Math.max(1, speed));
       let guard = Math.ceil(12 * Math.max(1, speed));
       while (acc >= TICK && guard-- > 0 && !sim.over) {
-        if (sim.offer) { if (autopick) sim.pick(0); else break; }
+        if (sim.offer) { if (autopick) sim.pick(botPick(sim)); else break; }
         applyInput();
         sim.tick(TICK);
         acc -= TICK;
@@ -281,7 +285,7 @@ async function boot() {
       step(seconds: number) {
         const n = Math.round(seconds * 60);
         for (let i = 0; i < n && !sim.over; i++) {
-          if (sim.offer) { if (autopick) sim.pick(0); else break; }
+          if (sim.offer) { if (autopick) sim.pick(botPick(sim)); else break; }
           applyInput();
           sim.tick(TICK);
         }
@@ -297,6 +301,7 @@ async function boot() {
       autopick(on: boolean) { autopick = on; },
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
+      renderer,
       hero: () => hero,
       /** what is on screen: the screen name ('login', 'select', 'title', 'create', 'playing', 'paused', 'ended') and the open game windows */
       ui: () => ({ screen: mode === 'title' ? (create.visible ? 'create' : screens.titleState() || 'title') : mode, windows: gearUi.windows.list().map((w) => w.name) }),

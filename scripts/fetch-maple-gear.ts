@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLASSES } from '../src/game/data.ts';
 import type { ClassKey } from '../src/game/data.ts';
-import { GEAR_SLOTS, JOB_BIT, TIER_LEVELS, tierOfLevel } from '../src/game/gear.ts';
+import { GEAR_SLOTS, JOB_BIT, MAX_GEAR_LEVEL, TIER_LEVELS, tierOfLevel } from '../src/game/gear.ts';
 import type { GearEntry, GearManifest, GearSlot, GearStats } from '../src/game/gear.ts';
 import { compose, defaultLook, itemFile, lookItems, rasterize, stanceActions } from '../src/maple/avatar-core.ts';
 import type { Part, Slot, ZTable } from '../src/maple/avatar-core.ts';
@@ -126,7 +126,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     // ---- scan every equip image's info node ----
     const names = equipNames(strings, lg);
     const cands: Candidate[] = [];
-    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0 };
+    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, tooHigh: 0 };
     const infoKeys = new Map<string, number>();
     const vslots = new Map<string, number>();
     const islots = new Map<string, number>();
@@ -197,9 +197,14 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
         seen.noStats++;
         continue;
       }
-      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level: intOf(val('reqLevel')), job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')) });
+      const level = intOf(val('reqLevel'));
+      if (level > MAX_GEAR_LEVEL) {
+        seen.tooHigh++;
+        continue;
+      }
+      cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')) });
     }
-    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand/walk frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable; filters removed ${seen.noTuc} with tuc <= 0, ${seen.flagged} flagged timeLimited/notSale/exItem/setItemID/charmEXP/tradeBlock, ${seen.noStats} without a usable inc* stat; ${cands.length} candidates`);
+    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand/walk frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable; filters removed ${seen.noTuc} with tuc <= 0, ${seen.flagged} flagged timeLimited/notSale/exItem/setItemID/charmEXP/tradeBlock, ${seen.noStats} without a usable inc* stat, ${seen.tooHigh} above reqLevel ${MAX_GEAR_LEVEL}; ${cands.length} candidates`);
     const top = (m: Map<string, number>, k = 40) => [...m].sort((a, b) => b[1] - a[1]).slice(0, k).map(([s, c]) => `${s || '(none)'}x${c}`).join(' ');
     log(`gear: info keys seen: ${top(infoKeys, 60)}`);
     log(`gear: islot values seen: ${top(islots)}`);
@@ -231,8 +236,8 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
               .map((x) => x.c)
               .sort((a, b) => classic(a.n) - classic(b.n) || a.n - b.n);
             pool.slice(0, PER_BUCKET).forEach((c, rank) => {
-              // tier 3 first-picks come first (the CI preview needs a full set), then the rest of rank 0, then rank 1; spread inside a rank
-              const lead = tier === 3 && rank === 0 ? 0 : 1 + rank;
+              // tier 3 first-picks come first (the CI preview needs a full set), as do the top tier's (the best drops must exist), then the rest of rank 0, then rank 1; spread inside a rank
+              const lead = (tier === 3 || tier === TIER_LEVELS.length - 1) && rank === 0 ? 0 : 1 + rank;
               picks.push({ c, key: lead * 4294967296 + scatter(tier, bi) });
             });
           }
@@ -329,6 +334,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
 
     // ---- report ----
     const perSlot = GEAR_SLOTS.map((s) => `${s} ${Object.values(entries).filter((e) => e.slot === s).length}`).join(', ');
+    log(`gear: items per tier: ${TIER_LEVELS.map((_, t) => `t${t} ${Object.values(entries).filter((e) => tierOfLevel(e.level) === t).length}`).join(', ')}`);
     log(`gear: ${Object.keys(entries).length} items extracted (${perSlot}), ${bytes} bytes (${(bytes / 1e6).toFixed(2)} MB), cap ${MAX_GEAR_ITEMS}`);
     log('gear: id | slot | name | reqLevel | reqJob | gender | stats');
     const rows = Object.entries(entries).slice(0, 40);

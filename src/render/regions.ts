@@ -6,9 +6,10 @@
 import { Container, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { frameAt } from '../maple/art.ts';
 import type { RegionArt } from '../maple/region-art.ts';
+import { FADE, advanceFade, fadeView } from './fade.ts';
 import { BIG, CLUSTER_CELL, MEDIUM, Placements, SMALL, TUFT_CELL, clusterAt, hash3, tuftAt } from './cluster.ts';
 
-export const FADE = 2.5;
+export { FADE };
 const MAX_SPRITES = 360;
 const SAT_MAX = 130;
 
@@ -147,7 +148,7 @@ export class RegionScenery {
       }
       this.cur = region;
     }
-    this.fade = Math.min(1, this.fade + dt / FADE);
+    this.fade = advanceFade(this.fade, dt);
     const f = this.slots[this.front], b = this.slots[this.front ^ 1];
     const ox = w / 2 - camX * zoom, oy = h / 2 - camY * zoom;
     for (const s of [f, b]) {
@@ -156,12 +157,15 @@ export class RegionScenery {
       s.ground.tilePosition.set(ox, oy);
       s.ground.tileScale.set(zoom);
     }
-    const fading = this.fade < 1;
-    f.ground.alpha = fading ? this.fade : 1;
-    f.decor.layer.alpha = fading ? this.fade : 1;
-    b.ground.visible = fading;
-    b.decor.layer.visible = fading;
-    b.decor.layer.alpha = 1 - this.fade;
+    const v = fadeView(this.fade);
+    const fading = v.fading;
+    // the front slot may have been hidden while it was the back one: show it and keep it above the leaving ground
+    f.ground.visible = f.decor.layer.visible = v.frontVisible;
+    f.ground.alpha = f.decor.layer.alpha = v.frontAlpha;
+    if (this.groundLayer.children[this.groundLayer.children.length - 1] !== f.ground) this.groundLayer.addChild(f.ground);
+    b.ground.visible = b.decor.layer.visible = v.backVisible;
+    b.ground.alpha = v.backGroundAlpha;
+    b.decor.layer.alpha = v.backDecorAlpha;
     f.decor.update(camX, camY, zoom, time, w, h);
     if (fading) b.decor.update(camX, camY, zoom, time, w, h);
     // the clear colour follows the fade (it only shows where a ground texture has holes)

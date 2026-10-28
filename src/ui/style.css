@@ -24,6 +24,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .nextboss.soon { background: linear-gradient(#ff6a5a, #c01a1a); animation: pulse .5s infinite alternate; }
 @keyframes pulse { to { transform: scale(1.08); } }
 .bosspanel { margin-top: 8px; }
+.bossrow + .bossrow { margin-top: 4px; }
 .bossname { font-weight: 900; font-size: 15px; color: #ffe27a; letter-spacing: .05em; }
 .bar { position: relative; height: 18px; border: 2px solid #fff; border-radius: 10px; background: #1a1f33; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,.5); }
 .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; }
@@ -122,6 +123,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .tag { background: #dfe9fb; color: var(--blue3); font-weight: 900; font-size: 12px; padding: 1px 10px; border-radius: 10px; }
 .tag.new { background: var(--orange); color: #fff; }
 .card.skill { border-color: #ffd0a0; }
+.card.mastery { border-color: #e0b6ff; }
 .banish { font-family: var(--font); font-size: 11px; font-weight: bold; cursor: pointer; margin-top: 4px; border: 1.5px solid #c9a0a0; background: #fdeeee; color: #a02020; border-radius: 8px; padding: 2px 8px; }
 .banish:disabled { opacity: .45; cursor: default; }
 .lu-row { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }

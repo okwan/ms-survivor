@@ -12,6 +12,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
+import { mobSpeedFactor } from '../src/game/data.ts';
 import { BGM_NODES, MOB_ACTIONS, SKILL_ANIMS, WANTED_MOBS, WANTED_SKILLS, WZ_FILES, pad7 } from '../src/maple/assets.ts';
 import type { FrameRec, MapleManifest, MobEntry, SkillEntry } from '../src/maple/assets.ts';
 import { extractAvatar } from './fetch-maple-character.ts';
@@ -325,7 +326,20 @@ function extractMobs(mobs: WzSet | null, strings: WzSet | null, dist: string, re
               if (typeof v === 'number' && k !== 'link') info[k] = v;
             }
           }
-          out[String(want.id)] = { name: sName ?? want.name, atlas: rel, size: [atlas.w, atlas.h], frames: kept, info };
+          // speed: info/speed (percent offset) or info/flySpeed for flyers, info/fs as a float multiplier; logged for every wanted mob so a CI log shows the real layout
+          const raw = (k: string) => {
+            for (const img of chain) {
+              const v = img.root.get(`info/${k}`)?.value;
+              if (v !== undefined && v !== null && v !== '') return Number(v);
+            }
+            return undefined;
+          };
+          const rawNum = (k: string) => { const v = raw(k); return v === undefined || Number.isNaN(v) ? undefined : v; };
+          const sp = { speed: rawNum('speed'), flySpeed: rawNum('flySpeed'), fs: rawNum('fs') };
+          const flies = chain.some((img) => img.root.get('fly')) && !chain.some((img) => img.root.get('move'));
+          const factor = mobSpeedFactor(sp, flies);
+          log(`mob speed ${want.id} ${want.name}: speed=${sp.speed ?? '-'} flySpeed=${sp.flySpeed ?? '-'} fs=${sp.fs ?? '-'} ${flies ? '(flyer)' : ''} -> factor ${factor === undefined ? 'none (hand-tuned speed kept)' : factor.toFixed(2)}`);
+          out[String(want.id)] = { name: sName ?? want.name, atlas: rel, size: [atlas.w, atlas.h], frames: kept, info, ...(factor !== undefined ? { speed: Math.round(factor * 100) / 100 } : {}) };
           report.mobsOk++;
           report.mobFrames += kept.length;
           summary = `${counts.join(' ')} -> ${atlas.w}x${atlas.h}${chain.length > 1 ? ` (link ${chain.length - 1})` : ''}`;
