@@ -515,6 +515,19 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
   mapImgs['Map/Map1/107000100.img'] = regionMap('darkCave', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // black
   mapImgs['Map/Map1/107000200.img'] = regionMap('swamp', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // dim: accepted and brightened
   mapImgs['Back/grassySoil.img'] = { back: { 0: canvas(16, 16, solid([200, 230, 255])) } };
+  if (!noUi) {
+    // the classic login backdrop: a sky gradient, a sea strip and two clouds (invented pixels)
+    const cloud = (w, h) => (x, y) => (((x - w / 2) / (w / 2)) ** 2 + ((y - h / 2) / (h / 2)) ** 2 < 1 ? [255, 255, 255, 230] : [0, 0, 0, 0]);
+    mapImgs['Back/login.img'] = {
+      back: {
+        0: canvas(400, 300, (x, y) => [90 + (y >> 2), 160 + (y >> 2), 255 - (y >> 3), 255], { origin: vec(200, 150) }),
+        1: canvas(400, 60, (x, y) => [30, 100 + ((x + y) % 8) * 3, 170, 255], { origin: vec(200, 30) }),
+        2: canvas(120, 40, cloud(120, 40), { origin: vec(60, 20) }),
+        3: canvas(90, 30, cloud(90, 30), { origin: vec(45, 15) }),
+      },
+      ani: {},
+    };
+  }
   writeFileSync(join(dir, 'Map.wz'), buildWz(mapImgs));
 
   const red = [255, 130, 50], redEdge = [90, 20, 10];
@@ -586,8 +599,43 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]),
     Slider: { left: canvas(3, 8, solid([60, 70, 100])), mid: canvas(1, 8, solid([70, 80, 115])), right: canvas(3, 8, solid([60, 70, 100])), thumbNormal: canvas(22, 14, panel(22, 14, [255, 200, 90], [220, 130, 30])), thumbMouseOver: canvas(22, 14, panel(22, 14, [255, 220, 120], [240, 150, 40])) },
   };
-  const login = { Title: { MSTitle: canvas(397, 219, (x, y) => ((x - 198) ** 2 / 190 ** 2 + (y - 109) ** 2 / 100 ** 2 < 1 ? (y > 80 && y < 140 ? [255, 160, 40, 255] : [60, 120, 220, 255]) : [0, 0, 0, 0]), { origin: vec(198, 109) }) }, Common: { frame: canvas(8, 8, solid([0, 0, 0])) } };
-  writeFileSync(join(dir, 'UI.wz'), buildWz({ 'StatusBar.img': statusBar, 'Basic.img': basic, 'Login.img': login, 'UIWindow.img': { Stat: { backgrnd: canvas(172, 290, panel(172, 290, [230, 230, 240], [200, 200, 220])) } } }));
+  const bigBtn = (a, b) => ({ normal: { 0: canvas(120, 36, panel(120, 36, a, b), { origin: vec(0, 0) }) }, pressed: { 0: canvas(120, 36, panel(120, 36, b, a), { origin: vec(0, 0) }) }, disabled: { 0: canvas(120, 36, panel(120, 36, [120, 120, 120], [80, 80, 80]), { origin: vec(0, 0) }) }, mouseOver: { 0: canvas(120, 36, panel(120, 36, a.map((c) => Math.min(255, c + 30)), b.map((c) => Math.min(255, c + 30))), { origin: vec(0, 0) }) } });
+  const login = {
+    Title: {
+      MSTitle: canvas(397, 219, (x, y) => ((x - 198) ** 2 / 190 ** 2 + (y - 109) ** 2 / 100 ** 2 < 1 ? (y > 80 && y < 140 ? [255, 160, 40, 255] : [60, 120, 220, 255]) : [0, 0, 0, 0]), { origin: vec(198, 109) }),
+      signboard: canvas(180, 200, panel(180, 200, [150, 100, 55], [100, 66, 36]), { origin: vec(0, 0) }),
+      BtLogin: bigBtn([255, 190, 70], [220, 120, 20]),
+      BtNew: bigBtn([130, 170, 230], [50, 90, 180]),
+      BtHomePage: bigBtn([140, 200, 140], [60, 130, 70]),
+      BtQuit: bigBtn([220, 130, 130], [150, 50, 50]),
+    },
+    CharSelect: {
+      BtSelect: bigBtn([255, 190, 70], [220, 120, 20]),
+      BtNew: bigBtn([130, 170, 230], [50, 90, 180]),
+      BtDelete: bigBtn([220, 130, 130], [150, 50, 50]),
+      charInfo: canvas(140, 70, panel(140, 70, [40, 50, 90], [20, 28, 56]), { origin: vec(0, 0) }),
+    },
+    Common: { frame: canvas(8, 8, solid([0, 0, 0])), selectWorld: canvas(60, 30, panel(60, 30, [200, 200, 220], [140, 140, 170])) },
+  };
+  const slotFrame = canvas(32, 32, panel(32, 32, [30, 38, 70], [60, 72, 120], [10, 10, 20]), { origin: vec(0, 0) });
+  const tab = (on) => canvas(30, 18, panel(30, 18, on ? [255, 230, 150] : [150, 150, 170], on ? [230, 170, 60] : [100, 100, 130]), { origin: vec(0, 0) });
+  const uiwindow = {
+    Stat: { backgrnd: canvas(172, 290, panel(172, 290, [230, 230, 240], [200, 200, 220])), BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]) },
+    Equip: { backgrnd: canvas(184, 290, panel(184, 290, [210, 215, 235], [170, 178, 210])), backgrnd2: canvas(184, 26, solid([120, 130, 170])), backgrnd3: canvas(184, 20, solid([100, 110, 150])), BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]), slot: slotFrame },
+    Item: {
+      backgrnd: canvas(172, 335, panel(172, 335, [220, 225, 240], [180, 188, 214])),
+      Tab: { enabled: { 0: tab(true), 1: tab(true), 2: tab(true) }, disabled: { 0: tab(false), 1: tab(false), 2: tab(false) } },
+      BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]),
+    },
+    ToolTip: { Item: { n: canvas(8, 8, solid([20, 20, 50])), c: canvas(4, 4, solid([20, 20, 50])) } },
+  };
+  Object.assign(statusBar, {
+    lvNumber: Object.fromEntries([...'0123456789'].map((c) => [c, canvas(9, 12, (x, y) => ((x + y) % 2 === 0 ? [255, 255, 255, 255] : [200, 160, 40, 255]), { origin: vec(0, 0) })])),
+    BtShop: state(32, 20, [230, 190, 90], [170, 120, 30]),
+    BtShort: state(32, 20, [120, 190, 140], [50, 120, 70]),
+    BtChat: state(32, 20, [150, 150, 190], [80, 80, 130]),
+  });
+  writeFileSync(join(dir, 'UI.wz'), buildWz({ 'StatusBar.img': statusBar, 'Basic.img': basic, 'Login.img': login, 'UIWindow.img': uiwindow }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

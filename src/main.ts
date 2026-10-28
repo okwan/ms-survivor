@@ -102,7 +102,10 @@ async function boot() {
     active: () => mode === 'playing',
     autoEquip: (on) => { save.settings.autoEquip = on; sim.autoEquip = on; writeSave(save); },
     sim: () => sim,
-  }, save.settings.autoEquip);
+    look: () => (avatar ? { ...hero.look, gear: lookGearOf(sim) } : null),
+    name: () => hero.name,
+  }, save.settings.autoEquip, avatar);
+  hud.onWindow = (w) => gearUi.windows.toggle(w);
   // the hero's look = creation look + equipped gear; re-composited when the equipped set changes
   let seenGear = 0;
 
@@ -113,6 +116,7 @@ async function boot() {
     sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip });
     sim.god = god;
     gearUi.reset();
+    hud.setHero(hero.name, hero.cls);
     seenGear = 0;
     acc = 0;
     mode = 'playing';
@@ -125,6 +129,7 @@ async function boot() {
 
   function bank(quit: boolean) {
     save.mesos += sim.mesos;
+    if (save.character && save.character.name === hero.name && sim.level > 1) save.character.level = sim.level;
     const best = !quit && sim.t > save.bestTime;
     if (sim.t > save.bestTime) save.bestTime = sim.t;
     writeSave(save);
@@ -175,6 +180,7 @@ async function boot() {
       mute: (m) => setMuted(m),
     },
     renderer.tex.icons,
+    avatar,
   );
   const create = new CreateScreen(uiRoot, {
     avatar,
@@ -278,6 +284,13 @@ async function boot() {
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
       hero: () => hero,
+      /** what is on screen: the screen name ('login', 'select', 'title', 'create', 'playing', 'paused', 'ended') and the open game windows */
+      ui: () => ({ screen: mode === 'title' ? (create.visible ? 'create' : screens.titleState() || 'title') : mode, windows: gearUi.windows.list().map((w) => w.name) }),
+      /** open or close the 'equip' / 'inventory' / 'stats' window */
+      window: (name: 'equip' | 'inventory' | 'stats', on = true) => gearUi.windows.set(name, on),
+      /** unequipped items carried (ids), and wear one of them */
+      bag: () => sim.bag.map((i) => i.id),
+      equipFromBag: (id: string) => sim.equipFromBag(id),
       /** equipped item ids by slot and the summed bonus */
       gear: () => sim.gearSummary(),
       /** put an item (pool id) in the bag as if picked up; equips it when it is an upgrade */

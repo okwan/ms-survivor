@@ -114,6 +114,7 @@ export class World {
     const png = encodePng(wd, ht, rgba);
     writeFileSync(path, png);
     this.out.bytes += png.length;
+    if (wd * ht <= 60000 && /^ui\//.test(rel)) this.cache.set(rel, { w: wd, h: ht, rgba });
     return rel;
   }
 
@@ -147,6 +148,13 @@ export class World {
   private raw(px: Px, action: string, index: number): Any {
     return { action, index, w: px.w, h: px.h, ox: px.ox, oy: px.oy, delay: px.hasDelay ? px.delay : 100, rgba: px.rgba, id: px.id };
   }
+
+  /** ASCII preview of a piece that was already written (decoded again from the PNG-less source is not possible, so use the cached pixels) */
+  private previewFile(title: string, pc: UiPiece) {
+    const px = this.cache.get(pc.src);
+    this.preview(title, px ? { w: px.w, h: px.h, rgba: px.rgba } : null);
+  }
+  private cache = new Map<string, { w: number; h: number; rgba: Buffer }>();
 
   preview(title: string, p: { w: number; h: number; rgba: Buffer } | null) {
     if (!p) return this.d.log(`preview ${title}: not available`);
@@ -448,6 +456,16 @@ export class World {
       return p;
     };
 
+    /** first of several candidate paths that holds a canvas (the node layout differs between client versions) */
+    const takeAny = (img: Any, paths: string[], name: string, quiet = false) => {
+      for (const path of paths) {
+        const p = first(img, path);
+        if (p) { add(name, p); return p; }
+      }
+      if (!quiet) missing.push(`${name} (${paths.join(' | ')})`);
+      return null;
+    };
+
     // ---- StatusBar.img
     const sb = wz.image('StatusBar.img');
     if (!sb) warn(`UI.wz has no StatusBar.img (images: ${wz.names().join(' ')})`);
@@ -466,6 +484,11 @@ export class World {
       for (let i = 0; i < 10; i++) take(sb, `number/${i}`, `sb.n.${i}`);
       for (const k of ['slash', 'percent', 'Lbracket', 'Rbracket']) take(sb, `number/${k}`, `sb.n.${k}`);
       this.buttonStates(sb, 'BtMenu', 'sb.menu', pieces, missing);
+      // v83 status bar extras: the level digits of the name plate and the shortcut buttons (all optional)
+      for (let i = 0; i < 10; i++) takeAny(sb, [`lvNumber/${i}`, `lvNumber/${i}/0`], `sb.lvn.${i}`);
+      for (const [node, name] of [['BtShop', 'sb.shop'], ['BtShort', 'sb.short'], ['BtChat', 'sb.chatBtn'], ['BtClaim', 'sb.claim'], ['BtNPT', 'sb.npt']] as const)
+        if (sb.root.get(node)) this.buttonStates(sb, node, name, pieces, missing);
+      log(`  lvNumber: ${this.describe(sb.root.get('lvNumber'))}`);
       if (bg) this.statusStrip(bg, add);
       if (bar) this.gaugeBands(bar, add);
       if (bg) {
@@ -512,24 +535,104 @@ export class World {
       for (const [k, name] of [['left', 'sl.left'], ['mid', 'sl.mid'], ['right', 'sl.right'], ['thumbNormal', 'sl.thumb'], ['thumbMouseOver', 'sl.thumbHover']] as const) take(basic, `Slider/${k}`, name);
     }
 
-    // ---- Login.img (title logo)
+    // ---- Login.img: the classic title screen (logo, signboard, buttons), character select, and the Map.wz backdrop
     const login = wz.image('Login.img');
     if (!login) warn('UI.wz has no Login.img');
     else {
+      log(`Login.img: ${login.root.keys().join(' ')}`);
+      for (const k of ['Title', 'CharSelect', 'Common', 'WorldSelect']) log(`Login.img ${k}: ${this.describe(login.root.get(k), 2)}`);
       take(login, 'Title/MSTitle', 'title.logo');
+      takeAny(login, ['Title/logo', 'Title/Logo'], 'login.logo', true);
+      takeAny(login, ['Title/signboard', 'Title/signBoard', 'Title/board'], 'login.signboard');
+      for (const [node, name] of [['BtLogin', 'login.btLogin'], ['BtNew', 'login.btNew'], ['BtHomePage', 'login.btHome'], ['BtQuit', 'login.btQuit']] as const)
+        if (login.root.get(`Title/${node}`)) this.buttonStates(login, `Title/${node}`, name, pieces, missing);
+        else missing.push(`${name} (Title/${node})`);
+      for (const [node, name] of [['BtSelect', 'cs.btSelect'], ['BtNew', 'cs.btNew'], ['BtDelete', 'cs.btDelete'], ['BtCharSelect', 'cs.btSelect']] as const)
+        if (login.root.get(`CharSelect/${node}`) && !pieces[`${name}.normal`]) this.buttonStates(login, `CharSelect/${node}`, name, pieces, missing);
+      takeAny(login, ['CharSelect/charInfo', 'CharSelect/CharInfo', 'CharSelect/info'], 'cs.info');
+      takeAny(login, ['CharSelect/nameTag', 'CharSelect/NameTag', 'CharSelect/nameTag/0'], 'cs.nameTag', true);
+      takeAny(login, ['CharSelect/selectedWorld', 'Common/selectWorld', 'CharSelect/backgrnd'], 'cs.world', true);
+      takeAny(login, ['Common/frame'], 'login.frame', true);
     }
+    this.loginBackdrop(add, missing);
 
-    // ---- UIWindow.img: only logged, so the next CI run shows what frames exist
+    // ---- UIWindow.img: Equip / Item / Stat windows, tab strip, tooltip frame (logged so the next CI run shows what exists)
     const uiw = wz.image('UIWindow.img');
     if (uiw) {
       for (const k of ['Stat', 'Skill', 'Item', 'Equip', 'ToolTip', 'MiniMap', 'GameMenu', 'Notice', 'UtilDlgEx']) log(`UIWindow.img ${k}: ${this.describe(uiw.root.get(k), 2)}`);
       take(uiw, 'Stat/backgrnd', 'uiw.stat');
+      takeAny(uiw, ['Equip/backgrnd'], 'uiw.equip');
+      takeAny(uiw, ['Equip/backgrnd2'], 'uiw.equip2', true);
+      takeAny(uiw, ['Equip/backgrnd3'], 'uiw.equip3', true);
+      takeAny(uiw, ['Item/backgrnd'], 'uiw.item');
+      takeAny(uiw, ['Item/FullBackgrnd', 'Item/backgrnd2'], 'uiw.item2', true);
+      takeAny(uiw, ['Stat/backgrnd2'], 'uiw.stat2', true);
+      for (let i = 0; i < 6; i++) {
+        takeAny(uiw, [`Item/Tab/enabled/${i}`], `item.tab.on.${i}`, true);
+        takeAny(uiw, [`Item/Tab/disabled/${i}`], `item.tab.off.${i}`, true);
+      }
+      for (const [win, name] of [['Equip', 'equip'], ['Item', 'item'], ['Stat', 'stat']] as const)
+        if (uiw.root.get(`${win}/BtClose`)) this.buttonStates(uiw, `${win}/BtClose`, `${name}.close`, pieces, missing);
+      // tooltip frame: the nine-patch-ish parts if present (n, ne, e, se, s, sw, w, nw, c)
+      for (const k of uiw.root.get('ToolTip/Item')?.keys() ?? uiw.root.get('ToolTip')?.keys() ?? []) {
+        const base = uiw.root.get('ToolTip/Item') ? 'ToolTip/Item' : 'ToolTip';
+        const p = first(uiw, `${base}/${k}`);
+        if (p && p.w <= 64 && p.h <= 64) add(`tip.${k}`, p);
+      }
     } else warn('UI.wz has no UIWindow.img');
 
+    for (const [n, label] of [['login.btLogin.normal', 'login button'], ['login.signboard', 'signboard'], ['uiw.equip', 'equip window background'], ['uiw.item', 'inventory window background']] as const) {
+      const pc = pieces[n];
+      if (pc) this.previewFile(label, pc);
+    }
     const names = Object.keys(pieces);
     log(`UI pieces found (${names.length}): ${names.join(' ')}`);
+    log(`UI extra (login/equip/inventory) pieces: ${names.filter((n) => /^(login|cs|uiw|item|equip|stat|tip|sb\.(lvn|shop|short|chatBtn|claim|npt))/.test(n)).length}; total UI+world bytes so far ${(this.out.bytes / 1e6).toFixed(2)} MB`);
     log(`UI pieces missing (${missing.length}): ${missing.join('; ') || '-'}`);
     return names.length ? { pieces } : undefined;
+  }
+
+  /**
+   * The classic title backdrop from Map.wz Back/login.img: every canvas under back/ (and the first frame of each ani/ node),
+   * largest first, as login.back.<key> (the largest is the sky, the rest drift across it). Capped at 900 KB of PNG.
+   */
+  private loginBackdrop(add: (name: string, p: Px, meta?: Record<string, number>) => void, missing: string[]) {
+    const wz = this.d.sets.Map;
+    if (!wz) return;
+    const { log } = this.d;
+    const img = wz.image('Back/login.img');
+    if (!img) {
+      const cand = wz.names().filter((n) => /^back\//i.test(n) && /login/i.test(n));
+      missing.push(`login.back (Map.wz Back/login.img; Back images matching login: ${cand.join(' ') || 'none'})`);
+      return;
+    }
+    log(`Back/login.img: ${img.root.keys().join(' ')}`);
+    const found: { key: string; px: Px }[] = [];
+    for (const group of ['back', 'ani']) {
+      const g = img.root.get(group);
+      if (!g) continue;
+      log(`Back/login.img ${group}: ${this.describe(g, 2)}`);
+      for (const k of g.keys()) {
+        const c = this.d.canvasList(g.get(k))[0];
+        const px = c ? this.px(c, img.key) : null;
+        if (px && px.w <= 1600 && px.h <= 1200 && px.w * px.h >= 400) found.push({ key: `${group}${k.replace(/[^A-Za-z0-9]/g, '')}`, px });
+      }
+    }
+    found.sort((a, b) => b.px.w * b.px.h - a.px.w * a.px.h);
+    let spent = 0;
+    let n = 0;
+    for (const f of found.slice(0, 8)) {
+      const est = f.px.w * f.px.h * 0.6;
+      if (spent + est > 900_000 && n > 0) { log(`login backdrop: ${f.key} ${f.px.w}x${f.px.h} skipped (900 KB budget)`); continue; }
+      const before = this.out.bytes;
+      add(`login.back.${f.key}`, f.px, { rank: n });
+      spent += this.out.bytes - before;
+      n++;
+      log(`login backdrop layer ${n}: ${f.key} ${f.px.w}x${f.px.h} origin ${f.px.ox},${f.px.oy}`);
+      if (n <= 2) this.preview(`login backdrop ${f.key}`, f.px);
+    }
+    if (!n) missing.push('login.back (no canvases under back/ or ani/)');
+    log(`login backdrop: ${n} layers, ${(spent / 1e3).toFixed(0)} KB`);
   }
 
   /** normal / mouseOver / pressed / disabled of a button node, stored as <name>.normal, .hover, .pressed, .disabled */

@@ -30,7 +30,7 @@ export class Input {
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => this.keys.clear());
 
-    const isUi = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('button, .win, input, .gear-toast');
+    const isUi = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('button, .win, .mwin, .mtip, input, .gear-toast');
     window.addEventListener('pointerdown', (e) => {
       if (e.pointerType !== 'touch' || this.joyId !== -1 || e.clientX > window.innerWidth / 2 || isUi(e.target)) return;
       this.joyId = e.pointerId;
