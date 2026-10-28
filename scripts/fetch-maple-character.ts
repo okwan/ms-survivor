@@ -13,10 +13,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLASSES } from '../src/game/data.ts';
-import { AVATAR_ACTIONS, SLOTS, SLOT_FOLDERS, compose, framesOf, itemFile, rasterize, stanceActions, wantedItems, zDepthTable, defaultLook, lookItems } from '../src/maple/avatar-core.ts';
+import { AVATAR_ACTIONS, SLOTS, emptyItems, SLOT_FOLDERS, compose, framesOf, itemFile, rasterize, stanceActions, wantedItems, zDepthTable, defaultLook, lookItems } from '../src/maple/avatar-core.ts';
 import type { AvatarManifest, FrameData, ItemJson, LayerRec, Part, Placed, Slot, Vec } from '../src/maple/avatar-core.ts';
 import { asciiPreview, encodePng } from './png.mjs';
 import { canvasRgba } from './wz.mjs';
+import { extractGear, previewGear } from './fetch-maple-gear.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -54,7 +55,7 @@ function vecOf(p: Any): Vec | null {
 }
 
 /** Frame nodes of an action: its numbered children, or the node itself when it holds canvases directly (hair/face "default"). */
-function frameNodes(node: Any): Any[] {
+export function frameNodes(node: Any): Any[] {
   if (!node) return [];
   const n = node.resolve ? node.resolve() : node;
   if (!n?.children) return [];
@@ -65,7 +66,7 @@ function frameNodes(node: Any): Any[] {
   return [];
 }
 
-function shelfPack(items: Decoded[]): { w: number; h: number; pos: { x: number; y: number }[]; rgba: Buffer } {
+export function shelfPack(items: Decoded[]): { w: number; h: number; pos: { x: number; y: number }[]; rgba: Buffer } {
   const area = items.reduce((a, f) => a + (f.w + 1) * (f.h + 1), 0);
   const widest = Math.max(1, ...items.map((f) => f.w + 2));
   const W = Math.min(1024, Math.max(widest, 2 ** Math.ceil(Math.log2(Math.max(16, Math.sqrt(area * 1.3))))));
@@ -200,7 +201,7 @@ const describeLayer = (l: LayerRec) => `${l.n}[z=${l.z} ${l.w}x${l.h} origin=${l
  * Extracts the avatar items. Returns the manifest block (or null when no body and head could be read) and the bytes written.
  * `outDir` is the maple/ folder (avatar files go to <outDir>/avatar/).
  */
-export function extractAvatar(character: WzLike | null, base: WzLike | null, outDir: string, lg: Logger): { manifest: AvatarManifest | null; bytes: number; previewPng: Buffer | null } {
+export function extractAvatar(character: WzLike | null, base: WzLike | null, outDir: string, lg: Logger, strings: WzLike | null = null): { manifest: AvatarManifest | null; bytes: number; previewPng: Buffer | null } {
   const { log, warn } = lg;
   let bytes = 0;
   try {
@@ -227,7 +228,7 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
 
     // ---- items ----
     const want = wantedItems();
-    const have: Record<Slot, string[]> = { body: [], head: [], face: [], hair: [], coat: [], pants: [], shoes: [], weapon: [] };
+    const have = emptyItems();
     const loaded = new Map<string, ExtractedItem>();
     const missing: string[] = [];
     const dir = join(outDir, 'avatar');
@@ -281,6 +282,15 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
     }
     const manifest: AvatarManifest = { version: 1, zmap, items: have, actions: AVATAR_ACTIONS, dir: 'avatar/' };
 
+    // ---- droppable equipment (scripts/fetch-maple-gear.ts): its frame files join the item lists, its block is manifest.gear ----
+    const gear = extractGear({ extractItem, frameNodes, shelfPack }, character, strings, dir, { log, warn }, loaded);
+    bytes += gear.bytes;
+    if (gear.manifest) {
+      manifest.gear = gear.manifest;
+      for (const [slot, ids] of Object.entries(gear.ids)) have[slot as Slot].push(...ids);
+      for (const [k, v] of gear.items) loaded.set(k, v);
+    }
+
     // ---- composite previews (same code as the browser) ----
     let previewPng: Buffer | null = null;
     try {
@@ -318,6 +328,7 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
           }
         }
       }
+      previewGear(gear, loaded, z, { log, warn });
     } catch (e) {
       warn(`avatar preview: ${(e as Error).stack}`);
     }

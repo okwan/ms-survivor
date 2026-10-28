@@ -197,3 +197,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .ms-slider .volume input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--u-sl-thumb-w); height: var(--u-sl-thumb-h); background: var(--u-sl-thumb) no-repeat; image-rendering: pixelated; margin-top: calc((var(--u-sl-mid-h) - var(--u-sl-thumb-h)) / 2); }
 .ms-slider .volume input[type=range]::-moz-range-track { height: var(--u-sl-mid-h); background: var(--u-sl-mid) repeat-x; }
 .ms-slider .volume input[type=range]::-moz-range-thumb { width: var(--u-sl-thumb-w); height: var(--u-sl-thumb-h); background: var(--u-sl-thumb) no-repeat; border: 0; border-radius: 0; }
+
+/* ---------- gear: toast and equip window ---------- */
+.gear-toast { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; max-width: min(92vw, 420px); padding: 6px 12px 6px 8px; background: rgba(10,20,50,.82); border: 2px solid #fff; border-radius: 10px; color: #fff; pointer-events: auto; cursor: pointer; font-size: 13px; z-index: 5; }
+.gear-toast.offer { border-color: var(--orange); }
+.gear-toast img { width: 36px; height: 36px; image-rendering: pixelated; }
+.gear-toast span { display: flex; flex-direction: column; text-align: left; }
+.gear-toast b { font-size: 14px; }
+.gear-toast em { font-style: normal; color: #cfe0ff; font-size: 12px; }
+.gear-win { position: absolute; left: 12px; top: 64px; width: 224px; z-index: 6; pointer-events: auto; }
+.gear-win .win-head { position: relative; font-size: 16px; padding: 5px 12px; }
+.gear-x { position: absolute; right: 6px; top: 4px; border: 0; border-radius: 4px; background: rgba(0,0,0,.25); color: #fff; font-weight: 900; cursor: pointer; width: 22px; height: 22px; line-height: 20px; padding: 0; }
+.gear-grid { display: grid; grid-template-columns: repeat(4, 44px); gap: 6px; justify-content: center; }
+.gear-slot { width: 44px; height: 44px; border: 2px solid #8a98c8; border-radius: 6px; background: #eaf0ff; display: flex; align-items: center; justify-content: center; position: relative; }
+.gear-slot.empty::after { content: attr(data-name); font-size: 9px; color: #7a86a8; }
+.gear-slot img { width: 36px; height: 36px; image-rendering: pixelated; }
+.gear-totals { font-size: 13px; font-weight: bold; min-height: 18px; color: var(--orange2); }
+.gear-auto { font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer; }

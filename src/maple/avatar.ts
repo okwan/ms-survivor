@@ -83,7 +83,7 @@ export class Avatar {
   /** Loads every item of the look. Resolves true when the look can be drawn (body and head present). */
   async ensureLook(look: Look): Promise<boolean> {
     const ids = lookItems(look);
-    await Promise.all(SLOTS.map((s) => this.load(s, ids[s])));
+    await Promise.all(SLOTS.map((s) => (ids[s] ? this.load(s, ids[s]) : null)));
     return this.ready(look);
   }
 
@@ -95,7 +95,7 @@ export class Avatar {
   /** Whether the look is fully loaded and drawable (body and head present; other parts may be absent). */
   ready(look: Look): boolean {
     const ids = lookItems(look);
-    for (const s of SLOTS) if (!this.items.has(`${s}-${ids[s]}`)) return false;
+    for (const s of SLOTS) if (ids[s] && !this.items.has(`${s}-${ids[s]}`)) return false;
     return !!this.items.get(`body-${ids.body}`) && !!this.items.get(`head-${ids.head}`);
   }
 
@@ -104,7 +104,7 @@ export class Avatar {
     const ids = lookItems(look);
     const out: Part[] = [];
     for (const s of SLOTS) {
-      const it = this.items.get(`${s}-${ids[s]}`);
+      const it = ids[s] ? this.items.get(`${s}-${ids[s]}`) : null;
       if (it) out.push({ slot: s, item: it.json });
     }
     return out;
@@ -235,16 +235,26 @@ export class AvatarPlayer {
   private atkCycle = 0;
   private seenFire = -99;
   private out: PlayerFrame = { tex: Texture.EMPTY, ax: 0, ay: 0 };
+  /** a changed look (new gear) still loading: the old one keeps being drawn until it is ready */
+  private next: Look | null = null;
 
   constructor(readonly avatar: Avatar) {}
 
   set(look: Look, stance: Stance) {
     this.look = look;
+    this.next = null;
     this.stanceKind = stance;
     this.ok = false;
     this.acts = null;
     this.atkT = 99;
     this.seenFire = -99;
+  }
+
+  /** Swaps to a changed look (equipped gear) without dropping back to the placeholder while its parts load. */
+  change(look: Look) {
+    if (!this.look || !this.ok) return this.set(look, this.stanceKind);
+    this.next = look;
+    this.avatar.prefetch(look);
   }
 
   /** Whether frames can be produced (the look finished loading). */
@@ -260,6 +270,11 @@ export class AvatarPlayer {
 
   /** `lastFire` is the sim time of the last skill fire; a change starts an attack. */
   frame(dt: number, moving: boolean, lastFire: number): PlayerFrame | null {
+    if (this.next && this.avatar.ready(this.next)) {
+      this.look = this.next;
+      this.next = null;
+      this.acts = this.avatar.stance(this.look, this.stanceKind);
+    }
     if (!this.look || !this.ready || !this.acts) return null;
     const a = this.acts;
     if (lastFire !== this.seenFire) {

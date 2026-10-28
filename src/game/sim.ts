@@ -1,12 +1,14 @@
 import {
   BERSERK_AFTER, BOSSES, BOSS_EVERY, LADDER, MAX_GEMS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, NOVA_DAMAGE_FRAC, NOVA_EVERY,
-  CLASS_BY_KEY, DEFAULT_CLASS, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVES, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
+  CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVES, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
 } from './data.ts';
 import { SpatialGrid } from './grid.ts';
 import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
-import { BAG, ELIXIR, GEM, MESO, POTION } from './types.ts';
+import { GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
+import type { GearItem, GearSlot } from './gear.ts';
+import { BAG, ELIXIR, GEAR, GEM, MESO, POTION } from './types.ts';
 import type { ClassDef, SkillDef } from './data.ts';
 import type { Area, Card, Enemy, PassiveState, Pickup, PickupKind, Projectile, SimEvent, SkillState } from './types.ts';
 
@@ -61,6 +63,20 @@ export class Sim {
   skills: SkillState[];
   passives: PassiveState[] = [];
 
+  // gear (src/game/gear.ts): drops come from their own seeded stream so that they never shift the run's other random draws
+  gearPool: GearPool;
+  gender: 0 | 1 = 0;
+  equipped: Partial<Record<GearSlot, GearItem>> = {};
+  /** an unequipped pickup waiting for E (null = none) */
+  gearOffer: { item: GearItem; until: number } | null = null;
+  /** last equip / offer for the toast: seq counts up on every change */
+  gearToast: { seq: number; item: GearItem; kind: 'equipped' | 'offer'; until: number } | null = null;
+  /** equipped set changed: the renderer re-composites the hero when this counts up */
+  gearVersion = 0;
+  autoEquip = true;
+  gearDrops = 0;
+  private gearRng: Rng;
+
   offer: Card[] | null = null;
   pendingLevels = 0;
   rerolls = START_REROLLS;
@@ -88,9 +104,13 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
+    this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
+    this.gearPool = opts.pool ?? GearPool.placeholder();
+    this.gender = opts.gender ?? 0;
+    this.autoEquip = opts.autoEquip ?? true;
     this.cls = CLASS_BY_KEY[classKey] ?? CLASS_BY_KEY[DEFAULT_CLASS];
     this.skills = [{ key: this.cls.skills[0], level: 1, cd: 0.2 }];
     this.speed = this.cls.speed;
@@ -127,6 +147,10 @@ export class Sim {
         case 'crit': crit += v; break;
       }
     }
+    const g = totalBonus(Object.values(this.equipped), this.cls.key);
+    might += g.dmg;
+    armor += g.armor;
+    speed += g.speed;
     this.might = might;
     this.speed = this.cls.speed * speed;
     this.haste = haste;
@@ -136,7 +160,7 @@ export class Sim {
     this.growth = growth;
     this.regen = regen;
     this.crit = crit;
-    const newMax = this.cls.hp * hpMul;
+    const newMax = this.cls.hp * hpMul + g.hp;
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
     this.maxHp = newMax;
     if (this.hp > this.maxHp) this.hp = this.maxHp;
@@ -242,15 +266,79 @@ export class Sim {
       this.dropPickup(GEM, e.x, e.y, gv);
       this.dropPickup(ELIXIR, e.x + 1.2, e.y + 0.6, 1);
       this.dropPickup(BAG, e.x - 1.2, e.y + 0.6, 50 * (e.boss + 1));
+      for (let k = 0; k < GEAR_BOSS_DROPS; k++) this.dropGear(e.x + (k === 0 ? 1.8 : -1.8), e.y - 0.4, true);
       return;
     }
     this.dropPickup(GEM, e.x, e.y, gv);
     if (this.rng.next() < 0.015) this.dropPickup(POTION, e.x, e.y, 0.25);
     if (this.rng.next() < 0.3) this.dropPickup(MESO, e.x, e.y, mesoValue(e.tier));
+    if (this.gearRng.next() < (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL)) this.dropGear(e.x, e.y, false);
+  }
+
+  /** Drops a piece of gear for this class at the current run tier. */
+  private dropGear(x: number, y: number, boss: boolean) {
+    const it = this.gearPool.roll(this.gearRng, this.cls.key, this.gender, this.t);
+    if (!it) return;
+    this.placeGear(it, x, y, boss);
+  }
+
+  private placeGear(it: GearItem, x: number, y: number, boss: boolean) {
+    this.gearDrops++;
+    const p = this.newPickup(GEAR, x, y, 0);
+    p.item = it;
+    p.life = GEAR_PICKUP_LIFE;
+    this.pickups.push(p);
+    this.emit({ type: 'drop', x, y, id: it.id, name: it.name, boss });
+  }
+
+  /** Test / bot hook: the item appears in the hero's bag as if picked up. Returns what happened. */
+  giveGear(id: string): 'equipped' | 'offered' | 'unknown' {
+    const it = this.gearPool.get(id);
+    if (!it) return 'unknown';
+    return this.gotGear(it);
+  }
+
+  /** Picked up: auto-equip a clear upgrade (setting on), else offer it for GEAR_OFFER_SECONDS. */
+  private gotGear(it: GearItem): 'equipped' | 'offered' {
+    const cur = this.equipped[it.slot];
+    const better = !cur || itemScore(it, this.cls.key) > itemScore(cur, this.cls.key);
+    if (better && (this.autoEquip || !cur)) {
+      this.equip(it, true);
+      return 'equipped';
+    }
+    this.gearOffer = { item: it, until: this.t + GEAR_OFFER_SECONDS };
+    this.gearToast = { seq: (this.gearToast?.seq ?? 0) + 1, item: it, kind: 'offer', until: this.t + GEAR_OFFER_SECONDS };
+    return 'offered';
+  }
+
+  equip(it: GearItem, auto = false) {
+    this.equipped[it.slot] = it;
+    if (this.gearOffer?.item.slot === it.slot) this.gearOffer = null;
+    this.gearVersion++;
+    this.gearToast = { seq: (this.gearToast?.seq ?? 0) + 1, item: it, kind: 'equipped', until: this.t + 3 };
+    this.recalc();
+    this.emit({ type: 'equip', id: it.id, slot: it.slot, auto });
+  }
+
+  /** E: wear the offered item. */
+  equipOffer(): boolean {
+    const o = this.gearOffer;
+    if (!o || o.until < this.t) return false;
+    this.gearOffer = null;
+    this.equip(o.item, false);
+    return true;
+  }
+
+  /** ids by slot and the summed bonus, for the equip window and the bot hook */
+  gearSummary() {
+    const ids: Partial<Record<GearSlot, string>> = {};
+    for (const s of GEAR_SLOTS) if (this.equipped[s]) ids[s] = this.equipped[s]!.id;
+    return { equipped: ids, totals: totalBonus(Object.values(this.equipped), this.cls.key), drops: this.gearDrops };
   }
 
   private newPickup(kind: PickupKind, x: number, y: number, value: number): Pickup {
-    const p = this.pickupPool.pop() ?? { kind, x, y, value, life: 0, pulled: false };
+    const p = this.pickupPool.pop() ?? { kind, x, y, value, life: 0, pulled: false, item: null };
+    p.item = null;
     p.kind = kind; p.x = x; p.y = y; p.value = value; p.pulled = false;
     p.life = kind === POTION || kind === MESO ? 50 : 1e9;
     return p;
@@ -551,6 +639,7 @@ export class Sim {
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
       case ELIXIR: this.hp = this.maxHp; break;
       case MESO: case BAG: this.mesos += p.value; break;
+      case GEAR: if (p.item) this.gotGear(p.item); break;
     }
   }
 

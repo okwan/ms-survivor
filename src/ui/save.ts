@@ -11,11 +11,11 @@ export interface SavedCharacter {
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number; muted: boolean };
+  settings: { volume: number; muted: boolean; autoEquip: boolean };
   character: SavedCharacter | null;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, muted: false }, character: null };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, muted: false, autoEquip: true }, character: null };
 
 function readCharacter(c: unknown): SavedCharacter | null {
   if (!c || typeof c !== 'object') return null;
@@ -37,6 +37,7 @@ export function loadSave(): SaveData {
       settings: {
         volume: typeof o.settings?.volume === 'number' ? o.settings.volume : DEFAULT.settings.volume,
         muted: o.settings?.muted === true,
+        autoEquip: o.settings?.autoEquip !== false,
       },
       character: readCharacter(o.character),
     };

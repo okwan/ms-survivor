@@ -2,12 +2,13 @@ import { Application, BitmapFont, BitmapText, Container, Sprite, TilingSprite, T
 import { BOSSES, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
 import type { Stance } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
-import { BAG, ELIXIR, GEM, MESO, POTION } from '../game/types.ts';
+import { BAG, ELIXIR, GEAR, GEM, MESO, POTION } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
 import { AvatarPlayer } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import type { Look } from '../maple/avatar-core.ts';
+import type { GearIcons } from './gear-icons.ts';
 import type { Anim, MapleArt, MobArt } from '../maple/art.ts';
 import { DamageNumbers } from './damage.ts';
 import { DecorLayer } from './decor.ts';
@@ -59,6 +60,7 @@ export class Renderer {
   private topLayer = new Container();
   private playerSp: Sprite;
   private hero: AvatarPlayer | null = null;
+  private gearIcons: GearIcons | null = null;
   private orbitSp: Sprite[] = [];
   private decoSprites: Sprite[] = [];
   private enemyViews = new Map<Enemy, EnemyView>();
@@ -184,6 +186,15 @@ export class Renderer {
     if (!avatar || !look) { this.hero = null; return; }
     this.hero = new AvatarPlayer(avatar);
     this.hero.set(look, stance);
+  }
+
+  /** The hero put on or took off gear: same character, changed look (the old one is drawn until the new parts are loaded). */
+  setLook(look: Look) {
+    this.hero?.change(look);
+  }
+
+  setGearIcons(g: GearIcons) {
+    this.gearIcons = g;
   }
 
   // ---- pools ------------------------------------------------------------------------------------
@@ -368,6 +379,9 @@ export class Renderer {
         this.ringFx(tx.ring, sim.px, sim.py, 5, 0.7, 0xffe060, 1);
         this.number(sim.px, sim.py - 2.4, 'LEVEL UP!', 0xffe060, 24, 1.2);
         break;
+      case 'drop':
+        if (e.boss) this.number(e.x, e.y - 1.4, e.name.toUpperCase(), 0xffe9a0, 15, 2.2);
+        break;
       case 'pickup':
         if (e.kind === MESO || e.kind === BAG) this.number(e.x, e.y - 0.6, '+' + e.value, 0xffd23a, 15, 0.7);
         else if (e.kind === POTION || e.kind === ELIXIR) this.ringFx(tx.glow, e.x, e.y, 2.5, 0.4, 0xff6a6a, 0.9);
@@ -528,10 +542,11 @@ export class Renderer {
         case POTION: t = tx.potion; break;
         case ELIXIR: t = tx.elixir; break;
         case MESO: t = tx.meso; break;
+        case GEAR: t = (p.item && this.gearIcons?.texture(p.item)) || tx.bag; break;
         default: t = tx.bag;
       }
       if (sp.texture !== t) sp.texture = t;
-      sp.scale.set(SCALE);
+      sp.scale.set(p.kind === GEAR ? 1 : SCALE);
       sp.position.set(p.x * PX, p.y * PX - 8 + Math.sin(this.time * 4 + p.x) * 2);
     }
     for (const [k, v] of this.pickupViews) {
