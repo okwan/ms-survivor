@@ -16,7 +16,7 @@ String.wz Skill.img names, so a wrong id only costs its art.
 | Thief | 120 | 7.5 | 8% | Dagger 01332005 | stab |
 
 The class stat passive is named per class (Strength / Intelligence / Dexterity / Luck, same effect:
-+10% damage per level). The armor passive is named per class (Iron Body 1000003 / Magic Guard 2001002 /
++10% damage per level). The armor passive is named per class (Iron Body 1001003 / Magic Guard 2001002 /
 Focus 3001003 / Dark Sight 4001003, same effect: +1 flat armor per level). The other 8 passives stay shared.
 
 ## New skill kinds

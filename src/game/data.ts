@@ -245,7 +245,7 @@ export const PASSIVES: PassiveDef[] = [
   { key: 'sharp_eyes', name: 'Sharp Eyes', id: 3121002, stat: 'crit', per: 0.05, desc: '+5% crit chance' },
   // class-named copies of the stat and armor passives (same effects as Intelligence and Magic Guard)
   { key: 'str', name: 'Strength', id: 1000000, stat: 'might', per: 0.1, desc: '+10% damage', cls: 'warrior' },
-  { key: 'iron_body', name: 'Iron Body', id: 1000003, stat: 'armor', per: 1, desc: '+1 armor', cls: 'warrior' },
+  { key: 'iron_body', name: 'Iron Body', id: 1001003, stat: 'armor', per: 1, desc: '+1 armor', cls: 'warrior' },
   { key: 'dex', name: 'Dexterity', id: 3000000, stat: 'might', per: 0.1, desc: '+10% damage', cls: 'bowman' },
   { key: 'focus', name: 'Focus', id: 3001003, stat: 'armor', per: 1, desc: '+1 armor', cls: 'bowman' },
   { key: 'luk', name: 'Luck', id: 4000000, stat: 'might', per: 0.1, desc: '+10% damage', cls: 'thief' },
