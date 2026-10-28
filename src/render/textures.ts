@@ -1,5 +1,6 @@
 import { Texture } from 'pixi.js';
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
+import { EVOLVED_SKILLS } from '../game/evolutions.ts';
 
 /** Textures are drawn at RES x and displayed at 1/RES. */
 export const RES = 2;
@@ -216,6 +217,9 @@ export interface Textures {
   elixir: Texture;
   meso: Texture;
   bag: Texture;
+  /** Gachapon capsule and Mastery Book pickups (placeholders: the capsule is replaced by the Gachapon Ticket art when extracted) */
+  gacha: Texture;
+  book: Texture;
   missiles: Record<string, Texture>;
   ring: Texture;
   disc: Texture;
@@ -370,6 +374,30 @@ function drawMeso(bag: boolean): Texture {
   return tex(c);
 }
 
+/** A two-colour capsule ball: red top half, cream bottom half, a seam and a highlight (the placeholder for the Gachapon Ticket icon) */
+export function gachaCanvas(S: number): HTMLCanvasElement {
+  const [c, ctx] = canvas(S, S);
+  ctx.scale(S / 34, S / 34);
+  ctx.lineWidth = 1.6; ctx.strokeStyle = '#3a1a1a';
+  ctx.fillStyle = '#f4ecd0'; ctx.beginPath(); ctx.arc(17, 17, 12.5, 0, 7); ctx.fill();
+  ctx.fillStyle = '#e8383c'; ctx.beginPath(); ctx.arc(17, 17, 12.5, Math.PI, 0); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(17, 17, 12.5, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(4.5, 17); ctx.lineTo(29.5, 17); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.ellipse(12.5, 11, 3.2, 2, -0.6, 0, 7); ctx.fill();
+  return c;
+}
+
+function drawBook(): Texture {
+  const S = 26 * RES;
+  const [c, ctx] = canvas(S, S);
+  ctx.scale(S / 26, S / 26);
+  ctx.lineWidth = 1.3; ctx.strokeStyle = '#2a1a4a'; ctx.lineJoin = 'round';
+  ctx.fillStyle = '#7a4ad8'; ctx.beginPath(); ctx.roundRect(4, 3, 18, 20, 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f4ecd0'; ctx.fillRect(7, 5, 13, 16); ctx.strokeRect(7, 5, 13, 16);
+  ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.moveTo(13.5, 8); ctx.lineTo(15, 12); ctx.lineTo(19, 12.4); ctx.lineTo(16, 15); ctx.lineTo(17, 19); ctx.lineTo(13.5, 16.8); ctx.lineTo(10, 19); ctx.lineTo(11, 15); ctx.lineTo(8, 12.4); ctx.lineTo(12, 12); ctx.closePath(); ctx.fill();
+  return tex(c);
+}
+
 function radial(size: number, stops: [number, string][]): Texture {
   const [c, ctx] = canvas(size, size);
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
@@ -451,10 +479,11 @@ export function buildTextures(): Textures {
   const mobs = LADDER.map((m, i) => mobTex(m.name, i, m.big ? BIG_SIZE : MOB_SIZE, false));
   const bosses = BOSSES.map((b) => mobTex(b.name, 29, Math.round(1.6 * b.scale * 2 * 20 * 1.3), true));
   const icons: Record<string, string> = {};
-  SKILLS.forEach((s, i) => { icons[s.key] = iconDataUrl(abbreviate(s.name), SKILL_COLORS[s.element], i); });
+  [...SKILLS, ...EVOLVED_SKILLS].forEach((s, i) => { icons[s.key] = iconDataUrl(abbreviate(s.name), SKILL_COLORS[s.element], i); });
   PASSIVES.forEach((p, i) => { icons[p.key] = iconDataUrl(abbreviate(p.name), PASSIVE_COLOR, i + 3); });
   icons.elixir = iconDataUrl('EX', '#d0e8ff', 2);
   icons.mesobag = iconDataUrl('$', '#c89020', 3);
+  icons.gacha = gachaCanvas(48).toDataURL();
   const [bc, bctx] = canvas(2, 2);
   bctx.fillStyle = '#fff'; bctx.fillRect(0, 0, 2, 2);
   return {
@@ -467,6 +496,8 @@ export function buildTextures(): Textures {
     elixir: drawBottle('#7fd8ff', true),
     meso: drawMeso(false),
     bag: drawMeso(true),
+    gacha: tex(gachaCanvas(34 * RES)),
+    book: drawBook(),
     missiles: drawMissiles(),
     ring: drawRing(),
     disc: radial(64, [[0, 'rgba(255,255,255,1)'], [0.7, 'rgba(255,255,255,0.85)'], [1, 'rgba(255,255,255,0)']]),

@@ -1,5 +1,6 @@
 // Run: node --experimental-strip-types scripts/test-sim.ts
 import { Sim } from '../src/game/sim.ts';
+import { EVOLUTION_PASSIVE_SLOTS, partnerSlotOpen } from '../src/game/evolutions.ts';
 import { botInput, botPick } from '../src/game/bot.ts';
 import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER } from '../src/game/data.ts';
 
@@ -130,7 +131,7 @@ function jobRun(clsKey: string, branchIdx: number) {
   }
   const b = c.branches[branchIdx];
   const label = `${c.name} -> ${JOB_BY_CODE[b].name}`;
-  ok(sim.skills.length <= MAX_SKILLS && sim.passives.length <= MAX_PASSIVES, `${label}: at most ${MAX_SKILLS} skills and ${MAX_PASSIVES} passives`);
+  ok(sim.skills.length <= MAX_SKILLS && sim.passives.length <= MAX_PASSIVES + EVOLUTION_PASSIVE_SLOTS, `${label}: at most ${MAX_SKILLS} skills and ${MAX_PASSIVES} passives (+${EVOLUTION_PASSIVE_SLOTS} for an evolution partner)`);
   ok(t30 > 0 && t70 > 0, `${label}: reached level 30 (${t30.toFixed(0)} s) and 70 (${t70.toFixed(0)} s)`);
   eq(jobOffers, 1, `${label}: one job choice`);
   eq(jobOfferLevel, 30, `${label}: job choice at level 30`);
@@ -203,6 +204,8 @@ function maxedSim(clsKey: string, seed = 31) {
     if (s.jobs.includes(jobOfId(d.id)) && s.skills.length < MAX_SKILLS) s.skills.push({ key: k, level: 8, cd: 0 });
   }
   for (const p of PASSIVES) if (JOB_BY_CODE[jobOfId(p.id)]?.cls === clsKey && s.jobs.includes(jobOfId(p.id)) && s.passives.length < MAX_PASSIVES) s.passives.push({ key: p.key, level: 5 });
+  // and the extra slot a recipe partner may take, so nothing at all is left to offer
+  for (const p of PASSIVES) if (!s.passives.some((o) => o.key === p.key) && partnerSlotOpen(s, p.key, MAX_PASSIVES)) s.passives.push({ key: p.key, level: 5 });
   s.recalc();
   return s;
 }

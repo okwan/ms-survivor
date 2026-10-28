@@ -1,5 +1,5 @@
 import type { Sim } from '../game/sim.ts';
-import { GEM, MESO } from '../game/types.ts';
+import { GACHA, GEM, MASTERY, MESO } from '../game/types.ts';
 import { theme } from './theme.ts';
 
 const SIZE = 120;
@@ -44,7 +44,15 @@ export class Radar {
     const ps = sim.pickups;
     for (let i = 0; i < ps.length; i++) {
       const p = ps[i];
-      const x = h + (p.x - px) * k, y = h + (p.y - py) * k;
+      let x = h + (p.x - px) * k, y = h + (p.y - py) * k;
+      if (p.kind === GACHA || p.kind === MASTERY) {
+        // capsules and Mastery Books stay on the radar: far ones sit on its rim, pointing the way
+        const dx = x - h, dy = y - h, d = Math.hypot(dx, dy), lim = h - 5;
+        if (d > lim) { x = h + (dx / d) * lim; y = h + (dy / d) * lim; }
+        c.fillStyle = '#ff9a3a';
+        c.fillRect(x - 2, y - 2, 5, 5);
+        continue;
+      }
       if (x < 0 || y < 0 || x > SIZE || y > SIZE) continue;
       c.fillStyle = p.kind === GEM ? '#5ab4ff' : p.kind === MESO ? '#ffd23a' : '#ff7ad0';
       c.fillRect(x - 1, y - 1, p.kind === GEM ? 2 : 3, p.kind === GEM ? 2 : 3);

@@ -195,6 +195,8 @@ try {
   ok(ic.frames.filter((f) => f.action === '09000000').every((f) => f.delay === 120), 'meso frames without delays play at 120 ms');
   eq(ic.frames.filter((f) => f.action === '09000003').length, 4, 'iconRaw directly under the item is found too');
   eq([it.keys!.potionRed, it.keys!.mesoBag], ['02000000', '09000003'], 'role keys');
+  eq(it.keys!.gacha, '05220000', 'Gachapon Ticket role key (Cash/0522.img)');
+  ok(it.icons!.frames.some((f) => f.action === '05220000'), 'Gachapon Ticket icon frame in the atlas');
   eq(png(join(dist, 'maple', ic.atlas)), ic.size, 'icon atlas PNG size matches');
   const sc = it.scrolls!;
   eq(sc['2041001'], { name: 'Scroll for One-Handed Sword for ATT 60%', slot: 'weapon', wclass: 'warrior', stat: 'pad', pct: 60 }, 'scroll parsed');

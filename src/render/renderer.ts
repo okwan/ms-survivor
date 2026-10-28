@@ -2,7 +2,7 @@ import { Application, BitmapFont, BitmapText, Container, Graphics, Sprite, Text,
 import { BOSSES, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
 import type { Stance } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
-import { BAG, ELIXIR, GEAR, GEM, MESO, POTION, SCROLL } from '../game/types.ts';
+import { BAG, ELIXIR, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
 import { ItemArt } from '../maple/item-art.ts';
@@ -430,6 +430,14 @@ export class Renderer {
         if (this.levelFx) this.levelFx.pending = true;
         this.ringFx(tx.ring, sim.px, sim.py, 6, 0.9, 0xffd23a, 0.8);
         break;
+      case 'evolve':
+        // the job-advancement effect again; the "Mastery Book! ... evolved into ..." banner is the sim's raid text
+        if (this.levelFx) this.levelFx.pending = true;
+        this.ringFx(tx.ring, sim.px, sim.py, 6, 0.9, 0xb070ff, 0.8);
+        break;
+      case 'gacha':
+        this.ringFx(tx.glow, sim.px, sim.py, 4, 0.6, 0xff9a3a, 0.9);
+        break;
       case 'drop':
         // the item's name floats up in its tier colour (grey, white, blue, purple, gold); a boss drop stays up longer
         if (e.tier === undefined) {
@@ -442,6 +450,7 @@ export class Renderer {
       case 'pickup':
         if (e.kind === MESO || e.kind === BAG) this.number(e.x, e.y - 0.6, '+' + e.value, 0xffd23a, 15, 0.7);
         else if (e.kind === POTION || e.kind === ELIXIR) this.ringFx(tx.glow, e.x, e.y, 2.5, 0.4, 0xff6a6a, 0.9);
+        else if (e.kind === GACHA || e.kind === MASTERY) this.ringFx(tx.glow, e.x, e.y, 3, 0.5, 0xffc060, 0.9);
         break;
       default:
         break;
@@ -626,6 +635,8 @@ export class Renderer {
         }
         case GEAR: t = (p.item && this.gearIcons?.texture(p.item)) || tx.bag; scale = 1; break;
         case SCROLL: t = p.scroll ? ia.scrollTexture(p.scroll) : ia.placeholderScroll(); scale = 1; break;
+        case GACHA: { const r = ia.gacha(); t = r ?? tx.gacha; scale = r ? 1.25 : SCALE; break; }
+        case MASTERY: t = tx.book; break;
         default: t = tx.bag;
       }
       if (sp.texture !== t) sp.texture = t;

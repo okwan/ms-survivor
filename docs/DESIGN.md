@@ -33,6 +33,7 @@ World units are yards (Azeroth's unit). `PX_PER_YD = 20` at zoom 1. Player speed
 | Gems | at most 350 on the ground; past that a new gem's value merges into the nearest existing gem |
 | Heals | 1.5% of kills drop a Red Potion (heals 25% max HP); every boss drops an Elixir (full heal) |
 | Mesos | 30% of kills drop a meso coin worth `1 + floor(tier/3)`; bosses drop a bag worth 50 x boss number. Banked at run end |
+| Gachapon | the boss each wave is named after (not its companions) also drops a Gachapon capsule (see "Gachapon and evolutions"); it never expires and the pet leaves it alone |
 
 ### Enemy ladder (tier: name, v83 mob id, hp, speed yd/s, damage, xp, scale, big)
 
@@ -125,6 +126,40 @@ upgrades of owned passives below max; one of the three is always a skill card wh
 Each run has 2 rerolls and 2 banishes (banish removes that card's key from the run and redraws the slot).
 Cards show icon placeholder, name, "NEW" or "Lv N > N+1", and a one-line effect.
 
+## Gachapon and evolutions
+
+Both live in new files (`src/game/gachapon.ts`, `src/game/evolutions.ts`, UI in `src/ui/gachapon.ts`); `sim.ts` only has small hooks.
+Neither pauses the run.
+
+- **Capsule.** The boss a wave is named after drops a GACHA pickup (companions do not) (value = boss number) next to the Elixir and the meso bag. It does not expire, the pet never
+  fetches it (the hero walks to it), the radar shows it as an orange square on its rim when it is far away. Icon: Gachapon Ticket
+  (Item.wz `Cash/0522.img/05220000`, role `gacha`), else a drawn two-colour ball.
+- **Roll.** On touch the sim's rng picks 1, 3 or 5 upgrades. Boss #1: 75 / 22 / 3 %; each later boss index adds 6 % to "3" and 2 % to "5", taken from "1"
+  (boss #6: 35 / 52 / 13 %).
+- **Upgrades**, one by one: the first is the Mastery Book evolution when a recipe is ready; otherwise +1 level to a random owned skill below max, else a random
+  owned passive below max (stats recalculated), else 25 mesos x boss number. The sim emits `{ type: 'gacha', boss, count, results }`.
+- **Reveal.** `GachaUi` shows a panel (the status-bar blue and white of the HUD pills) that ticks through the results one by one between 0.5 s and 2.5 s with
+  icon and "Lv N > N+1", then fades; five upgrades get a larger "JACKPOT!" panel with a glow. A second capsule waits for the first. Sounds: `game.drop`
+  (`game.levelup` for 5), a tick per result.
+- **Evolutions.** There is no 4th job, so each 3rd job has one recipe (docs/CLASSES.md): the 3rd-job skill at SKILL_MAX_LEVEL AND the partner passive owned (any
+  level). When ready, the next capsule's first upgrade is a Mastery Book: the base skill is REPLACED in its slot by the 4th-job skill at SKILL_MAX_LEVEL; the base
+  key is banished for the run, the evolved key is not in the card pool, so neither is ever offered again. Banner and note: "Mastery Book! <Base> evolved into
+  <Evolved>", plus the job-advancement effect (`evolve` event). Evolved skills are SkillDefs of the existing kinds with `evolved: true`; their ids are in
+  `WANTED_SKILLS`, so the asset step extracts their icons and effects (a wrong id only logs MISMATCH).
+- **Passive slot.** Passive slots are full long before level 70 (when the partner passives become available), so a hero who owns a recipe's skill may take that
+  recipe's partner into one extra passive slot (7 passives at most; each 3rd job has exactly one recipe). The status bar shows seven passive icons.
+- **Cards.** A maxed 3rd-job skill whose partner is not owned makes the partner passive twice as likely in offers. Cards of skills and passives in a recipe show
+  "Evolves into <Evolved> with a Mastery Book" / "Evolves <Skill> with a Mastery Book".
+- **Fallback.** Once the last boss has spawned (no capsule is left to come), a ready recipe drops a Mastery Book pickup from normal kills at 0.2 % per kill, one on
+  the ground at most; touching it evolves like a capsule. Own seeded stream. In headless bot runs it is rarely needed (see timing below).
+- **Timing** (headless bot, 10 branches x 3 seeds, god mode and mortal runs identical): level 70 at 6:54 to 7:50 (median 7:26; one slow Priest run 10:23). When the
+  bot takes the recipe's skill and partner cards the skill is maxed at 7:22 to 9:10 (one run 10:37) and the evolution happens in the 9:00 boss's capsule (9:03 to
+  9:41, one slow run 10:40) in all 30 runs. With plain first-card picks the skill is maxed at 8:40 to 10:40 in only 18 of 30 runs (the others never own it) and the evolution lands in the 9:00 or
+  the 11:15 boss's capsule. So the fallback Mastery Book (after 13:30) is rarely needed; it covers players who max the skill late.
+- **Balance** (one skill alone at max level, test-gacha): damage against a boss-sized target is x2.8 to x3.2 the base skill for the eight non-line skills and their
+  crowd damage x2.9 to x3.6; the two line skills (Hurricane, Piercing Arrow) are x7.7 and x9.9 against a boss but only x0.3 and x0.7 against a dense crowd, since their
+  bases (Arrow Rain's carpet, Arrow Eruption's strikes) are crowd or weak-on-bosses skills. Boss lifetimes in bot runs: Zakum 42 s average without evolutions, 30 s with.
+
 ## Presentation (placeholder art, Pixi v8 WebGL, menus and HUD as a DOM overlay)
 
 - Camera follows the player. Ground: a tiled grass texture generated at boot (two greens, a few flowers), repeating forever.
@@ -151,7 +186,7 @@ In dev builds and when the URL has `?bot`, expose `window.game` with:
 `sim` (the live simulation), `start(seed?)`, `step(seconds)` (advance the sim headlessly in fixed 1/60 s ticks, auto-handling nothing),
 `pick(i)`, `reroll()`, `banish(i)`, `setInput(x, y)`, `god(on)` (no damage taken, damage still recorded), `speed(mult)` (time scale),
 `autopick(on)` (pick card 0 automatically), and `snapshot()` returning a plain object: elapsed, hp, maxHp, level, xp, kills, alive enemies,
-boss info, owned skills and passives, pending card offer, over/won.
+boss info, owned skills and passives, pending card offer, over/won Also in the snapshot: `gacha` (capsules and Mastery Books on the ground), `evolved` (evolved skill keys) and `evolutionReady` (the evolved key whose recipe is ready, or null).
 
 ## Assets (milestone 3)
 

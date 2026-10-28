@@ -13,7 +13,9 @@ import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
 import { BAG_SIZE, GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
 import type { GearItem, GearSlot } from './gear.ts';
-import { BAG, ELIXIR, GEAR, GEM, MESO, POTION, SCROLL } from './types.ts';
+import { BAG, ELIXIR, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from './types.ts';
+import { dropGacha, maybeDropMastery, openGacha, useMasteryBook } from './gachapon.ts';
+import { partnerSlotOpen, pickCard, readyRecipe } from './evolutions.ts';
 import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
 import type { BookData } from './book.ts';
 import { Pet } from './pet.ts';
@@ -100,6 +102,8 @@ export class Sim {
   // items (src/game/scrolls.ts, pet.ts, book.ts): own seeded stream again, so none of it shifts the run's other random draws
   scrollPool: ScrollPool;
   private itemRng: Rng;
+  /** Mastery Book fallback drops (src/game/gachapon.ts): its own stream as well */
+  gachaRng: Rng;
   scrollDrops = 0;
   /** counts up whenever a scroll changed a worn item (the equip window redraws) */
   upgradeVersion = 0;
@@ -151,6 +155,7 @@ export class Sim {
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
     this.itemRng = new Rng((seed ^ 0x5bd1e995) >>> 0);
+    this.gachaRng = new Rng((seed ^ 0x2c1b3c6d) >>> 0);
     this.scrollPool = opts.scrolls ?? ScrollPool.placeholder();
     this.book = { ...(opts.book ?? {}) };
     this.bookBonus = Math.max(0, Math.min(BOOK_BONUS_CAP, opts.bookBonus ?? bookBonus(opts.book)));
@@ -330,6 +335,7 @@ export class Sim {
       this.dropPickup(GEM, e.x, e.y, gv);
       this.dropPickup(ELIXIR, e.x + 1.2, e.y + 0.6, 1);
       this.dropPickup(BAG, e.x - 1.2, e.y + 0.6, 50 * (e.boss + 1));
+      if (e.lead) dropGacha(this, e.boss, e.x, e.y + 1.4);
       // the first item is a tier above the run tier (rarely two); a boss wave gets bigger loot as more bosses fall
       const n = Math.min(GEAR_BOSS_DROPS_MAX, GEAR_BOSS_DROPS + Math.floor((this.bossKills - 1) / GEAR_BOSS_DROP_STEP));
       for (let k = 0; k < n; k++) {
@@ -344,6 +350,7 @@ export class Sim {
     if (this.rng.next() < 0.3) this.dropPickup(MESO, e.x, e.y, mesoValue(e.tier));
     if (this.gearRng.next() < (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL)) this.dropGear(e.x, e.y, false);
     if (this.itemRng.next() < SCROLL_DROP_NORMAL) this.dropScroll(e.x, e.y + 0.4);
+    maybeDropMastery(this, e.x, e.y);
   }
 
   // ---- notes, Monster Book, scrolls --------------------------------------------------------------
@@ -515,7 +522,7 @@ export class Sim {
     return p;
   }
 
-  private dropPickup(kind: PickupKind, x: number, y: number, value: number) {
+  dropPickup(kind: PickupKind, x: number, y: number, value: number) {
     if (kind === GEM) {
       if (this.gemCount >= MAX_GEMS) {
         let best: Pickup | null = null, bd = 1e18;
@@ -586,7 +593,7 @@ export class Sim {
     e.dmg = d.dmg * enemyDmgMult(p);
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
-    e.tier = tier; e.boss = -1; e.big = d.big; e.add = add; e.alive = true;
+    e.tier = tier; e.boss = -1; e.lead = false; e.big = d.big; e.add = add; e.alive = true;
     e.hitCd = 0.5; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = this.rng.next() * 6.28;
     e.moving = true; e.berserk = false; e.age = 0; e.novaT = 0; e.castT = 0; e.summonT = 0; e.idx = -1;
     this.enemies.push(e);
@@ -604,7 +611,7 @@ export class Sim {
     e.dmg = def.dmg * enemyDmgMult(p);
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
-    e.tier = LADDER.length - 1; e.boss = n; e.big = true; e.add = false; e.alive = true;
+    e.tier = LADDER.length - 1; e.boss = n; e.lead = hpFrac >= 1; e.big = true; e.add = false; e.alive = true;
     e.hitCd = 1.0; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
     e.novaT = NOVA_EVERY; e.castT = 0; e.summonT = SUMMON_EVERY; e.idx = -1;
     this.enemies.push(e);
@@ -833,6 +840,8 @@ export class Sim {
       case MESO: case BAG: this.mesos += p.value; break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
       case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
+      case GACHA: openGacha(this, p.value - 1); break;
+      case MASTERY: useMasteryBook(this); break;
     }
   }
 
@@ -893,7 +902,7 @@ export class Sim {
       const own = this.passives.find((o) => o.key === p.key);
       if (own) {
         if (own.level < PASSIVE_MAX_LEVEL) out.push({ kind: 'passive', key: p.key, name: p.name, isNew: false, from: own.level, to: own.level + 1, desc: p.desc });
-      } else if (this.passives.length < MAX_PASSIVES) {
+      } else if (this.passives.length < MAX_PASSIVES || partnerSlotOpen(this, p.key, MAX_PASSIVES)) {
         out.push({ kind: 'passive', key: p.key, name: p.name, isNew: true, from: 0, to: 1, desc: p.desc });
       }
     }
@@ -951,7 +960,7 @@ export class Sim {
     const skillIdx: number[] = [];
     for (let i = 0; i < pool.length; i++) if (pool[i].kind === 'skill') skillIdx.push(i);
     if (skillIdx.length > 0) out.push(pool.splice(skillIdx[this.rng.int(skillIdx.length)], 1)[0]);
-    while (out.length < 3 && pool.length > 0) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    while (out.length < 3 && pool.length > 0) out.push(pool.splice(pickCard(this, pool), 1)[0]);
     // nothing left to upgrade (or fewer than three things): Masteries fill the cards, so a level-up always makes the hero stronger
     // (the first Mastery card is always real; later ones are sometimes an Elixir or Meso Bag)
     if (out.length < 3) out.push(...this.masteryCards(3 - out.length, out));
@@ -1131,6 +1140,9 @@ export class Sim {
       nextBossIn: this.nextBossIn(),
       skills: this.skills.map((s) => ({ key: s.key, level: s.level })),
       passives: this.passives.map((s) => ({ key: s.key, level: s.level })),
+      gacha: this.pickups.filter((p) => p.kind === GACHA || p.kind === MASTERY).length,
+      evolved: this.skills.filter((s) => SKILL_BY_KEY[s.key]?.evolved).map((s) => s.key),
+      evolutionReady: readyRecipe(this)?.evolved ?? null,
       offer: this.offer ? this.offer.map((c) => ({ key: c.key, name: c.name, isNew: c.isNew, from: c.from, to: c.to })) : null,
       mastery: { ...this.masteryLv },
       skillMastery: { ...this.skillMastery },

@@ -208,7 +208,7 @@ export interface SkillDef {
   desc: string;
   /** missile speed in yd/s (bolt, pierce); default MISSILE_SPEED */
   missile?: number;
-  /** melee / bolt: number of times each target is hit */
+  /** melee / bolt / cone: number of times each target is hit */
   hits?: number;
   /** pierce: enemies passed = pierceBase + level (default 3) */
   pierceBase?: number;
@@ -226,6 +226,8 @@ export interface SkillDef {
   heal?: number;
   /** melee: chance per hit that the enemy drops a meso pickup */
   steal?: number;
+  /** a 4th-job skill from a Mastery Book (src/game/evolutions.ts): replaces its base skill, always at SKILL_MAX_LEVEL, never offered on cards */
+  evolved?: true;
 }
 const S = (key: string, name: string, id: number, kind: SkillKind, element: Element, dmg: number, cd: number, range: number, radius: number, count: number, desc: string, extra: Partial<SkillDef> = {}): SkillDef =>
   ({ key, name, id, kind, element, dmg, cd, range, radius, count, desc, ...extra });

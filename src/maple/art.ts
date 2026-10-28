@@ -4,6 +4,7 @@
  */
 import { ImageSource, Rectangle, Texture } from 'pixi.js';
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
+import { EVOLVED_SKILLS } from '../game/evolutions.ts';
 import type { FrameRec, MapleManifest } from './assets.ts';
 import { buildItemArt } from './item-art.ts';
 import type { ItemArt } from './item-art.ts';
@@ -192,17 +193,19 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
     Promise.all(LADDER.map((d) => mobArt(d.id))),
     Promise.all(BOSSES.map((d) => mobArt(d.id))),
     Promise.all(
-      SKILLS.map(async (s) => {
+      [...SKILLS, ...EVOLVED_SKILLS].map(async (s) => {
         const a = await skillArt(s.id);
         if (a) art.skills.set(s.key, a);
       }),
     ),
-    Promise.all([...SKILLS.map((s) => icon(s.key, s.id)), ...PASSIVES.map((p) => icon(p.key, p.id))]),
+    Promise.all([...SKILLS, ...EVOLVED_SKILLS].map((s) => icon(s.key, s.id)).concat(PASSIVES.map((p) => icon(p.key, p.id)))),
   ]);
   await buildWorldArt(m, base, art, atlas);
   art.regions = await buildRegionArt(m, base, atlas);
   art.bgmRegions = art.regions.map((r) => r.bgm);
   art.items = await buildItemArt(m, base, atlas);
+  const gachaIcon = art.items?.gachaUrl();
+  if (gachaIcon) art.icons.gacha = gachaIcon;
   for (const [k, v] of Object.entries(m.sfx ?? {})) art.sfx[k] = base + v;
   art.tiers = tiers;
   art.bosses = bosses;

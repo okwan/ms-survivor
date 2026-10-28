@@ -18,6 +18,8 @@ export interface ItemIconKeys {
   mesoGold?: string;
   mesoBundle?: string;
   mesoBag?: string;
+  /** Gachapon Ticket (Cash/0522.img/05220000): the boss capsule, a single frame */
+  gacha?: string;
 }
 
 export interface PetSection extends AtlasRef {
