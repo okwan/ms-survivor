@@ -424,10 +424,12 @@ const digitSet = (scale, fill, edge, extras = {}) => {
 
 /** Slot frames of the synthetic Equip / Item backgrounds (the detector in slot-detect.ts must find these). Same grid as src/ui/layout.ts. */
 export const EQUIP_FIXTURE_RECTS = (() => {
-  const cells = [[0, 0], [2, 0], [4, 0], [0, 1], [4, 1], [4, 2], [4, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [0, 5], [1, 5], [2, 5], [3, 5], [4, 5]];
-  return cells.map(([c, r]) => ({ x: 6 + c * 34, y: 34 + r * 36, w: 32, h: 32 }));
+  // the real Equip background's lattice: 5 columns x 7 rows, 33 px apart; which cells hold frames (the middle columns of the upper rows are the character area)
+  const cells = [[1, 0], [1, 1], [2, 1], [3, 1], [4, 1], [1, 2], [2, 2], [3, 2], [4, 2], [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [0, 5], [1, 5], [2, 5], [3, 5], [0, 6], [1, 6], [2, 6]];
+  return cells.map(([c, r]) => ({ x: 5 + c * 33, y: 35 + r * 33, w: 32, h: 32 }));
 })();
-export const ITEM_FIXTURE_RECTS = Array.from({ length: 24 }, (_, i) => ({ x: 8 + (i % 4) * 36, y: 74 + Math.floor(i / 4) * 36, w: 32, h: 32 }));
+export const ITEM_FIXTURE_HEADER_RECTS = [{ x: 8, y: 6, w: 32, h: 32 }, { x: 80, y: 6, w: 32, h: 32 }];
+export const ITEM_FIXTURE_RECTS = Array.from({ length: 24 }, (_, i) => ({ x: 8 + (i % 4) * 36, y: 50 + Math.floor(i / 4) * 34, w: 32, h: 32 }));
 /** a window background: gradient panel, a title bar, and recessed dark frames with a light bevel at the given rects */
 const windowBg = (w, h, rects, top, bottom) => (x, y) => {
   for (const r of rects) {
@@ -718,7 +720,7 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     Stat: { backgrnd: canvas(175, 299, panel(175, 299, [230, 225, 210], [200, 195, 175])), BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]) },
     Equip: { backgrnd: canvas(175, 304, windowBg(175, 304, EQUIP_FIXTURE_RECTS, [210, 205, 190], [180, 175, 155]), { origin: vec(0, 0) }), backgrnd2: canvas(184, 26, solid([120, 130, 170])), backgrnd3: canvas(184, 20, solid([100, 110, 150])), BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]), slot: slotFrame },
     Item: {
-      backgrnd: canvas(175, 289, windowBg(175, 289, ITEM_FIXTURE_RECTS, [220, 215, 200], [185, 180, 160]), { origin: vec(0, 0) }),
+      backgrnd: canvas(175, 289, windowBg(175, 289, [...ITEM_FIXTURE_HEADER_RECTS, ...ITEM_FIXTURE_RECTS], [220, 215, 200], [185, 180, 160]), { origin: vec(0, 0) }),
       Tab: { enabled: { 0: tab(true), 1: tab(true), 2: tab(true) }, disabled: { 0: tab(false), 1: tab(false), 2: tab(false) } },
       BtClose: state(14, 14, [200, 90, 90], [140, 30, 30]),
     },

@@ -16,7 +16,7 @@ const Y0 = 30;
 /** every Maple equip position; the ones the game has items for carry its GearSlot, the rest are empty frames */
 export type EquipPos =
   | GearSlot
-  | 'ring1' | 'ring2' | 'pendant' | 'face' | 'eye' | 'earring' | 'belt' | 'medal' | 'pet';
+  | 'ring1' | 'ring2' | 'ring3' | 'ring4' | 'pendant' | 'face' | 'eye' | 'earring' | 'belt' | 'medal' | 'pet' | 'extra1' | 'extra2' | 'extra3';
 
 export interface SlotRect {
   pos: EquipPos;

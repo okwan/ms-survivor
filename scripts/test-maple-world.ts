@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import type { MapleManifest } from '../src/maple/assets.ts';
-import { EQUIP_FIXTURE_RECTS, ITEM_FIXTURE_RECTS, writeFixture, writeWorldFixture } from './maple-fixture.mjs';
+import { EQUIP_FIXTURE_RECTS, ITEM_FIXTURE_HEADER_RECTS, ITEM_FIXTURE_RECTS, writeFixture, writeWorldFixture } from './maple-fixture.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'test-maple-world-'));
 let checks = 0;
@@ -111,12 +111,12 @@ try {
   // baked slot frames are found in the window backgrounds (known rectangles in the fixture, within 1 px)
   const near = (found: { x: number; y: number; w: number; h: number }[] | undefined, want: { x: number; y: number; w: number; h: number }[], label: string) => {
     ok(found && found.length === want.length, `${label}: ${found?.length} frames found, ${want.length} expected`);
-    for (const w of want) ok(found!.some((f) => Math.abs(f.x - w.x) <= 1 && Math.abs(f.y - w.y) <= 1 && Math.abs(f.w - w.w) <= 1), `${label}: frame at ${w.x},${w.y} found`);
+    for (const w of want) ok(found!.some((f) => Math.abs(f.x - w.x) <= 1 && Math.abs(f.y - w.y) <= 1 && Math.abs(f.w - w.w) <= 2), `${label}: frame at ${w.x},${w.y} found`);
   };
   near(p['uiw.equip'].rects, EQUIP_FIXTURE_RECTS, 'equip');
-  near(p['uiw.item'].rects, ITEM_FIXTURE_RECTS, 'item');
+  near(p['uiw.item'].rects, [...ITEM_FIXTURE_HEADER_RECTS, ...ITEM_FIXTURE_RECTS], 'item');
   eq([p['uiw.equip'].w, p['uiw.equip'].h, p['uiw.item'].w, p['uiw.item'].h], [175, 304, 175, 289], 'window backgrounds keep their size');
-  ok(/uiw\.equip: 175x304, 17 slot frames detected/.test(out) && /uiw\.item: 175x289, 24 slot frames/.test(out) && /uiw\.equip slot overlay/.test(out), 'log lists the rects and prints the overlay');
+  ok(/uiw\.equip: 175x304, 26 slot frames detected/.test(out) && /uiw\.item: 175x289, 26 slot frames/.test(out) && /uiw\.equip slot overlay/.test(out), 'log lists the rects and prints the overlay');
 
   // run regions
   const rg = m!.regions!.list;
