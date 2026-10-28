@@ -496,3 +496,65 @@ html, body { -webkit-touch-callout: none; -webkit-tap-highlight-color: transpare
   .tagline { font-size: 12px; }
   .btn.big { font-size: 18px; padding: 6px; }
 }
+
+/* ---------- damage meter (src/ui/meter.ts): hangs under the kills pill and buffs, never takes touches ---------- */
+.meter { pointer-events: none; width: 210px; margin-top: 2px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.45); border-radius: 4px; font: bold 11px Arial, "Segoe UI", sans-serif; overflow: hidden; text-shadow: -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000; }
+.mt-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 1px 6px; height: 16px; background: linear-gradient(#4c9af0, #1d58b8 55%, #123a82); color: #fff; font-size: 11px; letter-spacing: .03em; white-space: nowrap; }
+.mt-title b { font-weight: bold; color: #ffe066; font-size: 10px; }
+.mt-body { padding: 2px; display: flex; flex-direction: column; gap: 1px; }
+.mt-row { position: relative; display: flex; align-items: center; gap: 4px; height: 18px; padding: 0 4px 0 2px; background: rgba(0,0,0,.35); overflow: hidden; color: #fff; }
+.mt-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0; opacity: .75; }
+.mt-row img { position: relative; width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
+.mt-nm { position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-v, .mt-pct, .mt-dps { position: relative; flex: none; font-style: normal; text-decoration: none; }
+.mt-v { font-weight: bold; }
+.mt-pct { color: #ffe9a8; min-width: 28px; text-align: right; }
+.mt-dps { color: #bfe0ff; font-size: 9px; min-width: 34px; text-align: right; }
+.meterbtn { font-size: 10px; letter-spacing: 0; padding: 0; width: 38px; opacity: .65; filter: grayscale(.7); }
+.meterbtn.on { opacity: 1; filter: none; }
+.ms-ui .meter { border-radius: 0; border: 1px solid #aab4cc; box-shadow: 0 0 0 1px #000; }
+.ms-ui .mt-title { text-shadow: var(--ol); }
+.ms-ui .mt-row { border-radius: 0; }
+.ms-menu .meterbtn { width: 38px; height: 26px; border: 1px solid #fff; border-radius: 2px; background: linear-gradient(#4c9af0, #1d58b8 55%, #123a82); font-size: 10px; text-shadow: var(--ol); image-rendering: auto; }
+.ms-menu .meterbtn:hover, .ms-menu .meterbtn:active { background: linear-gradient(#4c9af0, #1d58b8 55%, #123a82); }
+.ms-btn .meterbtn { height: 26px; line-height: 24px; min-width: 38px; font-size: 10px; padding: 0; border: 1px solid #fff; border-radius: 2px; background: linear-gradient(#4c9af0, #1d58b8 55%, #123a82); border-image: none; }
+@media (max-height: 500px), (max-width: 640px) {
+  .meter { width: 150px; font-size: 9px; max-height: calc(100vh - 71px * var(--sbs) - 140px); }
+  .mt-title { height: 13px; font-size: 9px; padding: 0 4px; }
+  .mt-title b { font-size: 9px; }
+  .mt-row { height: 13px; gap: 3px; padding-right: 3px; }
+  .mt-row img { width: 12px; height: 12px; }
+  .mt-row:nth-child(n+5) { display: none !important; }
+  .mt-dps { display: none; }
+  .mt-pct { min-width: 24px; }
+}
+
+/* results: damage breakdown */
+.win.resw { width: min(440px, 100%); }
+.dmgbox { text-align: left; }
+.dmg-h { font-size: 12px; font-weight: 900; letter-spacing: .06em; color: var(--blue3); text-transform: uppercase; margin-bottom: 3px; }
+.dmg-list { max-height: 168px; overflow-y: auto; touch-action: pan-y; display: flex; flex-direction: column; gap: 2px; border: 1px solid #b9d6fa; border-radius: 6px; background: #12285c; padding: 2px; }
+.dmg-row { position: relative; display: flex; align-items: center; gap: 5px; min-height: 20px; padding: 1px 6px 1px 2px; font: bold 11px Arial, "Segoe UI", sans-serif; color: #fff; text-shadow: -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000; overflow: hidden; background: rgba(0,0,0,.35); }
+.dmg-row .mt-bar { opacity: .7; }
+.dmg-row img { position: relative; width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
+.dmg-row b, .dmg-row u, .dmg-row em, .dmg-row small { position: relative; flex: none; text-decoration: none; font-style: normal; text-align: right; }
+.dmg-row b { min-width: 38px; }
+.dmg-row u { min-width: 28px; color: #ffe9a8; }
+.dmg-row em { min-width: 42px; color: #bfe0ff; font-size: 10px; }
+.dmg-row small { min-width: 38px; font-size: 9px; color: #dfe9fb; }
+@media (max-height: 500px), (max-width: 640px) {
+  .dmg-list { max-height: 92px; }
+  .dmg-row { gap: 3px; font-size: 10px; padding-right: 3px; }
+  .dmg-row b { min-width: 32px; }
+  .dmg-row em { min-width: 36px; }
+  .dmg-row small:nth-of-type(1) { display: none; }
+}
+@media (max-height: 500px) {
+  .resw .win-body { padding: 6px 14px 8px; gap: 4px; }
+  .resw .tagline { display: none; }
+  .resw .res { font-size: 12px; }
+  .resw .res td { padding: 1px 8px; }
+  .resw .win-head { font-size: 16px; padding: 4px 12px; }
+  .resw .dmg-list { max-height: 66px; }
+  .resw .btn { padding: 5px 16px; font-size: 14px; }
+}

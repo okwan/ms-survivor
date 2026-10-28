@@ -17,7 +17,7 @@ export interface SavedCharacter {
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean };
+  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean; /** damage meter shown (unset: on for desktop, off on touch) */ meter?: boolean };
   character: SavedCharacter | null;
   /** Monster Book: kills per mob id, kept across runs (src/game/book.ts) */
   book: BookData;
@@ -51,6 +51,7 @@ export function loadSave(): SaveData {
         muted: o.settings?.muted === true,
         autoEquip: o.settings?.autoEquip !== false,
         pet: o.settings?.pet !== false,
+        ...(typeof o.settings?.meter === 'boolean' ? { meter: o.settings.meter } : {}),
       },
       character: readCharacter(o.character),
       book: sanitizeBook(o.book),
