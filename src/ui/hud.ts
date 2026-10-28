@@ -223,7 +223,7 @@ export class Hud {
     for (let i = 0; i < sim.skills.length; i++) {
       const sk = sim.skills[i];
       const def = SKILL_BY_KEY[sk.key];
-      const r = def ? 1 - Math.max(0, Math.min(1, sk.cd / skillCooldown(def, sk.level, sim.haste))) : 1;
+      const r = def ? 1 - Math.max(0, Math.min(1, sk.cd / (skillCooldown(def, sk.level, sim.haste) * (sim.hyper[sk.key]?.cd ?? 1)))) : 1;
       ready += r;
       this.cdFill(this.skillCd[i], r);
     }

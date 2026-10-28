@@ -29,6 +29,8 @@ export interface ScreenHandlers {
   shop(): void;
   /** the player picked a difficulty tier */
   difficulty(i: number): void;
+  /** opens the Hyper Skills window */
+  hyper(): void;
   pet(on: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
@@ -46,6 +48,8 @@ export interface Results {
   /** the tier played, and the name of the tier this win unlocked (if any) */
   difficulty?: number;
   unlocked?: string;
+  /** Hyper SP earned this run for the hero's class (shown when above 0) */
+  hyperSp?: { name: string; sp: number };
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, html = ''): HTMLElementTagNameMap[K] {
@@ -90,6 +94,7 @@ export class Screens {
     else this.title.querySelector('.win-body')!.insertBefore(this.diff.el, this.title.querySelector('.btn.big'));
     this.login?.addButton('Monster Book', () => h.book());
     this.login?.addButton('Henesys Shop', () => h.shop());
+    this.login?.addButton('Hyper Skills', () => h.hyper());
     this.pause = this.buildPause();
     this.levelup = this.buildLevelUp();
     this.results = el('div', 'screen results hidden');
@@ -131,6 +136,7 @@ export class Screens {
     body.appendChild(this.btn('START', 'primary big', () => this.h.start()));
     body.appendChild(this.btn('Monster Book', 'book-btn', () => this.h.book()));
     body.appendChild(this.btn('Henesys Shop', 'book-btn', () => this.h.shop()));
+    body.appendChild(this.btn('Hyper Skills', 'book-btn', () => this.h.hyper()));
     const petOpt = el('label', 'pet-opt', '<input type="checkbox"> Pet (follows you and picks up mesos and potions)');
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
@@ -296,9 +302,10 @@ export class Screens {
       <tr><td>Bosses slain</td><td>${r.bosses} / ${BOSS_TOTAL}</td></tr>
       <tr><td>Elites slain</td><td>${r.elites}</td></tr>
       <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>`));
+    if (r.hyperSp && r.hyperSp.sp > 0) b.appendChild(el('p', 'res-sp', `+${r.hyperSp.sp} Hyper SP for ${r.hyperSp.name}`));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    b.append(row, this.btn('Henesys Shop', 'res-shop', () => this.h.shop()));
+    b.append(row, this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');
