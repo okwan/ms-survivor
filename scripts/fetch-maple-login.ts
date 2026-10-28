@@ -146,6 +146,7 @@ class Login {
     const scene: LoginSection = { source, backs, objs, bounds, steps, ui: this.loginUi(ui) };
     log(`login scene: ${backs.length} backs, ${objs.length} objects/tiles, ${this.written.size} images, ${(this.out.bytes / 1e6).toFixed(2)} MB; steps ${JSON.stringify(steps)}`);
     try {
+      this.dumpSheet(scene.ui);
       this.dumpPreview(scene);
     } catch (e) {
       warn(`login scene preview: ${(e as Error).message}`);
@@ -212,6 +213,36 @@ class Login {
       }
     }
     return res;
+  }
+
+  /** A contact sheet of the labelled Login.img pieces (rows of the creator, info boards, buttons) as a base64 PNG (LOGIN-UI-PNG lines). */
+  private dumpSheet(ui: Record<string, LoginSprite>) {
+    const keys = Object.keys(ui).filter((k) => /^(NewChar\/(avatarSel\/\d+\/normal|statTb|charAlert|BtCheck\/normal\/0|BtYes\/normal\/0|BtNo\/normal\/0|dice\/0|scroll\/0\/3)|CharSelect\/(charInfo1|icon\/job\/\d)|Common\/(selectWorld|Bt\w+\/normal\/0)|WorldSelect\/BtWorld\/[0-9]\/normal\/0)$/.test(k));
+    const items = keys.map((k) => ({ k, px: this.pixels.get(ui[k].src) })).filter((x) => x.px);
+    const W = 520, gap = 4;
+    let x = 0, y = 0, rowH = 0;
+    const pos: [number, number][] = [];
+    for (const it of items) {
+      if (x + it.px!.w > W) { x = 0; y += rowH + gap; rowH = 0; }
+      pos.push([x, y]);
+      x += it.px!.w + gap;
+      rowH = Math.max(rowH, it.px!.h);
+    }
+    const H = y + rowH;
+    if (!items.length || H > 2000) return;
+    const all = Buffer.alloc(W * H * 4);
+    for (let i = 0; i < W * H; i++) { all[i * 4] = 90; all[i * 4 + 1] = 90; all[i * 4 + 2] = 110; all[i * 4 + 3] = 255; }
+    items.forEach((it, n) => {
+      const px = it.px!, [ox, oy] = pos[n];
+      for (let yy = 0; yy < px.h; yy++)
+        for (let xx = 0; xx < px.w; xx++) {
+          const s = (yy * px.w + xx) * 4, a = px.rgba[s + 3] / 255, o = ((oy + yy) * W + ox + xx) * 4;
+          for (let c = 0; c < 3; c++) all[o + c] = px.rgba[s + c] * a + all[o + c] * (1 - a);
+        }
+    });
+    this.d.log(`login ui sheet (left to right, top to bottom): ${items.map((it, n) => `${it.k}@${pos[n].join(',')}`).join(' ')}`);
+    const b64 = encodePng(W, H, all).toString('base64');
+    for (let i = 0; i < b64.length; i += 3000) console.log(`LOGIN-UI-PNG ${b64.slice(i, i + 3000)}`);
   }
 
   /** Renders the camera view at each step at half size, as one base64 PNG in the log. */
