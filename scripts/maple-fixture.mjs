@@ -287,6 +287,8 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
         104040000: { streetName: 'Henesys', mapName: 'Hunting Ground I' },
         101010000: { streetName: 'Ellinia', mapName: 'Forest of Patience' },
         102000100: { streetName: 'Perion', mapName: 'Rocky Hill' },
+        105040300: { streetName: 'Sleepywood', mapName: 'Deep Cave' },
+        107000000: { streetName: 'Kerning City', mapName: 'Swamp' },
       },
     },
   };
@@ -417,7 +419,7 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     1: { info: { tS: 'grassySoil' }, tile: {}, obj: {} },
     foothold: {},
   };
-  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([30, 30, 30])) } }, ...objs };
+  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([90, 110, 100])) } }, 'Tile/dryRock.img': { bsc: { 0: canvas(8, 8, solid([170, 130, 90])) } }, 'Tile/darkCave.img': { bsc: { 0: canvas(8, 8, solid([0, 0, 0])) } }, ...objs };
   if (!noTown) mapImgs['Map/Map1/100000000.img'] = town;
   // run regions: 0 and 1 are candidates, 2 is found by its String.wz street name (no candidate exists), 3 to 6 have no map at all
   objs['Obj/acc2.img'] = { nature: { rock: { a: { 0: objFrame(80, 50, bushPx(80, 50)) } } } };
@@ -432,8 +434,11 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
   };
   const natureRefs = [['acc1', 'nature', 'tree', '0', 20], ['acc1', 'nature', 'bush', '0', 15], ['acc1', 'flower', 'a', '0', 12], ['acc1', 'flower', 'b', '0', 6], ['etc', 'fence', 'a', '0', 30], ['house', 'home', 'big', '0', 9], ['etc', 'connect', 'ladder', '0', 7]];
   mapImgs['Map/Map1/104040000.img'] = regionMap('grassySoil', natureRefs, 'Bgm00/FloralLife');
-  mapImgs['Map/Map1/101010000.img'] = regionMap('darkMountain', [['acc1', 'nature', 'tree', '0', 12], ['acc2', 'nature', 'rock', 'a', 9], ['signboard', 'sign', 'a', '0', 5]], 'Bgm00/Henesys', 12);
-  mapImgs['Map/Map1/102000100.img'] = regionMap('grassySoil', natureRefs.slice(0, 3), 'Bgm00/FloralLife');
+  mapImgs['Map/Map1/101010000.img'] = regionMap('darkMountain', [['acc1', 'nature', 'tree', '0', 12], ['acc2', 'nature', 'rock', 'a', 9], ['acc1', 'nature', 'bush', '0', 6], ['acc1', 'flower', 'b', '0', 4], ['signboard', 'sign', 'a', '0', 5]], 'Bgm00/Henesys', 12);
+  mapImgs['Map/Map1/102000100.img'] = regionMap('dryRock', natureRefs.slice(0, 4), 'Bgm00/FloralLife');
+  // rejected on purpose: a black cave ground (region 3), a tile set an earlier region already uses (region 4)
+  mapImgs['Map/Map1/105040300.img'] = regionMap('darkCave', natureRefs.slice(0, 4), 'Bgm00/Henesys');
+  mapImgs['Map/Map1/107000000.img'] = regionMap('grassySoil', natureRefs.slice(0, 4), 'Bgm00/Henesys');
   mapImgs['Back/grassySoil.img'] = { back: { 0: canvas(16, 16, solid([200, 230, 255])) } };
   writeFileSync(join(dir, 'Map.wz'), buildWz(mapImgs));
 

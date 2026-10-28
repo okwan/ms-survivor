@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { BIG, Placements, clusterAt } from '../src/render/cluster.ts';
-import { BIG_MIN_H, DECOR_CAP, DECOR_EXCLUDE, DECOR_INCLUDE, REGION_WANTS, SMALL_MAX_H, mapImagePath } from '../src/maple/region-data.ts';
+import { BIG_MIN_H, DECOR_CAP, DECOR_EXCLUDE, DECOR_FALLBACK_EXCLUDE, DECOR_FALLBACK_INCLUDE, DECOR_INCLUDE, MIN_DECOR, MIN_GROUND_LUMA, REGION_WANTS, SCAN_CAP, SMALL_MAX_H, mapImagePath } from '../src/maple/region-data.ts';
 import type { DecorSize, RegionEntry, RegionObj, RegionsSection } from '../src/maple/region-types.ts';
 import { asciiPreview } from './png.mjs';
 import { worldTools } from './fetch-maple-world.ts';
@@ -97,6 +97,21 @@ function mapNames(d: RegionDeps): Map<number, { street: string; name: string }> 
   return out;
 }
 
+/** Objects of a map that count as decor: the nature filter, widened to artificiality/acc objects when it keeps fewer than MIN_DECOR. */
+function passing(info: MapInfo): ObjRef[] {
+  const ranked = [...info.objs.values()].sort((a, b) => b.n - a.n);
+  const nature = ranked.filter((o) => {
+    const segs = [o.oS, o.l0, o.l1, o.l2];
+    return segs.some((s) => DECOR_INCLUDE.test(s)) && !segs.some((s) => DECOR_EXCLUDE.test(s));
+  });
+  if (nature.length >= MIN_DECOR) return nature;
+  const extra = ranked.filter((o) => {
+    const segs = [o.oS, o.l0, o.l1, o.l2];
+    return !nature.includes(o) && segs.some((s) => DECOR_FALLBACK_INCLUDE.test(s)) && !segs.some((s) => DECOR_FALLBACK_EXCLUDE.test(s));
+  });
+  return [...nature, ...extra].sort((a, b) => b.n - a.n);
+}
+
 const classOf = (h: number): DecorSize => (h >= BIG_MIN_H ? 'big' : h <= SMALL_MAX_H ? 'small' : 'medium');
 
 /** Draws frame `f` with its origin at (x, y) over an opaque RGBA canvas. */
@@ -128,6 +143,8 @@ export function buildRegions(d: RegionDeps): RegionsResult {
   d.log(`regions: Map.wz holds ${mapPaths.length} field maps`);
   const list: (RegionEntry | null)[] = [];
   const bgmFiles = new Map<string, string | null>();
+  /** dominant tile sets taken by earlier regions: two regions never share one */
+  const usedSets = new Set<string>();
 
   REGION_WANTS.forEach((want, index) => {
     try {
@@ -140,48 +157,78 @@ export function buildRegions(d: RegionDeps): RegionsResult {
 
   function region(index: number): RegionEntry | null {
     const want = REGION_WANTS[index];
-    let id = 0;
-    let img: { root: Any; key: Any } | null = null;
-    let info: MapInfo | null = null;
-    const tried: string[] = [];
-    for (const c of want.candidates) {
-      const im = wz!.image(mapImagePath(c));
-      if (!im) { tried.push(`${c} absent`); continue; }
-      const inf = analyse(im.root);
-      if (!inf.tiles) { tried.push(`${c} no tiles (keys ${im.root.keys().slice(0, 10).join(',')})`); continue; }
-      id = c; img = im; info = inf;
-      break;
-    }
-    if (!img || !info) {
-      // scan for the first map of the area: String.wz street name, lowest id first
-      const hits = mapPaths
-        .map((p) => ({ p, id: Number(p.slice(-13, -4)) }))
-        .filter((m) => want.street.test(names.get(m.id)?.street ?? ''))
-        .sort((a, b) => a.id - b.id);
-      d.log(`region ${index} ${want.label}: candidates failed (${tried.join('; ')}); street scan found ${hits.length} maps${hits.length ? ` (${hits.slice(0, 6).map((h) => h.id).join(' ')})` : ''}`);
-      for (const h of hits) {
-        const im = wz!.image(h.p);
-        const inf = im ? analyse(im.root) : null;
-        if (im && inf?.tiles) { id = h.id; img = im; info = inf; break; }
+    interface Pick { id: number; img: { root: Any; key: Any }; info: MapInfo; tileSet: string; ground: NonNullable<RegionEntry['ground']> | null }
+    const hasNames = names.size > 0;
+    /** cheap verdict first (street, tiles, decor, tile set), then the ground brightness; null reason = acceptable */
+    const evaluate = (c: number, path: string, cheap: { img: { root: Any; key: Any }; info: MapInfo; decor: number } | null = null): { reason: string | null; pick?: Pick; decor: number } => {
+      const nm = names.get(c);
+      if (want.strict && hasNames && !want.street.test(nm?.street ?? '')) return { reason: `street "${nm?.street ?? '?'}" is not ${want.street}`, decor: 0 };
+      let im = cheap?.img ?? wz!.image(path);
+      if (!im) return { reason: 'absent', decor: 0 };
+      const inf = cheap?.info ?? analyse(im.root);
+      const decor = cheap?.decor ?? passing(inf).length;
+      if (!inf.tiles) return { reason: `no tiles (keys ${im.root.keys().slice(0, 10).join(',')})`, decor };
+      const ranked = [...inf.tileSets].sort((a, b) => b[1] - a[1]);
+      if (ranked[0] && usedSets.has(ranked[0][0])) return { reason: `tile set ${ranked[0][0]} already used by an earlier region`, decor };
+      if (decor < MIN_DECOR) return { reason: `only ${decor} decor objects pass the filter`, decor };
+      let ground: Pick['ground'] = null, tileSet = ranked[0]?.[0] ?? 'grassySoil';
+      for (const [ts] of ranked.length ? ranked : ([['grassySoil', 0]] as [string, number][])) {
+        if (usedSets.has(ts)) continue;
+        ground = tools.buildGround(wz!, ts, inf.bsc.get(ts) ?? new Map(), `map/region-${index}-ground.png`);
+        if (ground) { tileSet = ts; break; }
       }
+      if (!ground) return { reason: 'no usable ground tile set', decor };
+      const luma = 0.299 * ground.avg[0] + 0.587 * ground.avg[1] + 0.114 * ground.avg[2];
+      if (luma < MIN_GROUND_LUMA) return { reason: `ground too dark (luma ${luma.toFixed(0)}, rgb(${ground.avg.join(',')}), tile set ${tileSet})`, decor };
+      return { reason: null, decor, pick: { id: c, img: im, info: inf, tileSet, ground } };
+    };
+    const verdict = (c: number, r: { reason: string | null; decor: number }) => d.log(`region ${index} ${want.label}: candidate ${c} "${names.get(c)?.street ?? '?'}" / "${names.get(c)?.name ?? '?'}": ${r.reason ? 'REJECTED, ' + r.reason : `ACCEPTED, ${r.decor} decor objects`}`);
+
+    let chosen: Pick | null = null;
+    for (const c of want.candidates) {
+      const r = evaluate(c, mapImagePath(c));
+      verdict(c, r);
+      if (r.pick) { chosen = r.pick; break; }
     }
-    if (!img || !info) {
-      d.warn(`region ${index} ${want.label}: no map with tiles found; the game reuses another region here`);
+    if (!chosen) {
+      // scan the folder for maps of the area (String.wz street name); cheap checks on up to SCAN_CAP of them, then the best by decor count and tiles
+      const folder = String(want.candidates[0]).padStart(9, '0')[0];
+      const hits = mapPaths
+        .filter((p) => p.toLowerCase().includes(`/map${folder}/`))
+        .map((p) => ({ p, id: Number(p.slice(-13, -4)) }))
+        .filter((m) => want.street.test(names.get(m.id)?.street ?? '') && !want.candidates.includes(m.id))
+        .sort((a, b) => a.id - b.id)
+        .slice(0, SCAN_CAP);
+      d.log(`region ${index} ${want.label}: no candidate acceptable; scanning ${hits.length} maps whose street matches ${want.street}`);
+      const scored = hits.flatMap((h) => {
+        const im = wz!.image(h.p);
+        if (!im) return [];
+        const info = analyse(im.root);
+        return [{ ...h, img: im, info, decor: passing(info).length }];
+      }).filter((h) => h.info.tiles && h.decor >= MIN_DECOR).sort((a, b) => b.decor - a.decor || b.info.tiles - a.info.tiles);
+      let built = 0;
+      for (const h of scored) {
+        if (built++ >= 8) break;
+        const r = evaluate(h.id, h.p, h);
+        verdict(h.id, r);
+        if (r.pick) { chosen = r.pick; break; }
+      }
+      if (!scored.length) d.log(`region ${index} ${want.label}: the scan found no map with tiles and ${MIN_DECOR}+ decor objects`);
+    }
+    if (!chosen) {
+      d.warn(`region ${index} ${want.label}: no acceptable map found; the game reuses another region here`);
       return null;
     }
+    const { id, img, info } = chosen;
+    usedSets.add(chosen.tileSet);
 
     const nm = names.get(id) ?? { street: '', name: '' };
     const ranked = [...info.tileSets].sort((a, b) => b[1] - a[1]);
     d.log(`region ${index} ${want.label}: map ${id} "${nm.street}" / "${nm.name}", top-level ${img.root.keys().join(' ')}; tile sets ${ranked.map(([k, n]) => `${k}=${n}`).join(' ') || '-'} of ${info.tiles} tiles`);
 
-    // ground from the dominant tile set that actually has a usable bsc piece
-    let tileSet = ranked[0]?.[0] ?? 'grassySoil';
-    let ground: RegionEntry['ground'] = null;
-    for (const [ts] of ranked.length ? ranked : ([['grassySoil', 0]] as [string, number][])) {
-      ground = tools.buildGround(wz!, ts, info.bsc.get(ts) ?? new Map(), `map/region-${index}-ground.png`);
-      if (ground) { tileSet = ts; break; }
-    }
-    if (!ground) d.warn(`region ${index}: no ground for tile sets ${ranked.map((r) => r[0]).join(',') || '(none)'}; the renderer keeps its default ground here`);
+    // the winning candidate's ground again (candidates tried after it would have overwritten the file; the build is deterministic)
+    const tileSet = chosen.tileSet;
+    const ground = tools.buildGround(wz!, tileSet, info.bsc.get(tileSet) ?? new Map(), `map/region-${index}-ground.png`);
 
     const objects = decor(index, wz!, info, ground?.avg ?? [79, 154, 60]);
     const bgm = music(index, info.bgm);
@@ -200,10 +247,7 @@ export function buildRegions(d: RegionDeps): RegionsResult {
     const paths = new Map<string, number>();
     for (const o of ranked) paths.set(`${o.oS}/${o.l0}/${o.l1}`, (paths.get(`${o.oS}/${o.l0}/${o.l1}`) ?? 0) + o.n);
     d.log(`region ${index}: ${ranked.length} distinct objects; oS/l0/l1 seen: ${[...paths].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, n]) => `${k}x${n}`).join(' ') || '-'}`);
-    const keep = ranked.filter((o) => {
-      const segs = [o.oS, o.l0, o.l1, o.l2];
-      return segs.some((s) => DECOR_INCLUDE.test(s)) && !segs.some((s) => DECOR_EXCLUDE.test(s));
-    });
+    const keep = passing(info);
     d.log(`region ${index}: filter keeps ${keep.length} of ${ranked.length} objects`);
 
     const images = new Map<string, { root: Any; key: Any } | null>();

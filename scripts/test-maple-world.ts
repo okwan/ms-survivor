@@ -104,12 +104,12 @@ try {
   eq([g0.street, g0.name, g0.tileSet], ['Henesys', 'Hunting Ground I', 'grassySoil'], 'region 0 names and dominant tile set');
   eq(g1.tileSet, 'darkMountain', 'region 1 uses its own dominant tile set (12 of 13 tiles)');
   eq(g0.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.flower.a.0:small', 'acc1.flower.b.0:small', 'acc1.nature.bush.0:small', 'acc1.nature.tree.0:big'], 'region 0 keeps nature decor only, with size classes');
-  eq(g1.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.nature.tree.0:big', 'acc2.nature.rock.a:medium'], 'region 1 decor: tree and rock, signboard dropped');
+  eq(g1.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.flower.b.0:small', 'acc1.nature.bush.0:small', 'acc1.nature.tree.0:big', 'acc2.nature.rock.a:medium'], 'region 1 decor: nature only, signboard dropped');
   ok(existsSync(maple(g0.ground!.image)) && existsSync(maple(g0.objects!.atlas)) && g0.ground!.image !== g1.ground!.image, 'per-region ground and atlas PNGs');
   eq(png(maple(g1.objects!.atlas)).w, g1.objects!.size[0], 'region atlas size matches');
   eq([g0.bgm, g1.bgm, rg[2]!.bgm], ['bgm/region-0.mp3', 'bgm/region-1.mp3', 'bgm/region-0.mp3'], 'regions sharing a track share the file');
   ok(existsSync(maple(g1.bgm!)), 'region bgm file written');
-  ok(/region 2 Perion rocks: candidates failed/.test(out) && /street scan found 1 maps/.test(out) && /oS\/l0\/l1 seen/.test(out) && /region 0 decor cluster/.test(out), 'log shows the scan, the object paths and a cluster preview');
+  ok(/region 3 .*candidate 105040300 .*REJECTED, ground too dark/.test(out) && /region 4 .*candidate 107000000 .*already used/.test(out) && /region 2 .*scanning 1 maps/.test(out) && /region 2 .*candidate 102000100 .*ACCEPTED/.test(out) && /oS\/l0\/l1 seen/.test(out) && /region 0 decor cluster/.test(out), 'log shows the scan, the object paths and a cluster preview');
 
   // sound effects: MP3 as is, PCM wrapped into a WAV, the oversized one skipped
   const sf = m!.sfx!;
