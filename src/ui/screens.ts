@@ -35,6 +35,7 @@ export interface Results {
   kills: number;
   mesos: number;
   bosses: number;
+  elites: number;
   best: boolean;
 }
 
@@ -264,6 +265,7 @@ export class Screens {
       <tr><td>Level</td><td>${r.level}</td></tr>
       <tr><td>Monsters slain</td><td>${r.kills}</td></tr>
       <tr><td>Bosses slain</td><td>${r.bosses} / ${BOSS_TOTAL}</td></tr>
+      <tr><td>Elites slain</td><td>${r.elites}</td></tr>
       <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>`));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));

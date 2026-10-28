@@ -206,6 +206,10 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
   art.items = await buildItemArt(m, base, atlas);
   const gachaIcon = art.items?.gachaUrl();
   if (gachaIcon) art.icons.gacha = gachaIcon;
+  for (let i = 0; i < 5; i++) {
+    const u = art.items?.fieldUrl(i);
+    if (u) art.icons['field' + i] = u;
+  }
   for (const [k, v] of Object.entries(m.sfx ?? {})) art.sfx[k] = base + v;
   art.tiers = tiers;
   art.bosses = bosses;

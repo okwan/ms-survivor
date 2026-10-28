@@ -1,5 +1,5 @@
 import type { Sim } from './sim.ts';
-import { GACHA, GEM, MASTERY } from './types.ts';
+import { EV_BOX, EV_TREASURE, FIELD, GACHA, GEM, MASTERY } from './types.ts';
 
 /**
  * Simple kiting bot: flee close enemies (with a sideways bias so it circles), otherwise
@@ -12,7 +12,8 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
   const es = sim.enemies;
   for (let i = 0; i < es.length; i++) {
     const e = es[i];
-    if (!e.alive) continue;
+    // boxes never attack and Treasure Pigs only run: neither is something to flee from
+    if (!e.alive || e.ev === EV_BOX || e.ev === EV_TREASURE) continue;
     const dx = px - e.x, dy = py - e.y;
     const reach = e.boss >= 0 ? sim.cls.botReach + 4.5 : sim.cls.botReach;
     const d2 = dx * dx + dy * dy;
@@ -23,17 +24,30 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
     fx += dx * w;
     fy += dy * w;
   }
+  // quiet enough to detour for a box or a Treasure Pig
+  const calm = fx * fx + fy * fy < 0.04;
   let best = 1e9, gx = 0, gy = 0;
   const ps = sim.pickups;
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
-    if (p.kind === GEM || p.kind === 1 || p.kind === 3 || p.kind === GACHA || p.kind === MASTERY) {
+    if (p.kind === GEM || p.kind === 1 || p.kind === 3 || p.kind === GACHA || p.kind === MASTERY || p.kind === FIELD) {
       const dx = p.x - px, dy = p.y - py;
       const d2 = dx * dx + dy * dy;
       // capsules and Mastery Books are worth a longer walk and win over nearer gems
-      const rare = p.kind === GACHA || p.kind === MASTERY;
+      const rare = p.kind === GACHA || p.kind === MASTERY || p.kind === FIELD;
       const score = rare ? d2 * 0.1 : d2;
       if (score < best && d2 < (rare ? 900 : 144)) { best = score; gx = dx; gy = dy; }
+    }
+  }
+  // field items sit where the hero can reach them; breakable boxes (within 45 yd) and fleeing Treasure Pigs (within 20 yd) are worth a walk when calm
+  if (calm) {
+    for (let i = 0; i < es.length; i++) {
+      const e = es[i];
+      if (!e.alive || (e.ev !== EV_BOX && e.ev !== EV_TREASURE)) continue;
+      const dx = e.x - px, dy = e.y - py;
+      const d2 = dx * dx + dy * dy;
+      const score = d2 * 0.1;
+      if (score < best && d2 < (e.ev === EV_BOX ? 2025 : 400)) { best = score; gx = dx; gy = dy; }
     }
   }
   let x = 0, y = 0;

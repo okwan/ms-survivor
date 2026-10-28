@@ -13,8 +13,11 @@ import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
 import { BAG_SIZE, GEAR_SLOTS, GearPool, itemScore, totalBonus } from './gear.ts';
 import type { GearItem, GearSlot } from './gear.ts';
-import { BAG, ELIXIR, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from './types.ts';
-import { dropGacha, maybeDropMastery, openGacha, useMasteryBook } from './gachapon.ts';
+import { BAG, ELIXIR, EV_BOX, EV_STAMPEDE, EV_TREASURE, FIELD, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from './types.ts';
+import { dropGacha, maybeDropMastery, openGacha, useMasteryBook, ELITE_CAPSULE } from './gachapon.ts';
+import { Elites, eliteContact, eliteTitle, eliteDamage, eliteKilled, eliteTick, maybePromote, updateElites } from './elites.ts';
+import { Swarms, eventStep, eventUpkeep, treasureKilled, updateSwarms } from './events.ts';
+import { CLOCK_BOSS_SLOW, COUPON_GEM_MULT, ELIXIR_DAMAGE, FieldState, breakBox, updateField, useFieldItem } from './fieldItems.ts';
 import { partnerSlotOpen, pickCard, readyRecipe } from './evolutions.ts';
 import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
 import type { BookData } from './book.ts';
@@ -105,6 +108,14 @@ export class Sim {
   /** Mastery Book fallback drops (src/game/gachapon.ts): its own stream as well */
   gachaRng: Rng;
   scrollDrops = 0;
+  /** Elites, swarm events and field items (src/game/elites.ts, events.ts, fieldItems.ts): own seeded streams, so they never shift the run's other random draws */
+  elites: Elites;
+  swarms: Swarms;
+  field: FieldState;
+  /** false: none of the three runs (baseline for balance comparisons) */
+  eventsOn: boolean;
+  /** event mobs and boxes alive (they are not counted against the alive target) */
+  private extras = 0;
   /** counts up whenever a scroll changed a worn item (the equip window redraws) */
   upgradeVersion = 0;
   /** short messages for the UI (newest last), pruned as they expire */
@@ -150,12 +161,16 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; mobSpeeds?: Record<number, number> } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
     this.itemRng = new Rng((seed ^ 0x5bd1e995) >>> 0);
     this.gachaRng = new Rng((seed ^ 0x2c1b3c6d) >>> 0);
+    this.elites = new Elites(seed);
+    this.swarms = new Swarms(seed);
+    this.field = new FieldState(seed);
+    this.eventsOn = opts.events ?? true;
     this.scrollPool = opts.scrolls ?? ScrollPool.placeholder();
     this.book = { ...(opts.book ?? {}) };
     this.bookBonus = Math.max(0, Math.min(BOOK_BONUS_CAP, opts.bookBonus ?? bookBonus(opts.book)));
@@ -281,11 +296,13 @@ export class Sim {
     let amt = base * this.might * (1 + SKILL_MASTERY_PER * (this.skillMastery[this.curSkill] ?? 0));
     const crit = this.rng.next() < this.crit;
     if (crit) amt *= PLAYER_BASE.critMult;
-    amt = Math.max(1, Math.round(amt));
+    if (this.field.elixirT > 0) amt *= ELIXIR_DAMAGE;
+    amt = eliteDamage(e, Math.max(1, Math.round(amt)));
     e.hp -= amt;
     e.flash = 0.08;
     e.lastHit = this.t;
     this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0, skill: this.curSkill, tier: e.tier, bossIdx: e.boss });
+    if (e.ev === EV_BOX) { this.kill(e); return; }
     const def = SKILL_BY_KEY[this.curSkill];
     if (def !== undefined && (def.drain || def.stun || def.root || def.weaken || def.steal)) this.applyEffects(e, def, amt);
     if (e.hp <= 0) this.kill(e);
@@ -321,8 +338,19 @@ export class Sim {
     return n;
   }
 
-  private kill(e: Enemy) {
+  /** Flat damage that bypasses the hero's multipliers (Powder Keg against Elites and bosses) */
+  hurt(e: Enemy, amt: number) {
+    if (!e.alive) return;
+    e.hp -= amt;
+    e.flash = 0.08;
+    e.lastHit = this.t;
+    this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: Math.round(amt), crit: false, boss: e.boss >= 0, skill: '', tier: e.tier, bossIdx: e.boss });
+    if (e.hp <= 0) this.kill(e);
+  }
+
+  kill(e: Enemy) {
     e.alive = false;
+    if (e.ev === EV_BOX) { breakBox(this, e); return; }
     this.kills++;
     this.emit({ type: 'death', x: e.x, y: e.y, tier: e.tier, boss: e.boss, big: e.big, facing: e.facing });
     const gv = e.xp * 2 * this.growth;
@@ -351,6 +379,8 @@ export class Sim {
     if (this.gearRng.next() < (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL)) this.dropGear(e.x, e.y, false);
     if (this.itemRng.next() < SCROLL_DROP_NORMAL) this.dropScroll(e.x, e.y + 0.4);
     maybeDropMastery(this, e.x, e.y);
+    if (e.elite) eliteKilled(this, e);
+    if (e.ev === EV_TREASURE) treasureKilled(this, e);
   }
 
   // ---- notes, Monster Book, scrolls --------------------------------------------------------------
@@ -374,7 +404,7 @@ export class Sim {
     }
   }
 
-  private dropScroll(x: number, y: number) {
+  dropScroll(x: number, y: number) {
     const d = this.scrollPool.roll(this.itemRng, this.equipped, this.cls.key);
     if (!d) return;
     this.scrollDrops++;
@@ -522,7 +552,7 @@ export class Sim {
     return p;
   }
 
-  dropPickup(kind: PickupKind, x: number, y: number, value: number) {
+  dropPickup(kind: PickupKind, x: number, y: number, value: number, life?: number) {
     if (kind === GEM) {
       if (this.gemCount >= MAX_GEMS) {
         let best: Pickup | null = null, bd = 1e18;
@@ -542,7 +572,9 @@ export class Sim {
         if (k === MESO || k === POTION) { this.removePickup(i); break; }
       }
     }
-    this.pickups.push(this.newPickup(kind, x, y, value));
+    const p = this.newPickup(kind, x, y, value);
+    if (life !== undefined) p.life = life;
+    this.pickups.push(p);
   }
 
   private removePickup(i: number) {
@@ -583,7 +615,7 @@ export class Sim {
   }
 
   // ---- enemies ---------------------------------------------------------------------------------
-  private spawnEnemy(tier: number, x: number, y: number, add: boolean): Enemy {
+  spawnEnemy(tier: number, x: number, y: number, add: boolean): Enemy {
     const d = LADDER[tier];
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
@@ -596,6 +628,7 @@ export class Sim {
     e.tier = tier; e.boss = -1; e.lead = false; e.big = d.big; e.add = add; e.alive = true;
     e.hitCd = 0.5; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = this.rng.next() * 6.28;
     e.moving = true; e.berserk = false; e.age = 0; e.novaT = 0; e.castT = 0; e.summonT = 0; e.idx = -1;
+    e.elite = 0; e.ev = 0; e.vx = 0; e.vy = 0; e.evT = 0;
     this.enemies.push(e);
     return e;
   }
@@ -614,6 +647,7 @@ export class Sim {
     e.tier = LADDER.length - 1; e.boss = n; e.lead = hpFrac >= 1; e.big = true; e.add = false; e.alive = true;
     e.hitCd = 1.0; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
     e.novaT = NOVA_EVERY; e.castT = 0; e.summonT = SUMMON_EVERY; e.idx = -1;
+    e.elite = 0; e.ev = 0; e.vx = 0; e.vy = 0; e.evT = 0;
     this.enemies.push(e);
     this.emit({ type: 'bossSpawn', boss: n, name: def.name, x: e.x, y: e.y });
   }
@@ -661,7 +695,7 @@ export class Sim {
     this.spawnT += SPAWN_INTERVAL;
     if (this.spawnT < 0) this.spawnT = 0;
     const target = aliveTarget(this.t);
-    const alive = this.enemies.length;
+    const alive = this.enemies.length - this.extras;
     if (alive >= target || alive >= MAX_ENEMIES - 20) return;
     const n = Math.min(4, target - alive);
     const lo = poolLo(this.t);
@@ -669,11 +703,12 @@ export class Sim {
     const d = this.rng.range(SPAWN_RING_MIN, SPAWN_RING_MAX);
     const cx = this.px + Math.cos(a) * d, cy = this.py + Math.sin(a) * d;
     for (let i = 0; i < n; i++) {
-      this.spawnEnemy(lo + this.rng.int(3), cx + this.rng.range(-1.6, 1.6), cy + this.rng.range(-1.6, 1.6), false);
+      const e = this.spawnEnemy(lo + this.rng.int(3), cx + this.rng.range(-1.6, 1.6), cy + this.rng.range(-1.6, 1.6), false);
+      if (i === 0 && this.eventsOn) maybePromote(this, e);
     }
   }
 
-  private hurtPlayer(amount: number, x: number, y: number) {
+  hurtPlayer(amount: number, x: number, y: number) {
     this.damageTaken += amount;
     this.emit({ type: 'playerHit', x, y, amount });
     if (this.god) return;
@@ -713,8 +748,10 @@ export class Sim {
       let dx = px - e.x, dy = py - e.y;
       let d2 = dx * dx + dy * dy;
 
-      // recycle far enemies back onto the spawn ring
-      if (d2 > RECYCLE_DIST * RECYCLE_DIST) {
+      // event mobs and boxes march, flee or sit still and leave play on their own terms (events.ts); the rest are recycled back onto the spawn ring
+      if (e.ev && eventUpkeep(e, dt, dx, dy, d2)) { e.alive = false; continue; }
+      if (e.ev === EV_BOX) continue;
+      if (!e.ev && d2 > RECYCLE_DIST * RECYCLE_DIST) {
         const base = this.moving ? Math.atan2(mvy, mvx) + this.rng.range(-1.0, 1.0) : this.rng.range(0, Math.PI * 2);
         const dist = this.rng.range(SPAWN_RING_MIN, SPAWN_RING_MAX);
         e.x = px + Math.cos(base) * dist;
@@ -724,6 +761,11 @@ export class Sim {
 
       const isBoss = e.boss >= 0;
       let canMove = e.stunT <= 0 && e.rootT <= 0;
+      // Ludibrium Clock: everything but bosses stands still and cannot hurt; bosses are slowed
+      const frozen = this.field.clockT > 0 && !isBoss;
+      if (frozen) canMove = false;
+      else if (this.field.clockT > 0) sp *= CLOCK_BOSS_SLOW;
+      if (e.elite) eliteTick(this, e, dt);
       if (isBoss) {
         const def = BOSSES[e.boss];
         if (def.berserk && !e.berserk && e.age >= BERSERK_AFTER) {
@@ -769,17 +811,20 @@ export class Sim {
       if (canMove && d2 > 0.0001) {
         const inv = 1 / Math.sqrt(d2);
         const stepLen = sp * dt;
-        if (d2 > (e.r + pr) * (e.r + pr) * 0.6) {
-          e.x += dx * inv * stepLen;
-          e.y += dy * inv * stepLen;
-          e.moving = true;
+        if (e.ev === EV_STAMPEDE || e.ev === EV_TREASURE) eventStep(e, dx, dy, inv, stepLen);
+        else {
+          if (d2 > (e.r + pr) * (e.r + pr) * 0.6) {
+            e.x += dx * inv * stepLen;
+            e.y += dy * inv * stepLen;
+            e.moving = true;
+          }
+          if (dx > 0.15) e.facing = 1;
+          else if (dx < -0.15) e.facing = -1;
         }
-        if (dx > 0.15) e.facing = 1;
-        else if (dx < -0.15) e.facing = -1;
       }
 
       // soft separation from neighbours
-      if (!isBoss) {
+      if (!isBoss && e.ev !== EV_STAMPEDE) {
         const cnt = grid.query(e.x, e.y, e.r + 1.0, buf);
         for (let k = 0; k < cnt; k++) {
           const j = buf[k];
@@ -800,9 +845,10 @@ export class Sim {
       // contact
       dx = px - e.x; dy = py - e.y;
       const rr = e.r + pr;
-      if (dx * dx + dy * dy < rr * rr && e.hitCd <= 0 && e.stunT <= 0) {
+      if (dx * dx + dy * dy < rr * rr && e.hitCd <= 0 && e.stunT <= 0 && !frozen) {
         e.hitCd = isBoss ? 1.0 : 1.3;
         this.hurtPlayer(Math.max(1, (e.weakT > 0 ? e.dmg * WEAKEN_FACTOR : e.dmg) - this.armor), px, py);
+        if (e.elite) eliteContact(e);
         if (this.over) return;
       }
     }
@@ -817,7 +863,7 @@ export class Sim {
       if (p.life <= 0) { this.removePickup(i); continue; }
       const dx = px - p.x, dy = py - p.y;
       const d2 = dx * dx + dy * dy;
-      if (!p.pulled && d2 < m2) p.pulled = true;
+      if (!p.pulled && d2 < m2 && p.kind !== FIELD) p.pulled = true;
       if (p.pulled) {
         const d = Math.sqrt(d2) || 0.001;
         const step = Math.min(d, (13 + this.speed) * dt);
@@ -834,13 +880,14 @@ export class Sim {
   private collect(p: Pickup) {
     this.emit({ type: 'pickup', kind: p.kind, x: p.x, y: p.y, value: p.value });
     switch (p.kind) {
-      case GEM: this.addXp(p.value); break;
+      case GEM: this.addXp(this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value); break;
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
       case ELIXIR: this.hp = this.maxHp; break;
       case MESO: case BAG: this.mesos += p.value; break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
       case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
-      case GACHA: openGacha(this, p.value - 1); break;
+      case GACHA: if (p.value >= ELITE_CAPSULE) openGacha(this, p.value - ELITE_CAPSULE, true); else openGacha(this, p.value - 1); break;
+      case FIELD: useFieldItem(this, p.value, p.x, p.y); break;
       case MASTERY: useMasteryBook(this); break;
     }
   }
@@ -1094,6 +1141,7 @@ export class Sim {
       this.bossesSpawned++;
     }
     this.spawner(dt);
+    if (this.eventsOn) { updateElites(this, dt); updateSwarms(this); updateField(this, dt); }
     this.updateEnemies(dt);
     if (this.over) return true;
 
@@ -1105,16 +1153,27 @@ export class Sim {
     while (this.notes.length && this.notes[0].until < this.t) this.notes.shift();
 
     // compact dead enemies
-    let w = 0;
+    let w = 0, extras = 0;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (e.alive) enemies[w++] = e;
+      if (e.alive) { enemies[w++] = e; if (e.ev) extras++; }
       else this.enemyPool.push(e);
     }
     enemies.length = w;
+    this.extras = extras;
 
     this.openOffer();
     return true;
+  }
+
+  /** Living Elites for the bot hook and the snapshot */
+  private eliteInfo() {
+    const out: { name: string; affix: number; hp: number; maxHp: number }[] = [];
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i];
+      if (e.alive && e.elite) out.push({ name: eliteTitle(e), affix: e.elite, hp: e.hp, maxHp: e.maxHp });
+    }
+    return out;
   }
 
   snapshot() {
@@ -1129,6 +1188,10 @@ export class Sim {
       xp: this.xp,
       xpNeed: this.xpNeed,
       kills: this.kills,
+      elitesKilled: this.elites.killed,
+      elites: this.eliteInfo(),
+      swarms: [...this.swarms.started],
+      field: { boxes: this.field.boxesBroken, used: this.field.itemsUsed, coupon: this.field.couponT, elixir: this.field.elixirT, clock: this.field.clockT },
       mesos: this.mesos,
       alive: this.enemies.length,
       x: this.px,

@@ -52,6 +52,17 @@ const POTIONS: [keyof ItemIconKeys, number][] = [['potionRed', 2000000], ['potio
 const MESOS: [keyof ItemIconKeys, number][] = [['mesoBronze', 9000000], ['mesoGold', 9000001], ['mesoBundle', 9000002], ['mesoBag', 9000003]];
 /** Gachapon Ticket: Item.wz/Cash/0522.img/05220000/info/icon (the boss capsule) */
 const GACHA_ID = 5220000;
+/**
+ * Field items (src/game/fieldItems.ts): the candidate item ids per role, tried in order in Consume, Cash and Etc; the first one with an icon wins.
+ * Apple is a sure id; the others are guesses, and each miss is logged, which leaves the drawn placeholder (the game never needs them).
+ */
+const FIELD_ICONS: [keyof ItemIconKeys, string, number[]][] = [
+  ['fieldApple', 'Apple', [2010000]],
+  ['fieldCoupon', '2x EXP Coupon', [5211000, 5211048, 5211060]],
+  ['fieldElixir', 'Warrior Elixir', [2022179, 2022180, 2022181]],
+  ['fieldClock', 'Ludibrium Clock', [2022012, 4031020]],
+  ['fieldKeg', 'Powder Keg', [2270000, 4031136]],
+];
 const PET_IDS = [5000000, 5000001, 5000002, 5000004];
 const PET_ACTIONS: [string, string[]][] = [['stand0', ['stand0', 'stand1', 'stand']], ['move', ['move', 'walk']], ['jump', ['jump']]];
 
@@ -250,6 +261,26 @@ class Items {
         got.push(`gacha=${GACHA_ID}(${fr.px[0].w}x${fr.px[0].h} ${fr.from})`);
         this.preview('Gachapon Ticket icon', fr.px[0]);
       } else log(`items: gacha ${GACHA_ID}: ${!img ? `${path} not found` : !node ? `no node in ${path}; its keys: ${img.root.keys().slice(0, 20).join(',')}` : `no icon canvas; node children: ${node.keys().join(',')}`}; the drawn capsule stays`);
+    }
+    // field items: the first candidate id of each role that has an icon in Consume, Cash or Etc
+    for (const [role, label, ids] of FIELD_ICONS) {
+      let hit = '';
+      for (const n of ids) {
+        for (const folder of ['Consume', 'Cash', 'Etc']) {
+          const path = `${folder}/${id8(n).slice(0, 4)}.img`;
+          const img = wz.image(path);
+          const node = img ? this.itemNode(img.root, n) : null;
+          const fr = img && node ? this.frames(img, node, ['info/icon', 'info/iconRaw', 'icon']) : null;
+          if (!fr) continue;
+          frames.push(this.raw(fr.px[0], id8(n), 0));
+          keys[role] = id8(n);
+          hit = `${role}=${n}(${folder}, ${fr.px[0].w}x${fr.px[0].h})`;
+          break;
+        }
+        if (hit) break;
+      }
+      if (hit) got.push(hit);
+      else log(`items: field item ${label}: none of ${ids.join(', ')} has an icon in Consume / Cash / Etc; the drawn ${label} stays`);
     }
     // mesos: animated iconRaw
     const spec = this.imageOf(wz, 'Special/0900.img');

@@ -20,6 +20,12 @@ export interface ItemIconKeys {
   mesoBag?: string;
   /** Gachapon Ticket (Cash/0522.img/05220000): the boss capsule, a single frame */
   gacha?: string;
+  /** Field items: Apple (Consume 2010000), 2x EXP Coupon, Warrior Elixir, Ludibrium Clock, Powder Keg (guessed ids, see FIELD_ICONS in scripts/fetch-maple-items.ts); a single frame each */
+  fieldApple?: string;
+  fieldCoupon?: string;
+  fieldElixir?: string;
+  fieldClock?: string;
+  fieldKeg?: string;
 }
 
 export interface PetSection extends AtlasRef {

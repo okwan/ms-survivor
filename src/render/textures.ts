@@ -220,6 +220,9 @@ export interface Textures {
   /** Gachapon capsule and Mastery Book pickups (placeholders: the capsule is replaced by the Gachapon Ticket art when extracted) */
   gacha: Texture;
   book: Texture;
+  /** field items (Apple, 2x EXP Coupon, Warrior Elixir, Ludibrium Clock, Powder Keg) and the breakable Maple box: placeholders for the extracted icons */
+  field: Texture[];
+  box: Texture;
   missiles: Record<string, Texture>;
   ring: Texture;
   disc: Texture;
@@ -398,6 +401,54 @@ function drawBook(): Texture {
   return tex(c);
 }
 
+/** The five field items drawn on a 28-unit canvas of S pixels (also the HUD buff icons): apple, coupon, elixir bottle, clock, powder keg */
+export function fieldCanvas(item: number, S: number): HTMLCanvasElement {
+  const [c, ctx] = canvas(S, S);
+  ctx.scale(S / 28, S / 28);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#2a1a1a'; ctx.lineJoin = 'round';
+  switch (item) {
+    case 0: // Apple
+      ctx.fillStyle = '#e8383c'; ctx.beginPath(); ctx.arc(11, 16, 8, 0, 7); ctx.arc(17, 16, 8, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#4fa83a'; ctx.beginPath(); ctx.ellipse(17, 6, 5, 2.6, -0.5, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.ellipse(8.5, 13, 2.2, 3.2, 0.4, 0, 7); ctx.fill();
+      break;
+    case 1: // 2x EXP Coupon
+      ctx.fillStyle = '#5ab4ff'; ctx.beginPath(); ctx.roundRect(2, 7, 24, 15, 3); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('2x', 14, 19);
+      break;
+    case 2: // Warrior Elixir
+      ctx.fillStyle = '#e8d9b0'; ctx.fillRect(11, 2, 6, 6); ctx.strokeRect(11, 2, 6, 6);
+      ctx.fillStyle = '#ff9a3a'; ctx.beginPath(); ctx.arc(14, 18, 8.5, 0, 7); ctx.fill(); ctx.stroke(); ctx.fillRect(12, 7, 4, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(10.5, 16, 2, 0, 7); ctx.fill();
+      break;
+    case 3: // Ludibrium Clock
+      ctx.fillStyle = '#b58cff'; ctx.beginPath(); ctx.arc(14, 15, 11, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f4ecd0'; ctx.beginPath(); ctx.arc(14, 15, 8, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(14, 15); ctx.lineTo(14, 9); ctx.moveTo(14, 15); ctx.lineTo(18.5, 17); ctx.stroke();
+      ctx.fillStyle = '#b58cff'; ctx.beginPath(); ctx.arc(7, 5, 3.2, 0, 7); ctx.arc(21, 5, 3.2, 0, 7); ctx.fill(); ctx.stroke();
+      break;
+    default: // Powder Keg
+      ctx.fillStyle = '#8a5a2a'; ctx.beginPath(); ctx.ellipse(14, 16, 10, 10.5, 0, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = '#3a2410'; ctx.beginPath(); ctx.moveTo(4.5, 12); ctx.lineTo(23.5, 12); ctx.moveTo(4.5, 20); ctx.lineTo(23.5, 20); ctx.stroke();
+      ctx.strokeStyle = '#2a1a1a'; ctx.beginPath(); ctx.moveTo(14, 6); ctx.quadraticCurveTo(17, 3, 20, 4); ctx.stroke();
+      ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(20.5, 3.8, 2.2, 0, 7); ctx.fill();
+  }
+  return c;
+}
+
+/** The breakable Maple box: a wooden crate with metal corners */
+function drawBox(): Texture {
+  const S = 34 * RES;
+  const [c, ctx] = canvas(S, S);
+  ctx.scale(S / 34, S / 34);
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#4a2a10'; ctx.lineJoin = 'round';
+  ctx.fillStyle = '#c8924a'; ctx.beginPath(); ctx.roundRect(4, 7, 26, 22, 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#a8742e'; ctx.fillRect(4, 14, 26, 3); ctx.strokeRect(4, 14, 26, 3);
+  ctx.beginPath(); ctx.moveTo(4, 7); ctx.lineTo(30, 29); ctx.moveTo(30, 7); ctx.lineTo(4, 29); ctx.strokeStyle = '#8a5a22'; ctx.stroke();
+  ctx.fillStyle = '#ffd23a'; ctx.strokeStyle = '#4a2a10'; ctx.beginPath(); ctx.arc(17, 18, 3.2, 0, 7); ctx.fill(); ctx.stroke();
+  return tex(c);
+}
+
 function radial(size: number, stops: [number, string][]): Texture {
   const [c, ctx] = canvas(size, size);
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
@@ -484,6 +535,7 @@ export function buildTextures(): Textures {
   icons.elixir = iconDataUrl('EX', '#d0e8ff', 2);
   icons.mesobag = iconDataUrl('$', '#c89020', 3);
   icons.gacha = gachaCanvas(48).toDataURL();
+  for (let i = 0; i < 5; i++) icons['field' + i] = fieldCanvas(i, 48).toDataURL();
   const [bc, bctx] = canvas(2, 2);
   bctx.fillStyle = '#fff'; bctx.fillRect(0, 0, 2, 2);
   return {
@@ -498,6 +550,8 @@ export function buildTextures(): Textures {
     bag: drawMeso(true),
     gacha: tex(gachaCanvas(34 * RES)),
     book: drawBook(),
+    field: [0, 1, 2, 3, 4].map((i) => tex(fieldCanvas(i, 28 * RES))),
+    box: drawBox(),
     missiles: drawMissiles(),
     ring: drawRing(),
     disc: radial(64, [[0, 'rgba(255,255,255,1)'], [0.7, 'rgba(255,255,255,0.85)'], [1, 'rgba(255,255,255,0)']]),

@@ -1,5 +1,6 @@
 import { EVOLUTION_PASSIVE_SLOTS } from '../game/evolutions.ts';
 import { BOSSES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
+import { FIELD_ITEMS } from '../game/fieldItems.ts';
 import type { Sim } from '../game/sim.ts';
 import { Radar } from './radar.ts';
 import { statusScale } from './layout.ts';
@@ -15,6 +16,13 @@ export const fmtTime = (s: number) => {
   const t = Math.max(0, Math.floor(s));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 };
+
+/** Timed field-item buffs shown under the kills pill: the field item and where its seconds left are kept (Sim.field) */
+const BUFFS: { item: number; left: (s: Sim) => number }[] = [
+  { item: 1, left: (s) => s.field.couponT },
+  { item: 2, left: (s) => s.field.elixirT },
+  { item: 3, left: (s) => s.field.clockT },
+];
 
 export class Hud {
   readonly root: HTMLDivElement;
@@ -37,7 +45,8 @@ export class Hud {
     const r = (this.root = document.createElement('div'));
     r.className = 'hud';
     r.innerHTML = `
-      <div class="hud-tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div></div>
+      <div class="hud-tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div>
+        <div class="buffs">${BUFFS.map((b, i) => `<div class="buff" data-k="buff${i}" title="${FIELD_ITEMS[b.item].name}"><img alt="" data-k="bufficon${i}"><b data-k="bufftime${i}"></b></div>`).join('')}</div></div>
       <div class="hud-top">
         <div class="clock" data-k="clock">0:00</div>
         <div class="nextboss" data-k="next">NEXT BOSS 2:15</div>
@@ -235,6 +244,19 @@ export class Hud {
     const raidOn = sim.raidUntil > sim.t && sim.raidText !== '' && !sim.over;
     this.disp(this.el.raid, raidOn);
     if (raidOn) this.text(this.el.raid, sim.raidText);
+
+    // active field-item buffs: small icon with the seconds left
+    for (let i = 0; i < BUFFS.length; i++) {
+      const left = BUFFS[i].left(sim);
+      const on = left > 0;
+      this.disp(this.el['buff' + i], on);
+      if (!on) continue;
+      const img = this.el['bufficon' + i] as HTMLImageElement;
+      const src = this.icons['field' + BUFFS[i].item] ?? '';
+      if (this.cache.get(img) !== src) { this.cache.set(img, src); img.src = src; }
+      this.text(this.el['bufftime' + i], String(Math.ceil(left)));
+      this.el['buff' + i].classList.toggle('low', left < 5);
+    }
 
     this.radar.draw(sim);
   }

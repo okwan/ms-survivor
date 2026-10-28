@@ -229,6 +229,13 @@ export function playSimEvents(sfx: SfxLike, events: readonly SimEvent[], cls: st
       case 'region':
         sfx.play('game.portal', { volume: 0.8 });
         break;
+      case 'elite':
+      case 'swarm':
+        sfx.play('game.portal', { volume: 0.6 });
+        break;
+      case 'box':
+        sfx.play('game.drop', { volume: 0.6 });
+        break;
       default:
         break;
     }

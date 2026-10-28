@@ -2,7 +2,9 @@ import { Application, BitmapFont, BitmapText, Container, Graphics, Sprite, Text,
 import { BOSSES, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
 import type { Stance } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
-import { BAG, ELIXIR, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from '../game/types.ts';
+import { AFFIXES, ELITE_SCALE, eliteTitle } from '../game/elites.ts';
+import { FIELD_ITEMS, KEG_RADIUS } from '../game/fieldItems.ts';
+import { BAG, ELIXIR, EV_BOX, EV_TREASURE, FIELD, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
 import { ItemArt } from '../maple/item-art.ts';
@@ -23,6 +25,7 @@ const MAX_DMG_NUMBERS = 120;
 const MAX_VFX = 110;
 const MAX_GHOSTS = 100;
 const MAX_ANIMFX = 60;
+const MAX_FIRES = 48;
 /** Maple mobs stand with their feet this many radii below the sim position (the hit circle sits on the body) */
 const FOOT = 0.7;
 const MAX_DECOS = 90;
@@ -37,6 +40,8 @@ interface EnemyView {
   sp: Sprite; stamp: number; barBg: Sprite | null; barFg: Sprite | null; tex: MobTex | null; flashing: boolean;
   /** real-art state: current mob art, animation, time in it, remaining hit1 time */
   art: MobArt | null; act: Anim | null; t: number; hitT: number; flashPrev: boolean;
+  /** Elites: the name plate over the head ("Elite Orange Mushroom" and the affix) and the text it shows */
+  title: Text | null; titleKey: string;
 }
 interface DmgNum { t: BitmapText; life: number; vy: number; active: boolean; max: number }
 interface Vfx { sp: Sprite; active: boolean; t: number; dur: number; s0: number; s1: number; a0: number; a1: number; x: number; y: number; vy: number }
@@ -79,6 +84,8 @@ export class Renderer {
   private projPool: Sprite[] = [];
   private areaViews = new Map<Area, { sp: Sprite; stamp: number }>();
   private areaPool: Sprite[] = [];
+  /** fire patches of Blazing Elites: a glowing disc and a bright rim each */
+  private fires: { fill: Sprite; ring: Sprite }[] = [];
   private dmg: DmgNum[] = [];
   private dmgNext = 0;
   private vfx: Vfx[] = [];
@@ -200,6 +207,14 @@ export class Renderer {
       this.fxLayer.addChild(fill, ring);
       this.danger.push({ fill, ring });
     }
+    for (let i = 0; i < MAX_FIRES; i++) {
+      const fill = new Sprite(tx.disc), ring = new Sprite(tx.ring);
+      fill.anchor.set(0.5); ring.anchor.set(0.5);
+      fill.tint = 0xff4a10; ring.tint = 0xffb030;
+      fill.visible = ring.visible = false;
+      this.groundFx.addChild(fill, ring);
+      this.fires.push({ fill, ring });
+    }
     if (art?.damage) {
       this.dmgNums = new DamageNumbers(art.damage);
       this.topLayer.addChild(this.dmgNums.layer);
@@ -244,13 +259,14 @@ export class Renderer {
     const sp = new Sprite(this.tex.mobs[0].frames[0]);
     sp.anchor.set(0.5, 0.82);
     this.entities.addChild(sp);
-    return { sp, stamp: 0, barBg: null, barFg: null, tex: null, flashing: false, art: null, act: null, t: 0, hitT: 0, flashPrev: false };
+    return { sp, stamp: 0, barBg: null, barFg: null, tex: null, flashing: false, art: null, act: null, t: 0, hitT: 0, flashPrev: false, title: null, titleKey: '' };
   }
 
   private releaseView(v: EnemyView) {
     v.sp.visible = false;
     v.art = null; v.act = null; v.tex = null; v.hitT = 0; v.flashPrev = false;
     if (v.barBg) { v.barBg.visible = false; v.barFg!.visible = false; }
+    if (v.title) v.title.visible = false;
     this.viewPool.push(v);
   }
 
@@ -438,6 +454,21 @@ export class Renderer {
       case 'gacha':
         this.ringFx(tx.glow, sim.px, sim.py, 4, 0.6, 0xff9a3a, 0.9);
         break;
+      case 'elite':
+        this.ringFx(tx.ring, e.x, e.y, 7, 0.9, AFFIXES.find((a) => a.key === e.affix)?.tint ?? 0xffffff, 0.9);
+        break;
+      case 'box':
+        this.ringFx(tx.glow, e.x, e.y, 2.2, 0.4, 0xffd890, 0.9);
+        break;
+      case 'fieldItem': {
+        const d = FIELD_ITEMS[e.item];
+        if (!d) break;
+        this.number(sim.px, sim.py - 2.2, d.name.toUpperCase(), parseInt(d.color.slice(1), 16), 15, 1.6);
+        if (e.item === 4) { this.ringFx(tx.ring, sim.px, sim.py, KEG_RADIUS, 0.7, 0xffa030, 1); this.ringFx(tx.disc, sim.px, sim.py, KEG_RADIUS, 0.5, 0xff7a20, 0.45); }
+        else if (e.item === 3) this.ringFx(tx.ring, sim.px, sim.py, 12, 0.9, 0xb58cff, 0.9);
+        else this.ringFx(tx.glow, sim.px, sim.py, 3.5, 0.6, parseInt(d.color.slice(1), 16), 0.9);
+        break;
+      }
       case 'drop':
         // the item's name floats up in its tier colour (grey, white, blue, purple, gold); a boss drop stays up longer
         if (e.tier === undefined) {
@@ -546,14 +577,16 @@ export class Renderer {
       v.stamp = stamp;
       const boss = e.boss >= 0;
       const sp = v.sp;
+      if (e.ev === EV_BOX) { this.drawBox(v, e); continue; }
+      const es = e.elite ? ELITE_SCALE : 1;
       const ma = this.art ? (boss ? this.art.bosses[e.boss] : this.art.tiers[e.tier]) : null;
       let footY = e.y * PX;
       let barTop = e.r * PX * 1.9;
       if (ma) {
         // real art: native pixel size (the world container already applies the zoom), feet near the hit circle's lower edge
         footY += e.r * PX * FOOT;
-        barTop = Math.max(e.r * PX * 1.2, this.animateMob(v, e, ma, dt) - e.r * PX * FOOT);
-        sp.scale.set(-e.facing, 1); // Maple sprites face left
+        barTop = Math.max(e.r * PX * 1.2, this.animateMob(v, e, ma, dt) * es - e.r * PX * FOOT);
+        sp.scale.set(-e.facing * es, es); // Maple sprites face left
       } else {
         if (v.art) { v.art = null; v.act = null; v.tex = null; sp.anchor.set(0.5, 0.82); }
         const mt = boss ? tx.bosses[e.boss] : tx.mobs[e.tier];
@@ -563,17 +596,17 @@ export class Renderer {
           v.tex = mt; v.flashing = flash;
           v.sp.texture = flash ? mt.flash[fr] : mt.frames[fr];
         }
-        sp.scale.set(SCALE * e.facing, SCALE);
+        sp.scale.set(SCALE * e.facing * es, SCALE * es);
       }
       sp.position.set(e.x * PX, footY);
       sp.zIndex = e.y * PX;
-      sp.tint = e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
-      if (!boss && e.big && sim.t - e.lastHit < HP_BAR_SECONDS) {
+      sp.tint = e.elite ? AFFIXES[e.elite - 1].tint : e.ev === EV_TREASURE ? 0xffd23a : e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
+      if (!boss && e.big && (e.elite || sim.t - e.lastHit < HP_BAR_SECONDS)) {
         // Maple-style bar over the head of big mobs for a few seconds after the last hit (small mobs die too fast to need one)
         this.ensureBar(v);
         const bw = Math.max(26, e.r * PX * 1.6);
         const by = e.y * PX - barTop - 4;
-        v.barBg!.tint = 0x101820; v.barFg!.tint = 0x6fd13a;
+        v.barBg!.tint = 0x101820; v.barFg!.tint = e.elite ? AFFIXES[e.elite - 1].tint : 0x6fd13a;
         v.barBg!.height = 6; v.barFg!.height = 4;
         v.barBg!.visible = v.barFg!.visible = true;
         v.barBg!.width = bw + 2; v.barBg!.position.set(e.x * PX, by);
@@ -581,6 +614,8 @@ export class Renderer {
       } else if (v.barBg && !boss) {
         v.barBg.visible = v.barFg!.visible = false;
       }
+      if (e.elite) this.drawTitle(v, e, e.y * PX - barTop - 14);
+      else if (v.title) v.title.visible = false;
       if (boss) {
         this.ensureBar(v);
         const bw = Math.max(70, e.r * PX * 2, ma ? sp.texture.frame.width * 0.45 : 0);
@@ -637,21 +672,22 @@ export class Renderer {
         case SCROLL: t = p.scroll ? ia.scrollTexture(p.scroll) : ia.placeholderScroll(); scale = 1; break;
         case GACHA: { const r = ia.gacha(); t = r ?? tx.gacha; scale = r ? 1.25 : SCALE; break; }
         case MASTERY: t = tx.book; break;
+        case FIELD: { const r = ia.field(p.value); t = r ?? tx.field[p.value] ?? tx.bag; scale = r ? 1 : SCALE; break; }
         default: t = tx.bag;
       }
       if (sp.texture !== t) sp.texture = t;
       sp.scale.set(scale);
       sp.position.set(p.x * PX, p.y * PX - 8 + Math.sin(this.time * 4 + p.x) * 2);
-      if (p.kind === GEAR && p.item) {
+      if ((p.kind === GEAR && p.item) || p.kind === FIELD) {
         let g = v.glow;
         if (!g) {
           g = this.glowPool.pop() ?? this.glowSprite();
           v.glow = g;
         }
         g.visible = true;
-        g.tint = tierColor(p.item.tier);
+        g.tint = p.item ? tierColor(p.item.tier) : parseInt(FIELD_ITEMS[p.value]?.color.slice(1) ?? 'ffffff', 16);
         g.position.set(sp.x, sp.y + 4);
-        g.scale.set(0.9 + 0.08 * p.item.tier + 0.08 * Math.sin(this.time * 5 + p.x));
+        g.scale.set((p.item ? 0.9 + 0.08 * p.item.tier : 1.1) + 0.08 * Math.sin(this.time * 5 + p.x));
       }
     }
     for (const [k, v] of this.pickupViews) {
@@ -719,6 +755,20 @@ export class Renderer {
     for (const [k, v] of this.areaViews) {
       if (v.stamp !== stamp) { this.areaViews.delete(k); v.sp.visible = false; this.areaPool.push(v.sp); }
     }
+
+    // fire patches of Blazing Elites: a flickering disc with a bright rim, fading out in the last half second
+    const fires = sim.elites.fires;
+    let fi = 0;
+    for (; fi < fires.length && fi < MAX_FIRES; fi++) {
+      const f = fires[fi], v = this.fires[fi];
+      const k = (f.r * PX * 2) / tx.disc.width;
+      const a = Math.min(1, f.t * 2);
+      v.fill.visible = v.ring.visible = true;
+      v.fill.position.set(f.x * PX, f.y * PX); v.ring.position.set(f.x * PX, f.y * PX);
+      v.fill.scale.set(k * (1 + 0.06 * Math.sin(this.time * 14 + f.x))); v.ring.scale.set(k * (tx.disc.width / tx.ring.width));
+      v.fill.alpha = (0.45 + 0.12 * Math.sin(this.time * 11 + f.y)) * a; v.ring.alpha = 0.9 * a;
+    }
+    for (; fi < MAX_FIRES; fi++) this.fires[fi].fill.visible = this.fires[fi].ring.visible = false;
 
     // transient fx
     for (let i = 0; i < MAX_VFX; i++) {
@@ -813,6 +863,39 @@ export class Renderer {
     sp.visible = true;
     this.petTag.position.set(fx, fy + 2);
     this.petTag.visible = true;
+  }
+
+  /** A breakable Maple box: the drawn crate, no bars */
+  private drawBox(v: EnemyView, e: Enemy) {
+    const sp = v.sp, t = this.tex.box;
+    if (v.art) { v.art = null; v.act = null; v.tex = null; }
+    if (sp.texture !== t) sp.texture = t;
+    sp.anchor.set(0.5, 0.75);
+    sp.scale.set(SCALE);
+    sp.position.set(e.x * PX, e.y * PX);
+    sp.zIndex = e.y * PX;
+    sp.tint = e.flash > 0 ? 0xffb0b0 : 0xffffff;
+    if (v.barBg) v.barBg.visible = v.barFg!.visible = false;
+    if (v.title) v.title.visible = false;
+  }
+
+  /** An Elite's name plate: "Elite Orange Mushroom" over its affix, in the affix's colour (the text changes only when the Elite does) */
+  private drawTitle(v: EnemyView, e: Enemy, y: number) {
+    let t = v.title;
+    if (!t) {
+      t = v.title = new Text({ text: '', style: { fontFamily: 'Arial', fontSize: 12, fontWeight: 'bold', fill: 0xffffff, align: 'center', stroke: { color: 0x10182c, width: 3 } } });
+      t.anchor.set(0.5, 1);
+      this.topLayer.addChild(t);
+    }
+    const a = AFFIXES[e.elite - 1];
+    const key = e.tier + ':' + e.elite;
+    if (v.titleKey !== key) {
+      v.titleKey = key;
+      t.text = `${eliteTitle(e)}\n${a.name}`;
+      t.tint = a.tint;
+    }
+    t.visible = true;
+    t.position.set(e.x * PX, y);
   }
 
   /** Picks and sets the current frame of a real-art mob; returns the frame's origin height in px (sprite top above the foot). */

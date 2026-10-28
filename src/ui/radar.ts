@@ -1,5 +1,5 @@
 import type { Sim } from '../game/sim.ts';
-import { GACHA, GEM, MASTERY, MESO } from '../game/types.ts';
+import { EV_BOX, EV_TREASURE, FIELD, GACHA, GEM, MASTERY, MESO } from '../game/types.ts';
 import { theme } from './theme.ts';
 
 const SIZE = 120;
@@ -54,17 +54,31 @@ export class Radar {
         continue;
       }
       if (x < 0 || y < 0 || x > SIZE || y > SIZE) continue;
-      c.fillStyle = p.kind === GEM ? '#5ab4ff' : p.kind === MESO ? '#ffd23a' : '#ff7ad0';
+      c.fillStyle = p.kind === GEM ? '#5ab4ff' : p.kind === MESO ? '#ffd23a' : p.kind === FIELD ? '#7dff7a' : '#ff7ad0';
       c.fillRect(x - 1, y - 1, p.kind === GEM ? 2 : 3, p.kind === GEM ? 2 : 3);
     }
     const es = sim.enemies;
     c.fillStyle = '#ff4a3a';
     for (let i = 0; i < es.length; i++) {
       const e = es[i];
-      if (e.boss >= 0) continue;
+      if (e.boss >= 0 || e.elite) continue;
       const x = h + (e.x - px) * k, y = h + (e.y - py) * k;
       if (x < 0 || y < 0 || x > SIZE || y > SIZE) continue;
-      c.fillRect(x - 1, y - 1, 2.2, 2.2);
+      // breakable boxes brown, Treasure Pigs gold, everything else red
+      if (e.ev === EV_BOX || e.ev === EV_TREASURE) {
+        c.fillStyle = e.ev === EV_BOX ? '#c8924a' : '#ffd23a';
+        c.fillRect(x - 1.5, y - 1.5, 3.2, 3.2);
+        c.fillStyle = '#ff4a3a';
+      } else c.fillRect(x - 1, y - 1, 2.2, 2.2);
+    }
+    // Elites: a bigger purple dot with a ring
+    for (let i = 0; i < es.length; i++) {
+      const e = es[i];
+      if (!e.elite) continue;
+      const x = h + (e.x - px) * k, y = h + (e.y - py) * k;
+      if (x < 0 || y < 0 || x > SIZE || y > SIZE) continue;
+      c.fillStyle = '#e060ff'; c.strokeStyle = '#fff'; c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); c.stroke();
     }
     for (let i = 0; i < es.length; i++) {
       const e = es[i];
