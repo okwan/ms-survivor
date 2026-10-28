@@ -1,5 +1,6 @@
 import type { SkillKind } from './data.ts';
 import type { GearItem } from './gear.ts';
+import type { ScrollDef } from './scrolls.ts';
 
 export interface Enemy {
   x: number;
@@ -37,8 +38,8 @@ export interface Enemy {
   idx: number;
 }
 
-export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5;
-export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5;
+export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5, SCROLL = 6;
 
 export interface Pickup {
   kind: PickupKind;
@@ -49,6 +50,8 @@ export interface Pickup {
   pulled: boolean;
   /** the item of a GEAR pickup */
   item: GearItem | null;
+  /** the scroll of a SCROLL pickup */
+  scroll: ScrollDef | null;
 }
 
 export interface Projectile {
@@ -113,5 +116,15 @@ export type SimEvent =
   | { type: 'bossSpawn'; boss: number; name: string; x: number; y: number }
   | { type: 'bossDeath'; boss: number; name: string; x: number; y: number }
   | { type: 'levelUp'; level: number }
+  | { type: 'scroll'; ok: boolean; slot: string; name: string; plus: number }
+  | { type: 'card'; mob: number; name: string; complete: boolean }
   | { type: 'region'; region: number }
   | { type: 'end'; won: boolean };
+
+/** A short message for the hero (scroll results, new Monster Book cards); the UI shows the ones whose `until` is still ahead of sim.t. */
+export interface Note {
+  id: number;
+  text: string;
+  kind: 'good' | 'bad' | 'card' | 'info';
+  until: number;
+}

@@ -278,7 +278,7 @@ export function gearImages() {
  * Default: a handful of entries that exercise links, fly, UOL frames, big frames, name mismatches and missing nodes.
  * `all`: every mob and skill the game lists, so the built game can be viewed with "real" art.
  */
-export async function writeFixture(dir, { all = false, noTitle = false, character = true } = {}) {
+export async function writeFixture(dir, { all = false, noTitle = false, character = true, items = false } = {}) {
   mkdirSync(dir, { recursive: true });
   const { WANTED_MOBS, WANTED_SKILLS } = await import('../src/maple/assets.ts');
   const mobs = {};
@@ -362,6 +362,7 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
     },
   };
 
+  if (items) writeItemFixture(dir, strings);
   writeFileSync(join(dir, 'Mob.wz'), buildWz(mobs));
   writeFileSync(join(dir, 'Skill.wz'), buildWz(skillImgs));
   writeFileSync(join(dir, 'String.wz'), buildWz(strings));
@@ -447,6 +448,63 @@ const panel = (w, h, top, bottom, edge = [30, 30, 50]) => (x, y) => {
  * Writes Map.wz, Effect.wz and UI.wz with the real layout names (Tile/grassySoil.img, Obj/*.img, Map/Map1/100000000.img,
  * BasicEff.img NoRed0.., StatusBar.img, Basic.img...) holding invented pixels. `noDigits`/`noTown` drop pieces to test fallbacks.
  */
+/** The scroll names of the item fixture: some parse, some must be rejected (two-handed, dark, odd stat, no slot, out of range). */
+export const FIXTURE_SCROLLS = {
+  2040000: 'Scroll for Helmet for DEF 100%',
+  2040001: 'Scroll for Helmet for DEF 60%',
+  2040002: 'Scroll for Helmet for DEF 10%',
+  2040100: 'Scroll for Overall Armor for DEX 60%',
+  2040200: 'Scroll for Gloves for ATT 60%',
+  2040300: 'Scroll for Shoes for Speed 60%',
+  2040400: 'Scroll for Cape for Magic Def 60%',
+  2040500: 'Scroll for Bottomwear for DEF 100%',
+  2040600: 'Scroll for Shield for HP 60%',
+  2041000: 'Scroll for One-Handed Sword for ATT 100%',
+  2041001: 'Scroll for One-Handed Sword for ATT 60%',
+  2041002: 'Scroll for One-Handed Sword for ATT 10%',
+  2041003: 'Scroll for Wand for Magic Att 60%',
+  2041004: 'Scroll for Bow for ATT 60%',
+  2041005: 'Scroll for Dagger for ATT 60%',
+  2041006: 'Scroll for Two-handed Sword for ATT 60%',
+  2041007: 'Dark Scroll for Helmet for DEF 70%',
+  2041008: 'Scroll for Helmet for Jump 60%',
+  2041009: 'Clean Slate Scroll 1%',
+  2050000: 'Scroll for Cap for DEF 60%',
+};
+/** Item.wz (potions, mesos, scrolls, a pet) and the String.wz names that go with it; adds Consume.img and Pet.img to `strings`. */
+export function writeItemFixture(dir, strings) {
+  const ico = (col) => canvas(32, 32, (x, y) => (x < 2 || y < 2 || x > 29 || y > 29 ? [0, 0, 0, 0] : [...col, 255]), { origin: vec(0, 32) });
+  const potion = (col) => ({ info: { icon: ico(col), price: 50 } });
+  const meso = (i, col, delay) => canvas(28, 28, blob(28, 28, col, i - 1), { origin: vec(14, 28), ...(delay ? { delay } : {}) });
+  const frames4 = (col, delay) => seq(4, (i) => meso(i, col, delay));
+  const scrolls = {};
+  for (const id of Object.keys(FIXTURE_SCROLLS)) {
+    if (Number(id) === 2040002 || Number(id) >= 2050000) continue; // no icon for 2040002: shown plain
+    scrolls[String(id).padStart(8, '0')] = { info: { icon: ico(hue(Number(id))), price: 100 } };
+  }
+  const kitty = (w, col, delay) => canvas(w, 28, blob(w, 28, col), { origin: vec(w >> 1, 28), delay });
+  writeFileSync(join(dir, 'Item.wz'), buildWz({
+    'Consume/0200.img': { '02000000': potion([230, 60, 60]), '02000001': potion([240, 150, 50]), '02000002': potion([240, 240, 240]), '02000004': potion([120, 200, 240]), '02000005': potion([180, 90, 220]) },
+    'Consume/0204.img': scrolls,
+    'Special/0900.img': {
+      '09000000': { info: { icon: ico([200, 120, 60]), iconRaw: frames4([200, 120, 60]) } },
+      '09000001': { info: { icon: ico([240, 200, 60]), iconRaw: frames4([240, 200, 60], 100) } },
+      '09000002': { info: { icon: ico([240, 220, 120]), iconRaw: frames4([240, 220, 120], 100) } },
+      // iconRaw directly under the item: the extractor tries that layout too
+      '09000003': { iconRaw: frames4([250, 230, 90], 100), info: { icon: ico([250, 230, 90]) } },
+    },
+    'Pet/5000000.img': {
+      info: { icon: ico([240, 150, 70]) },
+      stand0: seq(2, (i) => kitty(30 + i, [240, 150, 70], 400)),
+      move: seq(4, (i) => kitty(32 + (i & 1), [240, 150, 70], 120)),
+      jump: seq(1, () => kitty(30, [240, 160, 80], 200)),
+      hungry: seq(1, () => kitty(30, [150, 150, 150], 200)),
+    },
+  }));
+  strings['Consume.img'] = Object.fromEntries(Object.entries(FIXTURE_SCROLLS).map(([id, name]) => [id, { name }]));
+  strings['Pet.img'] = { 5000000: { name: 'Brown Kitty' }, 5000001: { name: 'Black Kitty' } };
+}
+
 export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, noUi = false } = {}) {
   mkdirSync(dir, { recursive: true });
   const bsc = Object.fromEntries([0, 1, 2, 3, 4].map((i) => [i, canvas(90, 60, grassPx(i), { origin: vec(0, 0), z: 0 })]));
@@ -540,7 +598,8 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
       return d < 1 && d > 0.55 - i * 0.02 ? [255, 235, 90, Math.round(255 * (1 - i / 14))] : [0, 0, 0, 0];
     }, { origin: vec(w >> 1, h - 10) });
   }
-  writeFileSync(join(dir, 'Effect.wz'), buildWz({ 'BasicEff.img': { ...sets, LevelUp: levelUp }, 'ItemEff.img': { 0: {} } }));
+  const burst = (n, col) => seq(n, (i) => canvas(70, 70, (x, y) => (Math.hypot(x - 35, y - 35) < 10 + i * 5 && Math.hypot(x - 35, y - 35) > i * 3 ? [...col, 220 - i * 20] : [0, 0, 0, 0]), { origin: vec(35, 35) }));
+  writeFileSync(join(dir, 'Effect.wz'), buildWz({ 'BasicEff.img': { ...sets, LevelUp: levelUp, Enchant: { Success: burst(6, [120, 255, 120]), Failure: burst(5, [255, 90, 90]) } }, 'ItemEff.img': { 0: {} } }));
 
   if (noUi) return;
   const num = (c, w = 5, h = 7) => canvas(w, h, (x, y) => ((x + y) % 3 === 0 || x === 0 ? [255, 255, 255, 255] : [0, 0, 0, 0]), { origin: vec(0, 0) });
