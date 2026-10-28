@@ -17,6 +17,8 @@ export interface LoginHandlers {
   create(): void;
   /** start the run with the saved character */
   select(): void;
+  /** resume the saved run in progress */
+  continueRun(): void;
   volume(v: number): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
@@ -60,6 +62,7 @@ export class LoginScreen {
   private shown = false;
   private save: SaveData | null = null;
   private playBtn: HTMLButtonElement;
+  private contBtn: HTMLButtonElement;
   private petEl!: HTMLInputElement;
   private selectBtns!: HTMLDivElement;
   /** frames the select stage drew (tests) */
@@ -82,8 +85,10 @@ export class LoginScreen {
     this.playBtn.title = 'Play';
     const newBtn = this.button('New Character', 'pb-new', () => this.h.create());
     newBtn.title = 'New Character';
+    this.contBtn = this.button('Continue', 'login-continue', () => this.h.continueRun());
+    this.contBtn.classList.add('hidden');
     const row = el('div', 'login-btns');
-    row.append(this.playBtn, newBtn);
+    row.append(this.contBtn, this.playBtn, newBtn);
     const extra = el('div', 'login-extra');
     row.appendChild(extra);
     this.board.appendChild(row);
@@ -201,6 +206,12 @@ export class LoginScreen {
 
   get visible() {
     return this.shown;
+  }
+
+  /** Shows (label) or hides (null) the Continue button for a run in progress. */
+  setContinue(label: string | null) {
+    this.contBtn.classList.toggle('hidden', !label);
+    if (label) { this.contBtn.textContent = label; this.contBtn.setAttribute('aria-label', label); this.contBtn.title = label; }
   }
 
   show(save: SaveData) {
