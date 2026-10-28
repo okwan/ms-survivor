@@ -2,6 +2,7 @@ import {
   BERSERK_AFTER, BOSSES, BOSS_EVERY, LADDER, MAX_GEMS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, NOVA_DAMAGE_FRAC, NOVA_EVERY,
   CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVES, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
+  ENEMY_DMG_GROWTH, ENEMY_HP_GROWTH, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
 } from './data.ts';
 import { SpatialGrid } from './grid.ts';
 import { Rng } from './rng.ts';
@@ -151,7 +152,7 @@ export class Sim {
     might += g.dmg;
     armor += g.armor;
     speed += g.speed;
-    this.might = might;
+    this.might = might * levelDamageMult(this.level);
     this.speed = this.cls.speed * speed;
     this.haste = haste;
     this.armor = armor;
@@ -160,7 +161,7 @@ export class Sim {
     this.growth = growth;
     this.regen = regen;
     this.crit = crit;
-    const newMax = this.cls.hp * hpMul + g.hp;
+    const newMax = (this.cls.hp + LEVEL_HP * (Math.min(this.level, LEVEL_HP_CAP) - 1)) * hpMul + g.hp;
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
     this.maxHp = newMax;
     if (this.hp > this.maxHp) this.hp = this.maxHp;
@@ -410,9 +411,9 @@ export class Sim {
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = x; e.y = y;
-    e.maxHp = e.hp = d.hp * (1 + 0.75 * p);
+    e.maxHp = e.hp = d.hp * (1 + ENEMY_HP_GROWTH * p);
     e.speed = d.speed;
-    e.dmg = d.dmg * (1 + 0.9 * p);
+    e.dmg = d.dmg * (1 + ENEMY_DMG_GROWTH * p);
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
     e.tier = tier; e.boss = -1; e.big = d.big; e.add = add; e.alive = true;
@@ -429,9 +430,9 @@ export class Sim {
     const dist = this.rng.range(SPAWN_RING_MIN, SPAWN_RING_MAX);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = this.px + Math.cos(a) * dist; e.y = this.py + Math.sin(a) * dist;
-    e.maxHp = e.hp = def.hp * (1 + 0.75 * p);
+    e.maxHp = e.hp = def.hp * (1 + ENEMY_HP_GROWTH * p);
     e.speed = def.speed;
-    e.dmg = def.dmg * (1 + 0.9 * p);
+    e.dmg = def.dmg * (1 + ENEMY_DMG_GROWTH * p);
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
     e.tier = LADDER.length - 1; e.boss = n; e.big = true; e.add = false; e.alive = true;
@@ -651,6 +652,7 @@ export class Sim {
       this.level++;
       this.xpNeed = xpToNext(this.level);
       this.pendingLevels++;
+      this.recalc();
       this.emit({ type: 'levelUp', level: this.level });
     }
   }
