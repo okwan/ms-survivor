@@ -751,5 +751,9 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main()
     .catch((e) => warn(`asset step failed: ${(e as Error).stack ?? e}`))
-    .finally(() => process.exit(0));
+    .finally(() => {
+      // Exit explicitly (stray download sockets must not keep the step alive), but only after stdout and stderr have
+      // drained: when they are pipes, process.exit() can drop the tail of a large log, which is the line callers grep for.
+      process.stdout.write('', () => process.stderr.write('', () => process.exit(0)));
+    });
 }
