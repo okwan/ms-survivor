@@ -29,6 +29,8 @@ const DECO_CELL = 14; // yards
 const SCALE = 1 / RES;
 /** the hero's feet stand this many px below the sim position (the hit circle is centred on the body) */
 const HERO_FOOT = 10;
+/** seconds an enemy's HP bar stays up after its last hit */
+const HP_BAR_SECONDS = 3;
 
 interface EnemyView {
   sp: Sprite; stamp: number; barBg: Sprite | null; barFg: Sprite | null; tex: MobTex | null; flashing: boolean;
@@ -419,6 +421,11 @@ export class Renderer {
         else this.ringFx(tx.glow, sim.px, sim.py - 0.8, 2.4, 0.55, e.ok ? 0x6aff7a : 0xff5a5a, 0.9);
         break;
       }
+      case 'jobAdvance':
+        // the level-up effect again; the "Job Advancement!" banner is the sim's raid text
+        if (this.levelFx) this.levelFx.pending = true;
+        this.ringFx(tx.ring, sim.px, sim.py, 6, 0.9, 0xffd23a, 0.8);
+        break;
       case 'drop':
         if (e.boss) this.number(e.x, e.y - 1.4, e.name.toUpperCase(), 0xffe9a0, 15, 2.2);
         break;
@@ -542,10 +549,25 @@ export class Renderer {
       sp.position.set(e.x * PX, footY);
       sp.zIndex = e.y * PX;
       sp.tint = e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
+      if (!boss && sim.t - e.lastHit < HP_BAR_SECONDS) {
+        // small Maple-style bar over the head for a few seconds after the last hit
+        this.ensureBar(v);
+        const bw = Math.max(26, e.r * PX * 1.6);
+        const by = e.y * PX - barTop - 4;
+        v.barBg!.tint = 0x101820; v.barFg!.tint = 0x6fd13a;
+        v.barBg!.height = 6; v.barFg!.height = 4;
+        v.barBg!.visible = v.barFg!.visible = true;
+        v.barBg!.width = bw + 2; v.barBg!.position.set(e.x * PX, by);
+        v.barFg!.width = Math.max(0, (e.hp / e.maxHp) * bw); v.barFg!.position.set(e.x * PX - bw / 2, by);
+      } else if (v.barBg && !boss) {
+        v.barBg.visible = v.barFg!.visible = false;
+      }
       if (boss) {
         this.ensureBar(v);
         const bw = Math.max(70, e.r * PX * 2, ma ? sp.texture.frame.width * 0.45 : 0);
         const by = e.y * PX - barTop - 10;
+        v.barBg!.tint = 0x1a0000; v.barFg!.tint = 0xe83a3a;
+        v.barBg!.height = 8; v.barFg!.height = 6;
         v.barBg!.visible = v.barFg!.visible = true;
         v.barBg!.width = bw + 4; v.barBg!.position.set(e.x * PX, by);
         v.barFg!.width = Math.max(0, (e.hp / e.maxHp) * bw); v.barFg!.position.set(e.x * PX - bw / 2, by);

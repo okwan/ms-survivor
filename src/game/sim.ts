@@ -1,6 +1,7 @@
 import {
   BERSERK_AFTER, BOSSES, BOSS_EVERY, LADDER, MAX_GEMS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, NOVA_DAMAGE_FRAC, NOVA_EVERY,
-  CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVES, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
+  CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY,
+  JOB2_LEVEL, JOB3_LEVEL, JOB_BY_CODE, PASSIVES, jobOfId, unlockedJobs, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
   ENEMY_DMG_GROWTH, ENEMY_HP_GROWTH, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
 } from './data.ts';
@@ -105,6 +106,10 @@ export class Sim {
   rerolls = START_REROLLS;
   banishes = START_BANISHES;
   banished = new Set<string>();
+  /** chosen 2nd job code (0 = not yet; the choice is offered at JOB2_LEVEL) and the job codes whose skills and passives are on offer */
+  branch = 0;
+  jobs: number[];
+  private pendingJob = false;
 
   enemies: Enemy[] = [];
   pickups: Pickup[] = [];
@@ -142,6 +147,7 @@ export class Sim {
     this.autoEquip = opts.autoEquip ?? true;
     this.cls = CLASS_BY_KEY[classKey] ?? CLASS_BY_KEY[DEFAULT_CLASS];
     this.skills = [{ key: this.cls.skills[0], level: 1, cd: 0.2 }];
+    this.jobs = [this.cls.firstJob];
     this.speed = this.cls.speed;
     this.crit = this.cls.crit;
     this.hp = this.maxHp = this.cls.hp;
@@ -165,6 +171,7 @@ export class Sim {
     for (const p of this.passives) {
       const d = PASSIVE_BY_KEY[p.key];
       const v = d.per * p.level;
+      if (d.also) { if (d.also.stat === 'crit') crit += d.also.per * p.level; else armor += d.also.per * p.level; }
       switch (d.stat) {
         case 'might': might += v; break;
         case 'maxHp': hpMul += v; break;
@@ -249,9 +256,10 @@ export class Sim {
     amt = Math.max(1, Math.round(amt));
     e.hp -= amt;
     e.flash = 0.08;
+    e.lastHit = this.t;
     this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0, skill: this.curSkill, tier: e.tier, bossIdx: e.boss });
     const def = SKILL_BY_KEY[this.curSkill];
-    if (def !== undefined && (def.drain || def.stun || def.root || def.weaken)) this.applyEffects(e, def, amt);
+    if (def !== undefined && (def.drain || def.stun || def.root || def.weaken || def.steal)) this.applyEffects(e, def, amt);
     if (e.hp <= 0) this.kill(e);
   }
 
@@ -265,6 +273,7 @@ export class Sim {
       if (def.root) e.rootT = Math.max(e.rootT, skillDuration(def.root, lvl));
     }
     if (def.weaken) e.weakT = Math.max(e.weakT, skillDuration(def.weaken, lvl));
+    if (def.steal && this.rng.next() < def.steal) this.dropPickup(MESO, e.x, e.y, mesoValue(e.tier));
   }
 
   /** Damages everything within r of (x,y), optionally slowing; returns hit count. */
@@ -519,7 +528,7 @@ export class Sim {
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
     e.tier = tier; e.boss = -1; e.big = d.big; e.add = add; e.alive = true;
-    e.hitCd = 0.5; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.facing = 1; e.phase = this.rng.next() * 6.28;
+    e.hitCd = 0.5; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = this.rng.next() * 6.28;
     e.moving = true; e.berserk = false; e.age = 0; e.novaT = 0; e.castT = 0; e.summonT = 0; e.idx = -1;
     this.enemies.push(e);
     return e;
@@ -538,7 +547,7 @@ export class Sim {
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
     e.tier = LADDER.length - 1; e.boss = n; e.big = true; e.add = false; e.alive = true;
-    e.hitCd = 1.0; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
+    e.hitCd = 1.0; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
     e.novaT = NOVA_EVERY; e.castT = 0; e.summonT = SUMMON_EVERY; e.idx = -1;
     this.enemies.push(e);
     this.emit({ type: 'bossSpawn', boss: n, name: def.name, x: e.x, y: e.y });
@@ -757,14 +766,41 @@ export class Sim {
       this.pendingLevels++;
       this.recalc();
       this.emit({ type: 'levelUp', level: this.level });
+      if (this.level === JOB2_LEVEL && this.branch === 0) this.pendingJob = true;
+      this.checkThirdJob();
     }
+  }
+
+  /** The 3rd job of the chosen branch arrives by itself at JOB3_LEVEL (once a 2nd job has been picked). */
+  private checkThirdJob() {
+    if (this.branch === 0 || this.level < JOB3_LEVEL || this.jobs.length >= 3) return;
+    this.jobs = unlockedJobs(this.cls, this.branch, this.level);
+    this.advanced(this.branch + 1);
+  }
+
+  private advanced(code: number) {
+    const j = JOB_BY_CODE[code];
+    this.raid(`Job Advancement! ${j.name}`);
+    this.emit({ type: 'jobAdvance', job: code, name: j.name, level: this.level });
+  }
+
+  /** Cards for the 2nd job choice: one per branch of the class. */
+  private jobCards(): Card[] {
+    return this.cls.branches.map((code) => {
+      const j = JOB_BY_CODE[code];
+      const sig = j.sig.map((k) => {
+        const d = SKILL_BY_KEY[k] ?? PASSIVE_BY_KEY[k];
+        return { key: k, name: d.name, desc: d.desc };
+      });
+      return { kind: 'job' as const, key: String(code), name: j.name, isNew: true, from: 0, to: 1, desc: j.blurb, sig };
+    });
   }
 
   private candidates(exclude: Card[] | null): Card[] {
     const out: Card[] = [];
     const skip = (k: string) => this.banished.has(k) || (exclude !== null && exclude.some((c) => c.key === k));
     for (const s of SKILLS) {
-      if (skip(s.key) || !this.cls.skills.includes(s.key)) continue;
+      if (skip(s.key) || !this.cls.skills.includes(s.key) || !this.jobs.includes(jobOfId(s.id))) continue;
       const own = this.skills.find((o) => o.key === s.key);
       if (own) {
         if (own.level < SKILL_MAX_LEVEL) out.push({ kind: 'skill', key: s.key, name: s.name, isNew: false, from: own.level, to: own.level + 1, desc: s.desc });
@@ -773,7 +809,7 @@ export class Sim {
       }
     }
     for (const p of PASSIVES) {
-      if (skip(p.key) || (p.cls !== undefined && p.cls !== this.cls.key)) continue;
+      if (skip(p.key) || JOB_BY_CODE[jobOfId(p.id)]?.cls !== this.cls.key || !this.jobs.includes(jobOfId(p.id))) continue;
       const own = this.passives.find((o) => o.key === p.key);
       if (own) {
         if (own.level < PASSIVE_MAX_LEVEL) out.push({ kind: 'passive', key: p.key, name: p.name, isNew: false, from: own.level, to: own.level + 1, desc: p.desc });
@@ -795,18 +831,28 @@ export class Sim {
     const pool = this.candidates(null);
     if (pool.length === 0) return this.fillers();
     const out: Card[] = [];
+    // a job has few skills, so one of the three cards is always a skill (new or an upgrade) while any is left
+    const skillIdx: number[] = [];
+    for (let i = 0; i < pool.length; i++) if (pool[i].kind === 'skill') skillIdx.push(i);
+    if (skillIdx.length > 0) out.push(pool.splice(skillIdx[this.rng.int(skillIdx.length)], 1)[0]);
     while (out.length < 3 && pool.length > 0) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = this.rng.int(i + 1);
+      const c = out[i]; out[i] = out[j]; out[j] = c;
+    }
     return out;
   }
 
   private openOffer() {
-    if (this.offer || this.pendingLevels <= 0 || this.over) return;
+    if (this.offer || this.over) return;
+    if (this.pendingJob) { this.pendingJob = false; this.offer = this.jobCards(); return; }
+    if (this.pendingLevels <= 0) return;
     this.pendingLevels--;
     this.offer = this.drawOffer();
   }
 
   reroll(): boolean {
-    if (!this.offer || this.rerolls <= 0) return false;
+    if (!this.offer || this.rerolls <= 0 || this.offer[0]?.kind === 'job') return false;
     this.rerolls--;
     this.offer = this.drawOffer();
     return true;
@@ -815,7 +861,7 @@ export class Sim {
   banish(i: number): boolean {
     if (!this.offer || this.banishes <= 0 || i < 0 || i >= this.offer.length) return false;
     const c = this.offer[i];
-    if (c.kind === 'elixir' || c.kind === 'meso') return false;
+    if (c.kind === 'elixir' || c.kind === 'meso' || c.kind === 'job') return false;
     this.banishes--;
     this.banished.add(c.key);
     const pool = this.candidates(this.offer);
@@ -830,7 +876,12 @@ export class Sim {
     if (!o || i < 0 || i >= o.length) return false;
     const c = o[i];
     this.offer = null;
-    if (c.kind === 'skill') {
+    if (c.kind === 'job') {
+      this.branch = Number(c.key);
+      this.jobs = [this.cls.firstJob, this.branch];
+      this.advanced(this.branch);
+      this.checkThirdJob();
+    } else if (c.kind === 'skill') {
       const own = this.skills.find((s) => s.key === c.key);
       if (own) own.level++;
       else this.skills.push({ key: c.key, level: 1, cd: 0.3 });

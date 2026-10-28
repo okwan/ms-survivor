@@ -24,6 +24,8 @@ export interface Enemy {
   rootT: number;
   weakT: number;
   flash: number;
+  /** sim time of the last hit it took (the renderer shows its HP bar for a few seconds after) */
+  lastHit: number;
   /** 1 faces right, -1 faces left */
   facing: number;
   /** walk-cycle phase offset for the renderer */
@@ -94,13 +96,15 @@ export interface PassiveState {
 }
 
 export interface Card {
-  kind: 'skill' | 'passive' | 'elixir' | 'meso';
+  kind: 'skill' | 'passive' | 'elixir' | 'meso' | 'job';
   key: string;
   name: string;
   isNew: boolean;
   from: number;
   to: number;
   desc: string;
+  /** job cards: the two signature skills or passives, with a one-line description each */
+  sig?: { key: string; name: string; desc: string }[];
 }
 
 export type SimEvent =
@@ -118,6 +122,7 @@ export type SimEvent =
   | { type: 'levelUp'; level: number }
   | { type: 'scroll'; ok: boolean; slot: string; name: string; plus: number }
   | { type: 'card'; mob: number; name: string; complete: boolean }
+  | { type: 'jobAdvance'; job: number; name: string; level: number }
   | { type: 'region'; region: number }
   | { type: 'end'; won: boolean };
 

@@ -124,16 +124,16 @@ try {
   ok(zp.w === 2048 && zp.h >= 600, 'Zakum atlas wraps rows at 2048');
 
   // Skills
-  eq(Object.keys(m.skills).sort(), ['1001', '2001005', '2101004'].sort(), 'only skills present in Skill.wz');
+  eq(Object.keys(m.skills).sort(), ['1000000', '2001005', '2101004'].sort(), 'only skills present in Skill.wz');
   const claw = m.skills['2001005'];
   eq(claw.icon, 'skills/2001005-icon.png', 'icon path');
   const icon = decodePng(join(run.dist, 'maple', claw.icon!));
   eq([icon.w, icon.h], [32, 32], 'icon PNG is 32x32');
   eq(['effect', 'ball', 'hit'].map((a) => count(claw.frames, a)), [3, 2, 2], 'effect/ball/hit frames (hit read from hit/0)');
   checkAtlas(run.dist, claw.atlas!, claw.size!, claw.frames);
-  eq(m.skills['1001'].atlas, null, 'icon-only skill has no atlas');
-  ok(m.skills['1001'].icon && existsSync(join(run.dist, 'maple', m.skills['1001'].icon!)), 'Recovery found at zero-padded node 0001001 in 000.img');
-  eq(WANTED_SKILLS.find((s) => s.key === 'recovery')!.node, '0001001', 'recovery node name is 7 digits');
+  eq(m.skills['1000000'].atlas, null, 'icon-only skill has no atlas');
+  ok(m.skills['1000000'].icon && existsSync(join(run.dist, 'maple', m.skills['1000000'].icon!)), 'Improved HP Recovery found at node 1000000 in 100.img');
+  eq(WANTED_SKILLS.find((s) => s.key === 'improved_hp_recovery')!.node, '1000000', 'job skill node name is 7 digits');
 
   // BGM passthrough
   eq(m.bgm, { run: 'bgm/run.mp3', title: 'bgm/title.mp3' }, 'bgm paths');
