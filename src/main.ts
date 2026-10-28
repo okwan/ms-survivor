@@ -22,6 +22,8 @@ import { MapBanner } from './ui/banner.ts';
 import { Hud } from './ui/hud.ts';
 import { BookPanel } from './ui/book.ts';
 import { ShopPanel } from './ui/shop.ts';
+import { HyperPanel } from './ui/hyper.ts';
+import { hyperAvailable, hyperEarned, hyperGain } from './game/hyper.ts';
 import { NoteUi } from './ui/items.ts';
 import { GachaUi } from './ui/gachapon.ts';
 import { ScrollPool } from './game/scrolls.ts';
@@ -129,7 +131,7 @@ async function boot() {
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta });
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta, hyper: save.hyper[hero.cls].ranks });
     sim.god = god;
     gearUi.reset();
     gachaUi.reset();
@@ -144,8 +146,13 @@ async function boot() {
     hud.show(true);
   }
 
+  /** Hyper SP the run just banked, for the results screen */
+  let hyperSp = { name: '', sp: 0 };
   function bank(quit: boolean) {
     save.book = mergeBook(save.book, sim.book);
+    const g = hyperGain(save.hyper[sim.cls.key], sim.level - 1);
+    save.hyper[sim.cls.key] = g.data;
+    hyperSp = { name: sim.cls.name, sp: g.sp };
     save.mesos += sim.mesos;
     if (save.character && save.character.name === hero.name && sim.level > 1) save.character.level = sim.level;
     const best = !quit && sim.t > save.bestTime;
@@ -157,7 +164,7 @@ async function boot() {
   function endRun() {
     mode = 'ended';
     const best = bank(false);
-    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best });
+    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best, hyperSp });
   }
 
   function toTitle() {
@@ -196,6 +203,7 @@ async function boot() {
       banish: (i) => sim.banish(i),
       book: () => bookPanel.show(save.book),
       shop: () => shopPanel.show(),
+      hyper: () => hyperPanel.show(),
       pet: (on) => { save.settings.pet = on; writeSave(save); },
       volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
       sfxVolume: (v) => { save.settings.sfxVolume = v; writeSave(save); sfx?.setVolume(v); sfx?.play('ui.click'); },
@@ -209,6 +217,12 @@ async function boot() {
     save: () => save,
     write: () => writeSave(save),
     changed: () => screens.refresh(save),
+    sound: (k) => { if (k !== 'deny') sfx?.play('game.pickup', { volume: 0.6 }); },
+  });
+  const hyperPanel = new HyperPanel(uiRoot, renderer.tex.icons, {
+    save: () => save,
+    write: () => writeSave(save),
+    cls: () => hero.cls,
     sound: (k) => { if (k !== 'deny') sfx?.play('game.pickup', { volume: 0.6 }); },
   });
   const noteUi = new NoteUi(uiRoot);
@@ -345,6 +359,14 @@ async function boot() {
       book: () => ({ ...(mode === 'title' ? save.book : sim.book) }),
       /** the Henesys shop: ranks bought and banked mesos, and open / close the window */
       shop: (on = true) => { if (on) shopPanel.show(); else shopPanel.hide(); return { meta: { ...save.meta }, mesos: save.mesos, open: shopPanel.visible }; },
+      /** Hyper Skills: the class's levels, SP and ranks; `give` adds lifetime levels (20 per SP) for testing; opens / closes the window */
+      hyper: (give = 0, cls: string = hero.cls, on?: boolean) => {
+        const k = (CLASS_BY_KEY[cls] ? cls : hero.cls) as typeof hero.cls;
+        if (give > 0) { save.hyper[k] = hyperGain(save.hyper[k], give).data; writeSave(save); }
+        if (on === true) hyperPanel.show(k); else if (on === false) hyperPanel.hide();
+        const h = save.hyper[k];
+        return { cls: k, levels: h.levels, earned: hyperEarned(h.levels), available: hyperAvailable(h), ranks: { ...h.ranks }, open: hyperPanel.visible };
+      },
       bookBonus: () => ({ ...bookCounts(sim.book), bonus: bookBonus(sim.book) }),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),
     };
