@@ -6,6 +6,7 @@ import type { Sim } from '../game/sim.ts';
 import { Radar } from './radar.ts';
 import { statusScale } from './layout.ts';
 import { theme } from './theme.ts';
+import { canFullscreen, isPortrait, isTouch, toggleFullscreen } from './touch.ts';
 
 /** Status bar theme per class: the hue of the EXP / level plate (warrior red, magician blue, bowman green, thief purple). */
 export const JOB_HUE: Record<string, number> = { warrior: 355, magician: 215, bowman: 125, thief: 280 };
@@ -30,6 +31,9 @@ export class Hud {
   readonly radar: Radar;
   readonly pauseBtn: HTMLButtonElement;
   readonly muteBtn: HTMLButtonElement;
+  readonly fsBtn: HTMLButtonElement | null = null;
+  private rotate: HTMLElement | null = null;
+  private rotateDismissed = false;
   private cache = new Map<HTMLElement, string>();
   private el: Record<string, HTMLElement> = {};
   private skillSlots: HTMLElement[] = [];
@@ -97,11 +101,27 @@ export class Hud {
     const btns = document.createElement('div');
     btns.className = 'hud-btns';
     btns.append(this.muteBtn, this.pauseBtn);
+    if (isTouch() && canFullscreen()) {
+      const fs = (this.fsBtn = document.createElement('button'));
+      fs.className = 'pausebtn mutebtn fsbtn';
+      fs.textContent = '\u26F6';
+      fs.title = 'Fullscreen';
+      fs.addEventListener('click', () => void toggleFullscreen());
+      btns.prepend(fs);
+    }
     this.el.tr.appendChild(btns);
     r.querySelectorAll<HTMLButtonElement>('.sbtn').forEach((b) => b.addEventListener('click', () => this.onWindow(b.dataset.w as BarWindow)));
     const fit = () => document.documentElement.style.setProperty('--sbs', String(statusScale(window.innerWidth)));
     fit();
-    window.addEventListener('resize', fit);
+    window.addEventListener('resize', () => { fit(); this.syncRotate(); });
+    if (isTouch()) {
+      const rot = (this.rotate = document.createElement('div'));
+      rot.className = 'rotate-hint';
+      rot.style.display = 'none';
+      rot.innerHTML = '<span>Rotate your phone for the best view</span><button aria-label="Dismiss">x</button>';
+      rot.querySelector('button')!.addEventListener('click', () => { this.rotateDismissed = true; this.syncRotate(); });
+      r.appendChild(rot);
+    }
     for (let i = 0; i < MAX_SKILLS; i++) { const sl = this.makeSlot(this.el.skills); this.skillSlots.push(sl); this.skillCd.push(sl.querySelector('.cd')!); }
     for (let i = 0; i < MAX_PASSIVES + EVOLUTION_PASSIVE_SLOTS; i++) this.passiveSlots.push(this.makeSlot(this.el.passives));
   }
@@ -178,6 +198,12 @@ export class Hud {
 
   show(on: boolean) {
     if (on !== this.shown) { this.shown = on; this.root.style.display = on ? '' : 'none'; }
+    this.syncRotate();
+  }
+
+  /** Portrait banner on touch devices during a run; once dismissed it stays away this session. */
+  private syncRotate() {
+    if (this.rotate) this.rotate.style.display = this.shown && !this.rotateDismissed && isPortrait() ? '' : 'none';
   }
 
   update(sim: Sim) {

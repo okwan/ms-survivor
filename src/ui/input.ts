@@ -1,4 +1,9 @@
-/** Keyboard (WASD/arrows) and a touch joystick (touch anywhere on the left half and drag). */
+import { isTouch } from './touch.ts';
+
+/** Keyboard (WASD/arrows) and a touch joystick (touch anywhere outside the UI and drag), with a faint ghost ring as a hint while idle. */
+const R = 56;
+const DEAD = 0.12;
+
 export class Input {
   private keys = new Set<string>();
   private joyId = -1;
@@ -8,6 +13,8 @@ export class Input {
   private joyY = 0;
   private base: HTMLDivElement;
   private knob: HTMLDivElement;
+  private ghost: HTMLDivElement;
+  private hint = false;
   onPause: () => void = () => {};
   enabled = true;
 
@@ -18,6 +25,10 @@ export class Input {
     this.knob.className = 'joy-knob';
     this.base.appendChild(this.knob);
     root.appendChild(this.base);
+    this.ghost = document.createElement('div');
+    this.ghost.className = 'joy-ghost';
+    this.ghost.innerHTML = '<div class="joy-knob"></div>';
+    root.appendChild(this.ghost);
 
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
@@ -30,33 +41,47 @@ export class Input {
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => this.keys.clear());
 
-    const isUi = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('button, .win, .mwin, .mtip, input, .gear-toast');
+    const isUi = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('button, .screen, .win, .card, .mwin, .mtip, input, .gear-toast, .statusbar, .hud-btns');
     window.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'touch' || this.joyId !== -1 || e.clientX > window.innerWidth / 2 || isUi(e.target)) return;
+      if (e.pointerType !== 'touch' || this.joyId !== -1 || isUi(e.target)) return;
       this.joyId = e.pointerId;
       this.joyX0 = e.clientX; this.joyY0 = e.clientY;
       this.joyX = this.joyY = 0;
       this.base.style.display = 'block';
+      this.showGhost();
       this.base.style.left = e.clientX + 'px';
       this.base.style.top = e.clientY + 'px';
       this.knob.style.transform = 'translate(-50%,-50%)';
     });
     window.addEventListener('pointermove', (e) => {
       if (e.pointerId !== this.joyId) return;
-      const R = 50;
       let dx = e.clientX - this.joyX0, dy = e.clientY - this.joyY0;
       const l = Math.hypot(dx, dy);
       if (l > R) { dx = (dx / l) * R; dy = (dy / l) * R; }
-      this.joyX = dx / R; this.joyY = dy / R;
+      const m = Math.min(l, R) / R;
+      if (m < DEAD) this.joyX = this.joyY = 0;
+      else { const k = ((m - DEAD) / (1 - DEAD)) / Math.max(m, 1e-6); this.joyX = (dx / R) * k; this.joyY = (dy / R) * k; }
       this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     });
     const end = (e: PointerEvent) => {
       if (e.pointerId !== this.joyId) return;
       this.joyId = -1; this.joyX = this.joyY = 0;
       this.base.style.display = 'none';
+      this.showGhost();
     };
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
+  }
+
+  /** Shows the idle ghost ring (touch devices, during a run only). */
+  setHint(on: boolean) {
+    if (on === this.hint) return;
+    this.hint = on;
+    this.showGhost();
+  }
+
+  private showGhost() {
+    this.ghost.style.display = this.hint && this.joyId === -1 && isTouch() ? 'block' : 'none';
   }
 
   /** Writes the movement vector (length <= 1) into out. */

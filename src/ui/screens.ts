@@ -4,6 +4,7 @@ import { evolutionHint } from '../game/evolutions.ts';
 import type { Card } from '../game/types.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
+import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
 import { LoginScreen, classic } from './login.ts';
 import type { SaveData } from './save.ts';
 import { theme } from './theme.ts';
@@ -138,7 +139,8 @@ export class Screens {
     vol.appendChild(this.muteEl);
     body.appendChild(vol);
     body.appendChild(sfxVol);
-    body.appendChild(el('p', 'hint', 'Move: WASD / arrow keys, or drag on the left half of a touch screen.<br>Skills fire automatically. Pause: Esc or P.'));
+    if (isTouch() && canFullscreen()) body.appendChild(this.btn('Fullscreen', 'fs-btn', () => void toggleFullscreen()));
+    body.appendChild(el('p', 'hint', isTouch() ? 'Move: drag anywhere.<br>Skills fire automatically.' : 'Move: WASD / arrow keys, or drag on a touch screen.<br>Skills fire automatically. Pause: Esc or P.'));
     return root;
   }
 
@@ -159,7 +161,7 @@ export class Screens {
     const row = el('div', 'lu-row');
     this.rerollBtn = this.btn('Reroll', '', () => this.h.reroll());
     row.appendChild(this.rerollBtn);
-    row.appendChild(el('span', 'hint', 'Keys 1-3 to choose. Banish removes a card from this run.'));
+    row.appendChild(el('span', 'hint', (isTouch() ? 'Tap a card to choose.' : 'Keys 1-3 to choose.') + ' Banish removes a card from this run.'));
     body.appendChild(row);
     w.appendChild(body);
     root.appendChild(w);

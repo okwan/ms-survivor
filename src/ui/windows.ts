@@ -85,6 +85,10 @@ interface Win {
 export class GearWindows {
   private wins = new Map<WindowName, Win>();
   private tip: HTMLDivElement;
+  /** the cell whose tooltip a touch tap pinned */
+  private pinned: HTMLElement | null = null;
+  /** pointer type of the latest press: touch long-press and double-tap fire contextmenu / dblclick, which the tap-again flow replaces */
+  private lastPtr = 'mouse';
   private z = 20;
   private lastSim: Sim | null = null;
   private seen = { gear: -1, bag: -1 };
@@ -134,6 +138,10 @@ export class GearWindows {
       const w = KEYS[e.key.toLowerCase()];
       if (w) this.toggle(w);
     });
+    window.addEventListener('pointerdown', (e) => {
+      this.lastPtr = e.pointerType;
+      if (this.pinned && e.pointerType === 'touch' && !(e.target instanceof Node && this.pinned.contains(e.target))) this.unpin();
+    }, true);
     window.addEventListener('resize', () => this.wins.forEach((w) => this.place(w, w.x, w.y)));
   }
 
@@ -184,16 +192,49 @@ export class GearWindows {
     win.el.style.top = p.y + 'px';
   }
 
-  private bindTip(el: HTMLElement, html: () => string) {
+  /** Mouse: hover tooltip. Touch: first tap pins the tooltip and selects the cell, a second tap on it runs `act`. */
+  private bindTip(el: HTMLElement, html: () => string, act?: () => void) {
     el.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'touch') return;
       const h = html();
       if (!h) return;
       this.tip.innerHTML = h;
       this.tip.style.display = '';
       this.moveTip(e);
     });
-    el.addEventListener('pointermove', (e) => this.moveTip(e));
-    el.addEventListener('pointerleave', () => { this.tip.style.display = 'none'; });
+    el.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') this.moveTip(e); });
+    el.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') this.tip.style.display = 'none'; });
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (this.pinned === el) { this.unpin(); act?.(); return; }
+      this.unpin();
+      const h = html();
+      if (!h) return;
+      this.pinned = el;
+      el.classList.add('sel');
+      this.tip.innerHTML = h;
+      this.tip.style.display = '';
+      this.pinTip(el);
+    });
+  }
+
+  /** Hides a tooltip pinned by a touch tap and clears the cell's selection. */
+  private unpin() {
+    if (!this.pinned) return;
+    this.pinned.classList.remove('sel');
+    this.pinned = null;
+    this.tip.style.display = 'none';
+  }
+
+  /** Puts the pinned tooltip beside the cell (right, else left), clamped to the viewport. */
+  private pinTip(el: HTMLElement) {
+    const r = el.getBoundingClientRect();
+    const w = this.tip.offsetWidth, h = this.tip.offsetHeight;
+    let x = r.right + 6;
+    if (x + w > window.innerWidth) x = r.left - w - 6;
+    const y = Math.min(r.top, window.innerHeight - h - 4);
+    this.tip.style.left = Math.max(0, Math.min(x, window.innerWidth - w)) + 'px';
+    this.tip.style.top = Math.max(0, y) + 'px';
   }
 
   private moveTip(e: PointerEvent) {
@@ -213,7 +254,7 @@ export class GearWindows {
     w.open = on;
     w.el.style.display = on ? '' : 'none';
     if (on) { w.el.style.zIndex = String(++this.z); this.seen = { gear: -1, bag: -1 }; this.statsSig = ''; }
-    else this.tip.style.display = 'none';
+    else { this.unpin(); this.tip.style.display = 'none'; }
   }
 
   toggle(name: WindowName) {
@@ -262,9 +303,10 @@ export class GearWindows {
       this.slotEls.set(s.pos, d);
       if (s.gear) {
         const g = s.gear;
-        this.bindTip(d, () => { const it = this.hooks.sim().equipped[g]; return it ? itemTooltip(it, this.hooks.sim()) : ''; });
-        d.addEventListener('dblclick', () => { if (this.hooks.active()) this.hooks.sim().unequip(g); });
-        d.addEventListener('contextmenu', (e) => { e.preventDefault(); if (this.hooks.active()) this.hooks.sim().unequip(g); });
+        const off = () => { if (this.hooks.active()) this.hooks.sim().unequip(g); };
+        this.bindTip(d, () => { const it = this.hooks.sim().equipped[g]; return it ? itemTooltip(it, this.hooks.sim()) : ''; }, off);
+        d.addEventListener('dblclick', () => { if (this.lastPtr !== 'touch') off(); });
+        d.addEventListener('contextmenu', (e) => { e.preventDefault(); if (this.lastPtr !== 'touch') off(); });
       }
     }
     this.preview = document.createElement('canvas');
@@ -287,6 +329,7 @@ export class GearWindows {
   }
 
   private refreshEquip(sim: Sim) {
+    this.unpin();
     for (const s of this.equipSlots) {
       if (!s.gear) continue;
       const el = this.slotEls.get(s.pos)!;
@@ -382,9 +425,9 @@ export class GearWindows {
       this.bindTip(c, () => {
         const it = this.bagItem(i);
         return it ? itemTooltip(it, this.hooks.sim(), this.hooks.sim().equipped[it.slot]) : '';
-      });
-      c.addEventListener('dblclick', () => this.wear(i));
-      c.addEventListener('contextmenu', (e) => { e.preventDefault(); this.wear(i); });
+      }, () => this.wear(i));
+      c.addEventListener('dblclick', () => { if (this.lastPtr !== 'touch') this.wear(i); });
+      c.addEventListener('contextmenu', (e) => { e.preventDefault(); if (this.lastPtr !== 'touch') this.wear(i); });
     }
     const foot = document.createElement('div');
     foot.className = 'inv-foot';
@@ -405,6 +448,7 @@ export class GearWindows {
   }
 
   private refreshInventory(sim: Sim) {
+    this.unpin();
     this.tabEls.forEach((t, i) => t.classList.toggle('on', i === this.tab));
     // the real tab art: the enabled image on the open tab, the disabled one elsewhere (Setup and Cash are never open)
     this.wins.get('inventory')!.el.querySelectorAll<HTMLElement>('.invtab.real').forEach((t) => {

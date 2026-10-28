@@ -8,6 +8,7 @@ import { CLASS_BY_KEY } from '../game/data.ts';
 import { frameIndexAt } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
+import { isTouch } from './touch.ts';
 import type { SaveData } from './save.ts';
 import { theme } from './theme.ts';
 
@@ -98,7 +99,7 @@ export class LoginScreen {
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
     this.optionsPane.appendChild(petOpt);
     this.board.appendChild(this.optionsPane);
-    this.board.appendChild(el('p', 'login-hint', 'Move: WASD / arrows or drag on touch.<br>Skills fire automatically. Q equip, I items, C stats.'));
+    this.board.appendChild(el('p', 'login-hint', isTouch() ? 'Move: drag anywhere.<br>Skills fire automatically.' : 'Move: WASD / arrows or drag on touch.<br>Skills fire automatically. Q equip, I items, C stats.'));
     this.titlePane.appendChild(this.board);
 
     // ---- select pane: the last character on a stage, name tag, buttons
