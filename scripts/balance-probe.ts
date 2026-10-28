@@ -3,6 +3,9 @@
 // hero's damage and the enemies' stats at minutes 1, 3, 5, 8, 12, 15, and the final level. Informational (no asserts).
 import { botInput } from '../src/game/bot.ts';
 import { BOSSES, CLASSES, enemyDmgMult, enemyHpMult, LADDER, SKILL_BY_KEY, poolLo, progress, skillDmgMult } from '../src/game/data.ts';
+import { GearPool, JOB_BIT, MAIN_STAT, TIER_LEVELS } from '../src/game/gear.ts';
+import type { GearItem, GearSlot, GearStats } from '../src/game/gear.ts';
+import type { ClassKey } from '../src/game/data.ts';
 import { Sim } from '../src/game/sim.ts';
 
 const seeds = Number(process.argv[2] ?? 8);
@@ -11,12 +14,34 @@ const only = process.argv[3];
 const mobSpeeds: Record<number, number> | undefined = process.env.PROBE_SPEEDS === 'rand'
   ? Object.fromEntries([...LADDER, ...BOSSES].map((d) => [d.id, 0.3 + (((d.id * 2654435761) >>> 0) % 1400) / 1000]))
   : undefined;
+// PROBE_GEAR=real: a pool with MapleStory-sized stats instead of the placeholder items (stats grow with reqLevel like the real classic equipment: weapon attack
+// ~10 + 1.1 L, armor PDD ~0.4-1.0 L, main stat up to L / 8 on a few slots, boots speed up to +15), two items per slot and tier (three per class for weapons)
+function realPool(): GearPool {
+  const list: GearItem[] = [];
+  TIER_LEVELS.forEach((lo, t) => {
+    for (const v of [0, 1]) {
+      const L = Math.min(99, lo + 4 + v * 5 + (t === 7 ? 5 : 0));
+      const mk = (slot: GearSlot, job: number, stats: GearStats, name: string) => list.push({ id: `rl${slot}${job}t${t}v${v}`, slot, name: `${name} L${L}`, level: L, job, gender: 2, tier: t, stats, long: false });
+      const st = L / 8 | 0;
+      mk('cap', 0, { pdd: 3 + L * 0.6 | 0, mhp: L > 40 ? L : 0, str: st / 2 | 0, dex: st / 2 | 0, int: st / 2 | 0, luk: st / 2 | 0 }, 'Cap');
+      mk('coat', 0, { pdd: 5 + L | 0, str: st / 2 | 0, dex: st / 2 | 0, int: st / 2 | 0, luk: st / 2 | 0 }, 'Top');
+      mk('pants', 0, { pdd: 4 + L * 0.7 | 0, str: st / 2 | 0, dex: st / 2 | 0, int: st / 2 | 0, luk: st / 2 | 0 }, 'Bottom');
+      mk('shoes', 0, { pdd: 2 + L * 0.4 | 0, speed: 2 + L / 7 | 0, dex: st / 3 | 0 }, 'Shoes');
+      mk('glove', 0, { pdd: 1 + L * 0.25 | 0, pad: L / 10 | 0, mad: L / 10 | 0, str: st / 3 | 0, dex: st / 3 | 0, int: st / 3 | 0, luk: st / 3 | 0 }, 'Gloves');
+      mk('cape', 0, { pdd: 2 + L * 0.4 | 0, mhp: L > 30 ? L / 2 | 0 : 0, str: st, dex: st, int: st, luk: st }, 'Cape');
+      mk('shield', JOB_BIT.warrior, { pdd: 5 + L * 0.8 | 0, mhp: L > 40 ? L : 0, str: st / 2 | 0 }, 'Shield');
+      for (const c of Object.keys(JOB_BIT) as ClassKey[]) mk('weapon', JOB_BIT[c], { pad: 10 + L * 1.1 | 0, mad: 10 + L * 1.2 | 0, [MAIN_STAT[c]]: st }, c);
+    }
+  });
+  return new GearPool(list, true);
+}
+const gearPool = process.env.PROBE_GEAR === 'real' ? realPool() : undefined;
 const MINUTES = [1, 3, 5, 8, 12, 15];
 
 interface Row { ttk: { boss: number; wave: number; s: number }[]; win: boolean; t: number; level: number; kills: number; snaps: Record<number, { might: number; hit: number; hp: number; maxHp: number; level: number; mobHp: number; mobDmg: number; bossKills: number; gear: number }> }
 
 function play(seed: number, cls: string): Row {
-  const sim = new Sim(seed, cls, { mobSpeeds });
+  const sim = new Sim(seed, cls, { mobSpeeds, ...(gearPool ? { pool: gearPool } : {}) });
   const snaps: Row['snaps'] = {};
   const ttk: Row['ttk'] = [];
   const spawnedAt: Record<number, number[]> = {};

@@ -76,6 +76,8 @@ export interface GearEntry {
   slot: GearSlot;
   name: string;
   level: number;
+  /** item tier when it differs from tierOfLevel(level): the extractor offers an item of a higher reqLevel in an otherwise empty tier */
+  tier?: number;
   job: number;
   /** gender, omitted = 2 */
   g?: 0 | 1 | 2;
@@ -187,7 +189,7 @@ export class GearPool {
       const level = typeof e.level === 'number' ? e.level : 0;
       list.push({
         id, slot: e.slot, name: typeof e.name === 'string' && e.name ? e.name : `Item ${id}`, level, job: e.job | 0,
-        gender: e.g === 0 || e.g === 1 ? e.g : 2, tier: tierOfLevel(level), stats: e.stats ?? {}, long: !!e.long,
+        gender: e.g === 0 || e.g === 1 ? e.g : 2, tier: typeof e.tier === 'number' && e.tier >= 0 && e.tier <= GEAR_MAX_TIER ? e.tier | 0 : tierOfLevel(level), stats: e.stats ?? {}, long: !!e.long,
         ...(typeof e.tuc === 'number' && e.tuc >= 0 ? { tuc: Math.floor(e.tuc) } : {}),
       });
     }
