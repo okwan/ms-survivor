@@ -4,6 +4,9 @@ import { evolutionHint } from '../game/evolutions.ts';
 import type { Card } from '../game/types.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
+import { compact } from '../game/meter.ts';
+import type { MeterRow } from '../game/meter.ts';
+import { BAR_COLORS, sourceInfo } from './meter.ts';
 import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
 import { LoginScreen, classic } from './login.ts';
 import { difficultyPicker } from './difficulty.ts';
@@ -53,6 +56,8 @@ export interface Results {
   /** the tier played, and the name of the tier this win unlocked (if any) */
   difficulty?: number;
   unlocked?: string;
+  /** damage dealt per source (Sim.meter), highest first */
+  damage: { rows: MeterRow[]; total: number; time: number };
   /** Hyper SP earned this run for the hero's class (shown when above 0) */
   hyperSp?: { name: string; sp: number };
 }
@@ -308,10 +313,28 @@ export class Screens {
     this.rerollBtn.disabled = sim.rerolls <= 0 || job;
   }
 
+  /** "Damage breakdown": a scrolling list with a row per damage source (icon, bar, total, share, DPS while owned, hits, crit rate) */
+  private breakdown(d: Results['damage']): HTMLElement {
+    const box = el('div', 'dmgbox');
+    box.appendChild(el('div', 'dmg-h', 'Damage breakdown'));
+    const list = el('div', 'dmg-list');
+    const top = d.rows[0].dmg;
+    d.rows.forEach((s, i) => {
+      const info = sourceInfo(s.key, this.icons);
+      const dps = s.dmg / Math.max(1, d.time - s.first);
+      const row = el('div', 'dmg-row');
+      row.title = `${info.name}: ${compact(dps)}/s while active, ${s.hits} hits, ${s.hits ? Math.round((s.crits / s.hits) * 100) : 0}% crit`;
+      row.innerHTML = `<i class="mt-bar" style="width:${Math.max(2, Math.round((s.dmg / top) * 100))}%;background:${BAR_COLORS[i % BAR_COLORS.length]}"></i>${info.icon ? `<img src="${info.icon}" alt="">` : '<img alt="" style="visibility:hidden">'}<span class="mt-nm">${info.name}</span><b>${compact(s.dmg)}</b><u>${d.total > 0 ? Math.round((s.dmg / d.total) * 100) : 0}%</u><em>${compact(dps)}/s</em><small>${s.hits} hits</small><small>${s.hits ? Math.round((s.crits / s.hits) * 100) : 0}% crit</small>`;
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+    return box;
+  }
+
   showResults(r: Results) {
     this.hideAll();
     this.results.innerHTML = '';
-    const w = el('div', 'win small');
+    const w = el('div', 'win small resw');
     w.appendChild(el('div', 'win-head ' + (r.won ? 'victory' : 'defeat'), r.won ? 'VICTORY!' : 'You Died'));
     const b = el('div', 'win-body');
     b.appendChild(el('p', 'tagline', r.won ? 'You survived the full 15 minutes!' : 'The monsters got you this time.'));
@@ -322,11 +345,16 @@ export class Screens {
       <tr><td>Monsters slain</td><td>${r.kills}</td></tr>
       <tr><td>Bosses slain</td><td>${r.bosses} / ${BOSS_TOTAL}</td></tr>
       <tr><td>Elites slain</td><td>${r.elites}</td></tr>
-      <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>`));
+      <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>
+      <tr><td>Total damage</td><td>${compact(r.damage.total)}</td></tr>
+      <tr><td>Average DPS</td><td>${compact(r.damage.total / Math.max(1, r.damage.time))}</td></tr>`));
     if (r.hyperSp && r.hyperSp.sp > 0) b.appendChild(el('p', 'res-sp', `+${r.hyperSp.sp} Hyper SP for ${r.hyperSp.name}`));
+    if (r.damage.rows.length) b.appendChild(this.breakdown(r.damage));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    b.append(row, this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
+    const more = el('div', 'btnrow res-more');
+    more.append(this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
+    b.append(row, more);
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');

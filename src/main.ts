@@ -20,6 +20,7 @@ import { CreateScreen } from './ui/create.ts';
 import type { CreateResult } from './ui/create.ts';
 import { MapBanner } from './ui/banner.ts';
 import { Hud } from './ui/hud.ts';
+import { MeterPanel } from './ui/meter.ts';
 import { BookPanel } from './ui/book.ts';
 import { ShopPanel } from './ui/shop.ts';
 import { HyperPanel } from './ui/hyper.ts';
@@ -116,6 +117,7 @@ async function boot() {
 
   const hud = new Hud(uiRoot, renderer.tex.icons);
   hud.show(false);
+  const meter = new MeterPanel(hud.topLeft, renderer.tex.icons, hud.meterBtn, { active: () => mode === 'playing', toggled: (on) => { save.settings.meter = on; writeSave(save); } }, save.settings.meter ?? !isTouch());
   const input = new Input(uiRoot);
   const vec = { x: 0, y: 0 };
   const gearUi = new GearUi(uiRoot, gearIcons, {
@@ -188,7 +190,7 @@ async function boot() {
     const best = bank(false);
     const unlocked = sim.won && sim.difficulty > prev && sim.difficulty + 1 < DIFFICULTIES.length ? DIFFICULTIES[sim.difficulty + 1].name : undefined;
     clearRun();
-    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best, hyperSp, difficulty: sim.difficulty, unlocked });
+    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best, hyperSp, damage: { rows: sim.meter.sorted(), total: sim.meter.total, time: sim.t }, difficulty: sim.difficulty, unlocked });
   }
 
   function toTitle() {
@@ -327,6 +329,7 @@ async function boot() {
     renderer.render(sim, dt);
     if (mode !== 'title') {
       hud.update(sim);
+      meter.update(sim);
       gearUi.update(sim);
       noteUi.update(sim);
       if (sim.gearVersion !== seenGear) {

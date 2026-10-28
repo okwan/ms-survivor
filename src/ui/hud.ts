@@ -31,7 +31,11 @@ export class Hud {
   readonly radar: Radar;
   readonly pauseBtn: HTMLButtonElement;
   readonly muteBtn: HTMLButtonElement;
+  /** toggles the damage meter (MeterPanel adds the behaviour) */
+  readonly meterBtn: HTMLButtonElement;
   readonly fsBtn: HTMLButtonElement | null = null;
+  /** the top-left column (kills, mesos, buffs): the damage meter hangs under it */
+  get topLeft(): HTMLElement { return this.el.tl; }
   private rotate: HTMLElement | null = null;
   private rotateDismissed = false;
   private cache = new Map<HTMLElement, string>();
@@ -50,7 +54,7 @@ export class Hud {
     const r = (this.root = document.createElement('div'));
     r.className = 'hud';
     r.innerHTML = `
-      <div class="hud-tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div>
+      <div class="hud-tl" data-k="tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div>
         <div class="buffs">${BUFFS.map((b, i) => `<div class="buff" data-k="buff${i}" title="${FIELD_ITEMS[b.item].name}"><img alt="" data-k="bufficon${i}"><b data-k="bufftime${i}"></b></div>`).join('')}
           ${AILMENTS.map((a) => `<div class="buff ail" data-k="ail${a.id}" title="${a.name}: ${a.desc}" style="border-color:${a.color}"><img alt="" data-k="ailicon${a.id}"><b data-k="ailtime${a.id}"></b></div>`).join('')}</div></div>
       <div class="vignette" data-k="vignette"></div>
@@ -99,9 +103,13 @@ export class Hud {
     this.muteBtn.className = 'pausebtn mutebtn';
     this.muteBtn.textContent = 'M';
     this.muteBtn.title = 'Mute music';
+    this.meterBtn = document.createElement('button');
+    this.meterBtn.className = 'pausebtn meterbtn';
+    this.meterBtn.textContent = 'DPS';
+    this.meterBtn.title = 'Damage meter (T)';
     const btns = document.createElement('div');
     btns.className = 'hud-btns';
-    btns.append(this.muteBtn, this.pauseBtn);
+    btns.append(this.meterBtn, this.muteBtn, this.pauseBtn);
     if (isTouch() && canFullscreen()) {
       const fs = (this.fsBtn = document.createElement('button'));
       fs.className = 'pausebtn mutebtn fsbtn';
