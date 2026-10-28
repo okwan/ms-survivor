@@ -9,6 +9,7 @@ import { loadManifest } from './maple/assets.ts';
 import { Bgm } from './maple/audio.ts';
 import { Renderer } from './render/renderer.ts';
 import { Hud } from './ui/hud.ts';
+import { applyUiTheme } from './ui/theme.ts';
 import { Input } from './ui/input.ts';
 import { loadSave, writeSave } from './ui/save.ts';
 import { Screens } from './ui/screens.ts';
@@ -22,7 +23,7 @@ async function loadArt(): Promise<MapleArt | null> {
       const m = await loadManifest();
       if (!m) return null;
       const art = await buildArt(m);
-      console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
+      console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, ${art.counts.objects} map objects, ${art.counts.digitSets} damage sets, ${art.counts.uiPieces} ui pieces, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
       return art;
     };
     return await Promise.race([run(), new Promise<null>((r) => setTimeout(() => r(null), 12000))]);
@@ -47,6 +48,7 @@ async function boot() {
   host.appendChild(app.canvas);
 
   const art = await loadArt();
+  applyUiTheme(art?.ui ?? null);
   const renderer = new Renderer(app, art);
   app.renderer.on('resize', () => renderer.resize());
 
@@ -186,7 +188,7 @@ async function boot() {
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
       /** what real Maple art was loaded (null = placeholders) */
-      maple: () => (art ? { ...art.counts, bgm: art.bgm } : null),
+      maple: () => (art ? { ...art.counts, bgm: art.bgm, ground: !!art.map?.ground, levelUp: !!art.levelUp } : null),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),
     };
     (window as unknown as { game: typeof api }).game = api;

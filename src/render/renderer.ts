@@ -5,6 +5,8 @@ import { BAG, ELIXIR, GEM, MESO, POTION } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
 import type { Anim, MapleArt, MobArt } from '../maple/art.ts';
+import { DamageNumbers } from './damage.ts';
+import { DecorLayer } from './decor.ts';
 import { RES, buildTextures } from './textures.ts';
 import type { MobTex, Textures } from './textures.ts';
 
@@ -28,6 +30,8 @@ interface DmgNum { t: BitmapText; life: number; vy: number; active: boolean; max
 interface Vfx { sp: Sprite; active: boolean; t: number; dur: number; s0: number; s1: number; a0: number; a1: number; x: number; y: number; vy: number }
 interface Ghost { sp: Sprite; active: boolean; t: number; s: number; anim: Anim | null; age: number }
 interface AnimFx { sp: Sprite; active: boolean; anim: Anim | null; t: number }
+/** the real level-up effect: plays once on the player, following them */
+interface FollowFx { sp: Sprite; active: boolean; t: number; pending: boolean }
 
 function hash2(x: number, y: number): number {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
@@ -66,6 +70,10 @@ export class Renderer {
   private animFx: AnimFx[] = [];
   private animFxNext = 0;
   private art: MapleArt | null;
+  /** MapleStory world/damage art; null members fall back to the placeholder look */
+  private decor: DecorLayer | null = null;
+  private dmgNums: DamageNumbers | null = null;
+  private levelFx: FollowFx | null = null;
   private danger: { fill: Sprite; ring: Sprite }[] = [];
   private stamp = 0;
   private time = 0;
@@ -79,10 +87,14 @@ export class Renderer {
     this.tex = buildTextures();
     if (art) Object.assign(this.tex.icons, art.icons);
     const tx = this.tex;
-    this.ground = new TilingSprite({ texture: tx.ground, width: 16, height: 16 });
+    const mapArt = art?.map ?? null;
+    this.ground = new TilingSprite({ texture: mapArt?.ground ?? tx.ground, width: 16, height: 16 });
+    if (mapArt?.ground) app.renderer.background.color = mapArt.groundColor;
     app.stage.addChild(this.ground);
     app.stage.addChild(this.world);
     this.entities.sortableChildren = true;
+    if (mapArt?.objects.length) this.decor = new DecorLayer(mapArt);
+    if (this.decor) this.world.addChild(this.decor.layer);
     this.world.addChild(this.groundFx, this.entities, this.fxLayer, this.topLayer);
 
     for (let i = 0; i < MAX_DECOS; i++) {
@@ -131,6 +143,16 @@ export class Renderer {
       fill.visible = ring.visible = false;
       this.fxLayer.addChild(fill, ring);
       this.danger.push({ fill, ring });
+    }
+    if (art?.damage) {
+      this.dmgNums = new DamageNumbers(art.damage);
+      this.topLayer.addChild(this.dmgNums.layer);
+    }
+    if (art?.levelUp) {
+      const sp = new Sprite(art.levelUp.tex[0]);
+      sp.visible = false;
+      this.fxLayer.addChild(sp);
+      this.levelFx = { sp, active: false, t: 0, pending: false };
     }
     this.resize();
   }
@@ -228,12 +250,14 @@ export class Renderer {
       case 'hit': {
         const ha = this.art?.skills.get(e.skill)?.hit;
         if (ha) this.spawnAnim(ha, e.x * PX, e.y * PX);
-        if (e.crit) this.number(e.x, e.y, e.amount + '!', 0xff5a4a, 27, 0.9);
+        if (this.dmgNums) this.dmgNums.spawn(e.x * PX + (Math.random() - 0.5) * 16, e.y * PX - 24, e.amount, e.crit ? 'cri' : 'red');
+        else if (e.crit) this.number(e.x, e.y, e.amount + '!', 0xff5a4a, 27, 0.9);
         else this.number(e.x, e.y, String(e.amount), e.boss ? 0xffb060 : 0xff9a2e, 17);
         break;
       }
       case 'playerHit':
-        this.number(e.x, e.y - 1.2, '-' + Math.round(e.amount), 0xc070ff, 24, 1.0);
+        if (this.dmgNums) this.dmgNums.spawn(e.x * PX, e.y * PX - 46, e.amount, 'violet');
+        else this.number(e.x, e.y - 1.2, '-' + Math.round(e.amount), 0xc070ff, 24, 1.0);
         this.hurt = 0.25;
         break;
       case 'death': {
@@ -300,6 +324,12 @@ export class Renderer {
         this.ringFx(tx.ring, e.x, e.y, e.r, 0.5, e.hit ? 0xff3030 : 0xffa070, 1);
         break;
       case 'levelUp':
+        if (this.levelFx && this.art?.levelUp) {
+          // the real effect carries its own "LEVEL UP!" lettering; it starts once the card dialog is closed, so it is seen
+          this.levelFx.pending = true;
+          this.ringFx(tx.ring, sim.px, sim.py, 5, 0.7, 0xffe060, 0.6);
+          break;
+        }
         this.ringFx(tx.ring, sim.px, sim.py, 5, 0.7, 0xffe060, 1);
         this.number(sim.px, sim.py - 2.4, 'LEVEL UP!', 0xffe060, 24, 1.2);
         break;
@@ -335,11 +365,12 @@ export class Renderer {
     this.ground.tileScale.set(z);
 
     // decorations on a hashed grid
+    if (this.decor) this.decor.update(sim.px * PX, sim.py * PX, z, this.time, this.w, this.h);
     const halfW = this.w / 2 / z / PX + 3, halfH = this.h / 2 / z / PX + 3;
     const cx0 = Math.floor((sim.px - halfW) / DECO_CELL), cx1 = Math.floor((sim.px + halfW) / DECO_CELL);
     const cy0 = Math.floor((sim.py - halfH) / DECO_CELL), cy1 = Math.floor((sim.py + halfH) / DECO_CELL);
     let di = 0;
-    for (let cy = cy0; cy <= cy1 && di < MAX_DECOS; cy++) {
+    for (let cy = cy0; cy <= cy1 && di < MAX_DECOS && !this.decor; cy++) {
       for (let cx = cx0; cx <= cx1 && di < MAX_DECOS; cx++) {
         const h = hash2(cx, cy);
         if (h > 0.42) continue;
@@ -542,6 +573,20 @@ export class Renderer {
       const k = frameAt(a, f.t, false);
       f.sp.texture = a.tex[k];
       f.sp.anchor.set(a.ax[k], a.ay[k]);
+    }
+    this.dmgNums?.update(dt);
+    const lf = this.levelFx;
+    if (lf?.pending && (!sim.offer || sim.over)) { lf.pending = false; lf.active = true; lf.t = 0; lf.sp.visible = true; }
+    if (lf?.active && this.art?.levelUp) {
+      const a = this.art.levelUp;
+      lf.t += dt;
+      if (lf.t >= a.total) { lf.active = false; lf.sp.visible = false; }
+      else {
+        const k = frameAt(a, lf.t, false);
+        lf.sp.texture = a.tex[k];
+        lf.sp.anchor.set(a.ax[k], a.ay[k]);
+        lf.sp.position.set(sim.px * PX, sim.py * PX + 6);
+      }
     }
     for (let i = 0; i < MAX_DMG_NUMBERS; i++) {
       const d = this.dmg[i];

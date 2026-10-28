@@ -114,3 +114,86 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
   .slots.passive .slot { width: 26px; height: 26px; }
   .statusbar .hp { flex-basis: 46vw; }
 }
+
+/* ---------- MapleStory UI (only with maple/ui art: classes and --u-* variables are set by src/ui/theme.ts) ---------- */
+:root.ms-ui { --font: Arial, "Segoe UI", Helvetica, sans-serif; --ol: -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000, 1px 1px #000, -1px -1px #000, 1px -1px #000, -1px 1px #000; }
+.ms-ui body { font-weight: bold; }
+.ms-ui .hud { text-shadow: var(--ol); }
+.ms-ui .pill { background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.45); border-radius: 3px; box-shadow: none; padding: 2px 10px; }
+.ms-ui .pill b { color: #ffe066; }
+.ms-ui .clock { -webkit-text-stroke: 0; text-shadow: var(--ol), 0 3px 0 #000; }
+.ms-ui .nextboss { background: rgba(0,0,0,.6); border: 1px solid #ffd35a; border-radius: 3px; color: #ffe27a; }
+.ms-ui .nextboss.soon { background: rgba(120,0,0,.75); border-color: #ff6a5a; color: #fff; }
+.ms-ui .bar { border-radius: 0; border: 1px solid #000; box-shadow: 0 0 0 1px #aab4cc; }
+.ms-ui .bar span { text-shadow: var(--ol); }
+.ms-ui .radar { border-radius: 3px; border: 1px solid #000; box-shadow: 0 0 0 1px #aab4cc, 0 2px 6px rgba(0,0,0,.5); }
+.ms-ui .slot { border-radius: 2px; background: rgba(0,0,0,.55); border: 1px solid #aab4cc; }
+.ms-ui .slot:not(.empty) { background: #1a2036; border-color: #fff; }
+.ms-ui .slot img { border-radius: 1px; }
+.ms-ui .slot em { border-radius: 2px; border: 1px solid #000; background: #ff8a1f; text-shadow: var(--ol); }
+
+/* cursor */
+.ms-cur, .ms-cur body, .ms-cur #app canvas, .ms-cur .screen { cursor: var(--cur0); }
+.ms-cur button, .ms-cur .btn, .ms-cur .card, .ms-cur input, .ms-cur .banish { cursor: var(--cur1) !important; }
+
+/* numbers drawn with the status bar / level digit images */
+.mnum { display: inline-flex; align-items: center; gap: 1px; vertical-align: middle; text-shadow: none; }
+.mnum img { display: block; image-rendering: pixelated; }
+.mnum .dot { display: block; background: #fff; align-self: flex-end; margin: 0 1px 3px; }
+.mnum .sp { display: block; }
+.mnum .lt { font: bold 11px Arial, sans-serif; color: #fff; text-shadow: var(--ol); margin: 0 1px; }
+
+/* bottom status bar */
+.ms-sb .statusbar { display: block; height: 71px; padding: 0; border: 0; box-shadow: none; background: var(--u-sb-fill) repeat-x left top / auto 100%; image-rendering: pixelated; }
+.ms-sb .statusbar .lvbox { position: absolute; left: max(10px, calc(50% - 390px)); top: 12px; height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.4); border-radius: 3px; }
+.ms-sb .statusbar .lvbox small { font-size: 12px; color: #ffe066; text-shadow: var(--ol); }
+.ms-sb .statusbar .lvbox b { font-size: 24px; display: flex; align-items: center; text-shadow: var(--ol); }
+.ms-sb .statusbar .hp { position: absolute; left: max(104px, calc(50% - 296px)); top: 14px; flex: none; width: min(340px, calc(100vw - 118px)); height: 20px; background: #20243a; }
+.ms-gray .statusbar .bar { background: var(--u-sb-gray) repeat-x 0 0 / 1px 100%; }
+.ms-hp .statusbar .hp { height: calc(var(--u-sb-hp-h) + 2px); }
+.ms-hp .statusbar .hp .fill { background: var(--u-sb-hp) left center / auto 100% repeat-x; }
+.ms-sb .statusbar .exp { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; }
+.ms-exp .statusbar .exp { height: calc(var(--u-expfill-h) + 2px); }
+.ms-exp .statusbar .exp .fill { background: var(--u-expfill) left center / var(--u-expfill-size) repeat-x; }
+.ms-sb .hud-skills { bottom: 82px; }
+
+/* windows: the 3-part Notice frame stretched as a border-image */
+.ms-win .win { overflow: visible; border: solid transparent; border-width: calc(var(--win-top) * 1px) calc(var(--win-side) * 1px) calc(var(--win-bottom) * 1px); border-image: var(--win-img) var(--win-top) var(--win-side) var(--win-bottom) fill / calc(var(--win-top) * 1px) calc(var(--win-side) * 1px) calc(var(--win-bottom) * 1px) stretch round; outline: none; border-radius: 0; background: none; box-shadow: none; image-rendering: pixelated; filter: drop-shadow(0 6px 12px rgba(0,0,0,.55)); }
+.ms-win .win-head { margin: calc(var(--win-top) * -1px) calc(var(--win-side) * -1px) 0; height: calc(var(--win-top) * 1px); line-height: calc(var(--win-top) * 1px); padding: 0; background: none; color: #fff; font-size: 18px; letter-spacing: .04em; text-shadow: var(--ol); display: flex; justify-content: center; align-items: center; gap: 8px; }
+.ms-win .win-head.victory { color: #ffe27a; }
+.ms-win .win-head.defeat { color: #c8d0f0; }
+.ms-win .win-body { padding: 4px 6px 4px; max-height: calc(100vh - 150px); overflow-y: auto; }
+.ms-win .card { background: rgba(255,255,255,.6); border: 1px solid #8a7a5a; border-radius: 3px; }
+.ms-win .card:hover { border-color: #ff8a1f; background: rgba(255,255,255,.85); }
+.ms-win .card img { border-radius: 2px; }
+.ms-win .stats { background: rgba(255,255,255,.45); border: 1px solid #9aa4bc; border-radius: 2px; }
+.ms-win .banish { border-radius: 2px; }
+.ms-win .tag { border-radius: 2px; }
+.ms-win .res td { border-bottom: 1px dotted #9aa4bc; }
+
+/* buttons: real button caps with a stretched middle (the label is ours, MapleStory's is baked into its images) */
+.ms-btn .btn, .ms-btn .mutebtn { font-family: var(--font); font-weight: bold; font-size: 14px; color: #fff; text-shadow: var(--ol); letter-spacing: .02em; outline: 0; background: none; border-radius: 0; border-style: solid; border-color: transparent; border-width: 0 calc(var(--btn-cap) * 2px); border-image: var(--btn-no-n) 0 var(--btn-cap) 0 var(--btn-cap) fill / 0 calc(var(--btn-cap) * 2px) 0 / 0 stretch; image-rendering: pixelated; height: var(--btn-h); line-height: var(--btn-h); padding: 0 8px; }
+.ms-btn .btn.primary { border-image-source: var(--btn-ok-n); }
+.ms-btn .btn:hover:not(:disabled), .ms-btn .mutebtn:hover { filter: none; border-image-source: var(--btn-no-h); }
+.ms-btn .btn.primary:hover:not(:disabled) { border-image-source: var(--btn-ok-h); }
+.ms-btn .btn:active:not(:disabled), .ms-btn .mutebtn:active { border-image-source: var(--btn-no-p); }
+.ms-btn .btn.primary:active:not(:disabled) { border-image-source: var(--btn-ok-p); }
+.ms-btn .btn:disabled { filter: none; opacity: 1; border-image-source: var(--btn-no-d); color: #c4c4c4; }
+.ms-btn .btn.big { height: calc(var(--btn-h) * 1.5); line-height: calc(var(--btn-h) * 1.5); font-size: 20px; padding: 0 8px; }
+.ms-btn .btn.mute { height: 30px; line-height: 30px; font-size: 12px; padding: 0 4px; }
+.ms-btn .mutebtn { height: 28px; line-height: 28px; min-width: 44px; width: auto; font-size: 13px; padding: 0 2px; }
+.ms-menu .pausebtn:not(.mutebtn) { width: var(--u-sb-menu-normal-w); height: var(--u-sb-menu-normal-h); border: 0; border-radius: 0; background: var(--u-sb-menu-normal) no-repeat center / 100% 100%; font-size: 0; image-rendering: pixelated; }
+.ms-menu .pausebtn:not(.mutebtn):hover { background-image: var(--u-sb-menu-hover, var(--u-sb-menu-normal)); }
+.ms-menu .pausebtn:not(.mutebtn):active { background-image: var(--u-sb-menu-pressed, var(--u-sb-menu-normal)); }
+
+/* title logo */
+.ms-logo .title-win .logo { font-size: 0; line-height: 0; }
+.ms-logo .title-win .logo::before { content: ''; display: block; width: var(--u-title-logo-w); height: var(--u-title-logo-h); max-width: 100%; margin: 0 auto 6px; background: var(--u-title-logo) center / contain no-repeat; image-rendering: pixelated; }
+.ms-logo .title-win .logo b { display: block; font-size: 30px; line-height: 1.1; }
+
+/* volume slider */
+.ms-slider .volume input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; width: 140px; height: 16px; margin: 0; }
+.ms-slider .volume input[type=range]::-webkit-slider-runnable-track { height: var(--u-sl-mid-h); background: var(--u-sl-mid) repeat-x; image-rendering: pixelated; }
+.ms-slider .volume input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--u-sl-thumb-w); height: var(--u-sl-thumb-h); background: var(--u-sl-thumb) no-repeat; image-rendering: pixelated; margin-top: calc((var(--u-sl-mid-h) - var(--u-sl-thumb-h)) / 2); }
+.ms-slider .volume input[type=range]::-moz-range-track { height: var(--u-sl-mid-h); background: var(--u-sl-mid) repeat-x; }
+.ms-slider .volume input[type=range]::-moz-range-thumb { width: var(--u-sl-thumb-w); height: var(--u-sl-thumb-h); background: var(--u-sl-thumb) no-repeat; border: 0; border-radius: 0; }

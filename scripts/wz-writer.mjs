@@ -208,7 +208,10 @@ export function buildImage(tree, key) {
   return w.buf();
 }
 
-/** A complete .wz file holding the given { 'Name.img': tree } images in a flat root directory. */
+/**
+ * A complete .wz file holding the given { 'Name.img': tree } images. Keys with slashes ('Tile/grassySoil.img') become
+ * nested directories, like the real Map.wz.
+ */
 export function buildWz(images, { iv = 'gms', version = 83 } = {}) {
   const key = wzKey(IVS[iv]);
   const { hash, check } = versionHash(version);
@@ -221,34 +224,69 @@ export function buildWz(images, { iv = 'gms', version = 83 } = {}) {
     return (off ^ ((target - fstart * 2) >>> 0)) >>> 0;
   };
   const fstart = 60;
-  const names = Object.keys(images);
-  const bodies = names.map((n) => buildImage(images[n], key));
-  // directory entry prefixes (everything but the 4-byte offset)
-  const prefixes = names.map((n, i) => {
+  // directory tree: { dirs: Map(name -> node), imgs: [{ name, body }] }
+  const mkNode = () => ({ dirs: new Map(), imgs: [] });
+  const rootNode = mkNode();
+  for (const path of Object.keys(images)) {
+    const parts = path.split('/');
+    let node = rootNode;
+    for (const d of parts.slice(0, -1)) {
+      if (!node.dirs.has(d)) node.dirs.set(d, mkNode());
+      node = node.dirs.get(d);
+    }
+    node.imgs.push({ name: parts.at(-1), body: buildImage(images[path], key) });
+  }
+  // entries of a directory: sub-directories first, then images; each prefix is everything but the 4-byte offset
+  const prefixOf = (type, name, size) => {
     const p = new Writer(key);
-    p.u8(4);
-    p.str(n);
-    p.cint(bodies[i].length);
+    p.u8(type);
+    p.str(name);
+    p.cint(size);
     p.cint(0);
     return p.buf();
-  });
-  const head = new Writer(key);
-  head.cint(names.length);
-  const dirLen = head.len + prefixes.reduce((a, p) => a + p.length + 4, 0);
-  let imgAt = fstart + 2 + dirLen;
-  const dir = new Writer(key);
-  dir.cint(names.length);
-  names.forEach((_, i) => {
-    dir.push(prefixes[i]);
-    const offsetPos = fstart + 2 + dir.len;
-    dir.u32(encOffset(offsetPos, fstart, imgAt));
-    imgAt += bodies[i].length;
+  };
+  const prep = (node) => {
+    node.entries = [
+      ...[...node.dirs].map(([name, child]) => ({ child, prefix: prefixOf(3, name, 1) })),
+      ...node.imgs.map((im) => ({ img: im, prefix: prefixOf(4, im.name, im.body.length) })),
+    ];
+    for (const d of node.dirs.values()) prep(d);
+    const head = new Writer(key);
+    head.cint(node.entries.length);
+    node.len = head.len + node.entries.reduce((a, e) => a + e.prefix.length + 4, 0);
+  };
+  prep(rootNode);
+  // layout: each directory, then its sub-directories, then its images
+  let at = fstart + 2;
+  const chunks = [];
+  const place = (node) => {
+    node.at = at;
+    at += node.len;
+    chunks.push(node);
+    for (const e of node.entries) if (e.child) place(e.child);
+    for (const e of node.entries)
+      if (e.img) {
+        e.img.at = at;
+        at += e.img.body.length;
+        chunks.push(e.img);
+      }
+  };
+  place(rootNode);
+  const bodies = chunks.map((c) => {
+    if (c.body) return c.body;
+    const dir = new Writer(key);
+    dir.cint(c.entries.length);
+    for (const e of c.entries) {
+      dir.push(e.prefix);
+      dir.u32(encOffset(c.at + dir.len, fstart, e.child ? e.child.at : e.img.at));
+    }
+    return dir.buf();
   });
   const out = Buffer.alloc(fstart + 2);
   out.write('PKG1', 0, 'latin1');
   out.write('Package file v1.0 Copyright 2002 Wizet, ZMS', 16, 'latin1');
   out.writeUInt16LE(check, fstart);
-  const body = Buffer.concat([dir.buf(), ...bodies]);
+  const body = Buffer.concat(bodies);
   out.writeBigUInt64LE(BigInt(body.length + 2), 4);
   out.writeUInt32LE(fstart, 12);
   return Buffer.concat([out, body]);
