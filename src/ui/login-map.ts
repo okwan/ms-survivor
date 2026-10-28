@@ -36,7 +36,7 @@ export const LAYOUT = {
     home: [169, 138] as Pt,
     quit: [268, 138] as Pt,
     /** controls hint: top of the line, centred */
-    hintY: 444,
+    hintY: 449,
   },
   world: {
     step: [8, 8] as Pt,
@@ -63,7 +63,7 @@ export const LAYOUT = {
     /** the character's feet */
     feet: [330, 368] as Pt,
     /** top-left of the difficulty picker */
-    diff: [250, 470] as Pt,
+    diff: [330, 66] as Pt,
     /** name tag offset from the feet (centred) */
     tag: [0, 4] as Pt,
     /** relative to the CharSelect signboard */
@@ -650,7 +650,7 @@ export class MapLogin implements LoginLike {
   private drawScroll(now: number) {
     const L = LAYOUT.world, fr = this.seq('WorldSelect/scroll/0');
     if (!fr.length) return;
-    const i = Math.min(fr.length - 1, Math.floor((now - this.scrollT0) / L.scrollMs));
+    const i = Math.max(0, Math.min(fr.length - 1, Math.floor((now - this.scrollT0) / L.scrollMs)));
     this.blit(fr[i], L.scroll[0], L.scroll[1]);
     if (i === fr.length - 1 && !this.tabsOn) this.showTabs();
   }

@@ -20,11 +20,13 @@
 .ml-field { position: absolute; box-sizing: border-box; margin: 0; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: #222; font: 12px Arial, sans-serif; outline: none; cursor: default; }
 .ml-field::placeholder { color: #8a8a8a; opacity: 1; }
 .ml-txt { position: absolute; font: bold 12px Arial, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; white-space: nowrap; pointer-events: none; }
-.ml-hint { position: absolute; left: 0; right: 0; text-align: center; font: 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
+.ml-hint { position: absolute; margin: 0; left: 0; right: 0; text-align: center; font: 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
 
 /* our own extras (not in the real client): the dock with Options, Monster Book, Henesys Shop */
 .ml-dock { position: absolute; display: flex; flex-wrap: wrap-reverse; justify-content: center; gap: 4px; }
 .ml-dock .btn { font-size: 11px; padding: 2px 10px; min-width: 0; width: auto; line-height: 16px; }
+/* the blank Basic.img button at its real 1x size, like the client's small text buttons */
+.ms-btn .ml-dock .btn { height: 20px; line-height: 20px; font-size: 11px; padding: 0 6px; border-width: 0 calc(var(--btn-cap) * 1px); border-image-width: 0 calc(var(--btn-cap) * 1px); }
 .ml-opts { position: absolute; right: 0; bottom: calc(100% + 4px); display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 6px; background: rgba(0, 0, 0, .55); border: 1px solid #e8c58a; border-radius: 4px; color: #fff; text-shadow: 0 1px 2px #000; }
 .ml-opts .volume { font-size: 12px; gap: 4px; }
 .ml-opts input[type=range] { width: 90px; }
@@ -33,3 +35,8 @@
 .mlogin .ml-diff { position: absolute; pointer-events: auto; }
 .mlogin .ml-continue { white-space: nowrap; }
 .ml-info { font: 11px Arial, sans-serif; color: #3b2a1a; text-shadow: none; }
+/* the difficulty picker on the character select sky, in the wooden look of the signboards */
+.mlogin .ml-diff .dpick { width: 300px; margin: 0; gap: 3px; }
+.mlogin .ml-diff .dpick-b { min-height: 22px; padding: 2px; font: bold 11px Arial, sans-serif; border-radius: 3px; border: 1px solid #5a3412; background: linear-gradient(#e7ae68, #a2652b); color: #fff8e0; text-shadow: 0 1px 0 #4a2a0a; box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
+.mlogin .ml-diff .dpick-b.sel { background: linear-gradient(#ffe08a, #f08a1c); border-color: #7a3a00; box-shadow: 0 0 0 1px #fff3c0; }
+.mlogin .ml-diff .dpick-d { font: bold 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 1px #000, 0 0 2px #1a3a6a; min-height: 0; }
