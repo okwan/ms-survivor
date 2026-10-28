@@ -1,9 +1,13 @@
 import { Application, BitmapFont, BitmapText, Container, Sprite, TilingSprite, Texture } from 'pixi.js';
-import { BOSSES, NOVA_RADIUS, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
+import { BOSSES, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
+import type { Stance } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import { BAG, ELIXIR, GEM, MESO, POTION } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
+import { AvatarPlayer } from '../maple/avatar.ts';
+import type { Avatar } from '../maple/avatar.ts';
+import type { Look } from '../maple/avatar-core.ts';
 import type { Anim, MapleArt, MobArt } from '../maple/art.ts';
 import { RES, buildTextures } from './textures.ts';
 import type { MobTex, Textures } from './textures.ts';
@@ -18,6 +22,8 @@ const FOOT = 0.7;
 const MAX_DECOS = 90;
 const DECO_CELL = 14; // yards
 const SCALE = 1 / RES;
+/** the hero's feet stand this many px below the sim position (the hit circle is centred on the body) */
+const HERO_FOOT = 10;
 
 interface EnemyView {
   sp: Sprite; stamp: number; barBg: Sprite | null; barFg: Sprite | null; tex: MobTex | null; flashing: boolean;
@@ -48,6 +54,8 @@ export class Renderer {
   private fxLayer = new Container();
   private topLayer = new Container();
   private playerSp: Sprite;
+  private hero: AvatarPlayer | null = null;
+  private orbitSp: Sprite[] = [];
   private decoSprites: Sprite[] = [];
   private enemyViews = new Map<Enemy, EnemyView>();
   private viewPool: EnemyView[] = [];
@@ -94,6 +102,12 @@ export class Renderer {
     this.playerSp = new Sprite(tx.player);
     this.playerSp.anchor.set(0.5, 0.9);
     this.entities.addChild(this.playerSp);
+    for (let i = 0; i < 2; i++) {
+      const o = new Sprite(tx.glow);
+      o.anchor.set(0.5); o.visible = false; o.tint = 0xe8f0ff; o.scale.set(0.5);
+      this.fxLayer.addChild(o);
+      this.orbitSp.push(o);
+    }
 
     BitmapFont.install({
       name: 'dmgfont',
@@ -141,6 +155,13 @@ export class Renderer {
     this.zoom = Math.min(this.w, this.h) < 560 ? 0.8 : 1;
     this.ground.width = this.w;
     this.ground.height = this.h;
+  }
+
+  /** Sets the hero's real-art look (null look or avatar = chibi placeholder). The look may still be loading; the placeholder shows until it is ready. */
+  setHero(avatar: Avatar | null, look: Look | null, stance: Stance) {
+    if (!avatar || !look) { this.hero = null; return; }
+    this.hero = new AvatarPlayer(avatar);
+    this.hero.set(look, stance);
   }
 
   // ---- pools ------------------------------------------------------------------------------------
@@ -278,6 +299,20 @@ export class Renderer {
         const tint = el === 'fire' ? 0xff7a2a : el === 'ice' ? 0x6fd6ff : el === 'lightning' ? 0xffe84a : el === 'poison' ? 0x62d85e : 0xb58cff;
         if (e.kind === 'bolt') this.ringFx(tx.disc, e.x, e.y, e.r, 0.3, tint, 0.8);
         else if (e.kind === 'nova') this.ringFx(tx.ring, e.x, e.y, e.r, 0.45, tint, 0.95);
+        else if (e.kind === 'melee') {
+          this.lineFx(e.x, e.y - 0.6, e.tx, e.ty - 0.4, 0.14, 0xffffff, 6);
+          this.ringFx(tx.glow, e.tx, e.ty, e.r > 0 ? e.r : 1.3, 0.25, tint, 0.9);
+        } else if (e.kind === 'cone') {
+          const ang = Math.atan2(e.ty - e.y, e.tx - e.x);
+          for (let k = -1; k <= 1; k++) {
+            const a = ang + k * 0.6;
+            this.lineFx(e.x, e.y - 0.4, e.x + Math.cos(a) * e.r, e.y + Math.sin(a) * e.r - 0.4, 0.22, tint, 8);
+          }
+          this.ringFx(tx.disc, e.x + Math.cos(ang) * e.r * 0.6, e.y + Math.sin(ang) * e.r * 0.6, e.r * 0.45, 0.28, tint, 0.55);
+        } else if (e.kind === 'orbit') {
+          this.lineFx(e.x, e.y - 0.7, e.tx, e.ty - 0.4, 0.16, tint, 4);
+          this.ringFx(tx.glow, e.tx, e.ty, 1.4, 0.25, 0xffffff, 0.85);
+        }
         else if (e.kind === 'strike') {
           if (e.skill === 'thunder_bolt') {
             this.lineFx(e.tx, e.ty - 9, e.tx, e.ty, 0.18, tint, 5);
@@ -354,15 +389,37 @@ export class Renderer {
     }
     for (; di < MAX_DECOS; di++) this.decoSprites[di].visible = false;
 
-    // player
+    // player: composited Maple character (native pixel size, art faces left) or the chibi placeholder
     const ps = this.playerSp;
-    ps.position.set(sim.px * PX, sim.py * PX);
     ps.zIndex = sim.py * PX;
-    const bob = sim.moving ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 3) * 1;
-    ps.y -= bob;
-    ps.scale.set(SCALE * (sim.facing >= 0 ? 1 : -1), SCALE);
+    const hf = this.hero?.frame(dt, sim.moving, sim.lastFire) ?? null;
+    if (hf) {
+      if (ps.texture !== hf.tex) ps.texture = hf.tex;
+      ps.anchor.set(hf.ax / hf.tex.frame.width, hf.ay / hf.tex.frame.height);
+      ps.position.set(sim.px * PX, sim.py * PX + HERO_FOOT);
+      ps.scale.set(sim.facing >= 0 ? -1 : 1, 1);
+    } else {
+      if (ps.texture !== tx.player) ps.texture = tx.player;
+      ps.anchor.set(0.5, 0.9);
+      ps.position.set(sim.px * PX, sim.py * PX);
+      const bob = sim.moving ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 3) * 1;
+      ps.y -= bob;
+      ps.scale.set(SCALE * (sim.facing >= 0 ? 1 : -1), SCALE);
+    }
     if (this.hurt > 0) { this.hurt -= dt; ps.tint = 0xff8080; } else ps.tint = 0xffffff;
     ps.visible = !sim.over || sim.won;
+
+    // orbiting summons (Silver Hawk): always on once owned
+    let oi = 0;
+    for (let i = 0; i < sim.skills.length && oi < this.orbitSp.length; i++) {
+      if (SKILL_BY_KEY[sim.skills[i].key]?.kind !== 'orbit') continue;
+      const o = this.orbitSp[oi++];
+      const a = sim.t * ORBIT_SPIN;
+      o.visible = true;
+      o.position.set((sim.px + Math.cos(a) * ORBIT_RADIUS) * PX, (sim.py + Math.sin(a) * ORBIT_RADIUS) * PX - 14);
+      o.tint = 0xdfe8ff;
+    }
+    for (; oi < this.orbitSp.length; oi++) this.orbitSp[oi].visible = false;
 
     // enemies
     const enemies = sim.enemies;

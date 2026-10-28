@@ -1,12 +1,13 @@
 import {
   BERSERK_AFTER, BOSSES, BOSS_EVERY, LADDER, MAX_GEMS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, NOVA_DAMAGE_FRAC, NOVA_EVERY,
-  NOVA_RADIUS, PASSIVES, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS,   SKILL_MAX_LEVEL, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
+  CLASS_BY_KEY, DEFAULT_CLASS, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVES, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
 } from './data.ts';
 import { SpatialGrid } from './grid.ts';
 import { Rng } from './rng.ts';
 import { updateSkills, updateProjectiles, updateAreas } from './skills.ts';
 import { BAG, ELIXIR, GEM, MESO, POTION } from './types.ts';
+import type { ClassDef, SkillDef } from './data.ts';
 import type { Area, Card, Enemy, PassiveState, Pickup, PickupKind, Projectile, SimEvent, SkillState } from './types.ts';
 
 export { TICK };
@@ -26,8 +27,11 @@ export class Sim {
   // player
   px = 0;
   py = 0;
+  cls: ClassDef;
   hp = PLAYER_BASE.hp;
   maxHp = PLAYER_BASE.hp;
+  /** sim time of the last non-summon skill that fired (the renderer plays the weapon's attack action) */
+  lastFire = -99;
   facing = 1;
   /** key of the skill currently dealing damage; carried on 'hit' events so the renderer can pick hit art */
   curSkill = '';
@@ -54,7 +58,7 @@ export class Sim {
   bossKills = 0;
   bossesSpawned = 0;
 
-  skills: SkillState[] = [{ key: 'magic_claw', level: 1, cd: 0.2 }];
+  skills: SkillState[];
   passives: PassiveState[] = [];
 
   offer: Card[] | null = null;
@@ -84,9 +88,14 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS) {
     this.seed = seed;
     this.rng = new Rng(seed);
+    this.cls = CLASS_BY_KEY[classKey] ?? CLASS_BY_KEY[DEFAULT_CLASS];
+    this.skills = [{ key: this.cls.skills[0], level: 1, cd: 0.2 }];
+    this.speed = this.cls.speed;
+    this.crit = this.cls.crit;
+    this.hp = this.maxHp = this.cls.hp;
   }
 
   // ---- events ----------------------------------------------------------------------------------
@@ -101,7 +110,7 @@ export class Sim {
 
   // ---- derived stats ---------------------------------------------------------------------------
   recalc() {
-    let might = 1, hpMul = 1, speed = 1, haste = 0, armor = 0, area = 1, magnet = 1, growth = 1, regen = 0, crit = PLAYER_BASE.crit;
+    let might = 1, hpMul = 1, speed = 1, haste = 0, armor = 0, area = 1, magnet = 1, growth = 1, regen = 0, crit = this.cls.crit;
     for (const p of this.passives) {
       const d = PASSIVE_BY_KEY[p.key];
       const v = d.per * p.level;
@@ -119,7 +128,7 @@ export class Sim {
       }
     }
     this.might = might;
-    this.speed = PLAYER_BASE.speed * speed;
+    this.speed = this.cls.speed * speed;
     this.haste = haste;
     this.armor = armor;
     this.area = area;
@@ -127,7 +136,7 @@ export class Sim {
     this.growth = growth;
     this.regen = regen;
     this.crit = crit;
-    const newMax = PLAYER_BASE.hp * hpMul;
+    const newMax = this.cls.hp * hpMul;
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
     this.maxHp = newMax;
     if (this.hp > this.maxHp) this.hp = this.maxHp;
@@ -186,7 +195,21 @@ export class Sim {
     e.hp -= amt;
     e.flash = 0.08;
     this.emit({ type: 'hit', x: e.x, y: e.y - 0.5, amount: amt, crit, boss: e.boss >= 0, skill: this.curSkill });
+    const def = SKILL_BY_KEY[this.curSkill];
+    if (def !== undefined && (def.drain || def.stun || def.root || def.weaken)) this.applyEffects(e, def, amt);
     if (e.hp <= 0) this.kill(e);
+  }
+
+  /** drain, stun, root and weaken of the skill that dealt the hit (bosses cannot be stunned or rooted) */
+  private applyEffects(e: Enemy, def: SkillDef, dealt: number) {
+    if (def.drain) this.hp = Math.min(this.maxHp, this.hp + Math.min(DRAIN_CAP, dealt * def.drain));
+    let lvl = 1;
+    for (let i = 0; i < this.skills.length; i++) if (this.skills[i].key === def.key) { lvl = this.skills[i].level; break; }
+    if (e.boss < 0) {
+      if (def.stun) e.stunT = Math.max(e.stunT, skillDuration(def.stun, lvl));
+      if (def.root) e.rootT = Math.max(e.rootT, skillDuration(def.root, lvl));
+    }
+    if (def.weaken) e.weakT = Math.max(e.weakT, skillDuration(def.weaken, lvl));
   }
 
   /** Damages everything within r of (x,y), optionally slowing; returns hit count. */
@@ -267,10 +290,10 @@ export class Sim {
   // ---- projectile / area allocation (used by skills.ts) -----------------------------------------
   newProjectile(): Projectile {
     const p = this.projPool.pop() ?? {
-      skill: '', pierce: false, x: 0, y: 0, vx: 0, vy: 0, dmg: 0, life: 0, target: null, splash: 0, pierceLeft: 0,
+      speed: MISSILE_SPEED, skill: '', pierce: false, x: 0, y: 0, vx: 0, vy: 0, dmg: 0, life: 0, target: null, splash: 0, pierceLeft: 0,
       hits: new Array<Enemy>(16), nHits: 0, slow: false,
     };
-    p.target = null; p.nHits = 0; p.splash = 0; p.slow = false; p.pierce = false;
+    p.target = null; p.nHits = 0; p.splash = 0; p.slow = false; p.pierce = false; p.speed = MISSILE_SPEED;
     this.projectiles.push(p);
     return p;
   }
@@ -305,7 +328,7 @@ export class Sim {
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
     e.tier = tier; e.boss = -1; e.big = d.big; e.add = add; e.alive = true;
-    e.hitCd = 0.5; e.slowT = 0; e.flash = 0; e.facing = 1; e.phase = this.rng.next() * 6.28;
+    e.hitCd = 0.5; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.facing = 1; e.phase = this.rng.next() * 6.28;
     e.moving = true; e.berserk = false; e.age = 0; e.novaT = 0; e.castT = 0; e.summonT = 0; e.idx = -1;
     this.enemies.push(e);
     return e;
@@ -324,7 +347,7 @@ export class Sim {
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
     e.tier = LADDER.length - 1; e.boss = n; e.big = true; e.add = false; e.alive = true;
-    e.hitCd = 1.0; e.slowT = 0; e.flash = 0; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
+    e.hitCd = 1.0; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
     e.novaT = NOVA_EVERY; e.castT = 0; e.summonT = SUMMON_EVERY; e.idx = -1;
     this.enemies.push(e);
     this.emit({ type: 'bossSpawn', boss: n, name: def.name, x: e.x, y: e.y });
@@ -397,6 +420,9 @@ export class Sim {
       if (e.hitCd > 0) e.hitCd -= dt;
       let sp = e.speed;
       if (e.slowT > 0) { e.slowT -= dt; sp *= 0.5; }
+      if (e.stunT > 0) e.stunT -= dt;
+      if (e.rootT > 0) e.rootT -= dt;
+      if (e.weakT > 0) e.weakT -= dt;
       let dx = px - e.x, dy = py - e.y;
       let d2 = dx * dx + dy * dy;
 
@@ -410,7 +436,7 @@ export class Sim {
       }
 
       const isBoss = e.boss >= 0;
-      let canMove = true;
+      let canMove = e.stunT <= 0 && e.rootT <= 0;
       if (isBoss) {
         const def = BOSSES[e.boss];
         if (def.berserk && !e.berserk && e.age >= BERSERK_AFTER) {
@@ -487,9 +513,9 @@ export class Sim {
       // contact
       dx = px - e.x; dy = py - e.y;
       const rr = e.r + pr;
-      if (dx * dx + dy * dy < rr * rr && e.hitCd <= 0) {
+      if (dx * dx + dy * dy < rr * rr && e.hitCd <= 0 && e.stunT <= 0) {
         e.hitCd = isBoss ? 1.0 : 1.3;
-        this.hurtPlayer(Math.max(1, e.dmg - this.armor), px, py);
+        this.hurtPlayer(Math.max(1, (e.weakT > 0 ? e.dmg * WEAKEN_FACTOR : e.dmg) - this.armor), px, py);
         if (this.over) return;
       }
     }
@@ -544,7 +570,7 @@ export class Sim {
     const out: Card[] = [];
     const skip = (k: string) => this.banished.has(k) || (exclude !== null && exclude.some((c) => c.key === k));
     for (const s of SKILLS) {
-      if (skip(s.key)) continue;
+      if (skip(s.key) || !this.cls.skills.includes(s.key)) continue;
       const own = this.skills.find((o) => o.key === s.key);
       if (own) {
         if (own.level < SKILL_MAX_LEVEL) out.push({ kind: 'skill', key: s.key, name: s.name, isNew: false, from: own.level, to: own.level + 1, desc: s.desc });
@@ -553,7 +579,7 @@ export class Sim {
       }
     }
     for (const p of PASSIVES) {
-      if (skip(p.key)) continue;
+      if (skip(p.key) || (p.cls !== undefined && p.cls !== this.cls.key)) continue;
       const own = this.passives.find((o) => o.key === p.key);
       if (own) {
         if (own.level < PASSIVE_MAX_LEVEL) out.push({ kind: 'passive', key: p.key, name: p.name, isNew: false, from: own.level, to: own.level + 1, desc: p.desc });
@@ -698,6 +724,7 @@ export class Sim {
   snapshot() {
     const b = this.activeBoss();
     return {
+      cls: this.cls.key,
       elapsed: this.t,
       hp: this.hp,
       maxHp: this.maxHp,

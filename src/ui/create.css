@@ -1,0 +1,51 @@
+/* MapleStory-style "New Character" window (src/ui/create.ts). Plain CSS on purpose: white rounded window, blue header, orange accents. */
+.create .create-win { width: min(760px, 100%); background: #fff; border: 3px solid #fff; outline: 3px solid #2f6fd0; border-radius: 18px; }
+.create .create-head { background: linear-gradient(#5fb0ff, #2f6fd0 55%, #1d4fa8); color: #fff; font-size: 18px; letter-spacing: .04em; text-align: left; padding: 9px 18px; text-shadow: 0 2px 0 rgba(0,30,90,.55); border-bottom: 3px solid #ffa42b; }
+.create .create-body { padding: 14px 18px 16px; gap: 12px; text-align: left; }
+.create .create-step { display: flex; flex-direction: column; gap: 12px; }
+.create .create-step.hidden { display: none; }
+.create .create-lead { margin: 0; font-weight: 800; font-size: 15px; color: #2a3a60; text-align: center; }
+.create .create-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+.create .create-buttons .btn { min-width: 110px; }
+
+/* class cards */
+.create .create-classes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.create .class-card { font-family: var(--font); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 10px; border-radius: 14px; background: linear-gradient(#f4f9ff, #dcebff); border: 3px solid #b9d3f5; color: #26324f; cursor: pointer; text-align: center; transition: transform .08s, border-color .08s; pointer-events: auto; }
+.create .class-card:hover { transform: translateY(-2px); border-color: #5aa0ee; }
+.create .class-card.selected { border-color: #ff9a1f; background: linear-gradient(#fff9ea, #ffe6b0); box-shadow: 0 0 0 2px #fff inset, 0 0 12px rgba(255,154,31,.7); }
+.create .class-art { width: 90px; height: 110px; image-rendering: pixelated; background: radial-gradient(ellipse at 50% 92%, rgba(0,0,0,.14) 0 22px, transparent 24px); }
+.create .class-name { margin: 0; font-size: 19px; font-weight: 900; color: #1d4fa8; }
+.create .class-blurb { margin: 0; font-size: 11.5px; line-height: 1.25; min-height: 42px; color: #4a587a; }
+.create .class-weapon { font-size: 12px; font-weight: 800; color: #b85f00; }
+.create .class-stats { font-size: 10.5px; color: #5a6688; }
+.create .class-start { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #3a4a70; }
+.create .class-skill { width: 28px; height: 28px; border-radius: 6px; border: 2px solid #fff; background: #12285c; box-shadow: 0 1px 3px rgba(0,0,0,.4); image-rendering: pixelated; }
+
+/* customise */
+.create .create-layout { display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: start; }
+.create .create-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; border-radius: 14px; background: linear-gradient(#bfe3ff, #eaf6ff 60%, #cfe9a8 60%, #9fcf6a); border: 3px solid #b9d3f5; }
+.create .create-canvas { width: 200px; height: 230px; image-rendering: pixelated; max-width: 100%; }
+.create .create-status { min-height: 16px; font-size: 11px; color: #4a587a; text-align: center; }
+.create .create-namelabel { font-size: 11px; font-weight: 800; color: #1d4fa8; align-self: flex-start; }
+.create .create-name { width: 100%; font-family: var(--font); font-size: 15px; font-weight: 700; padding: 6px 10px; border-radius: 10px; border: 2px solid #8fb4e8; color: #26324f; background: #fff; }
+.create .create-name:focus { outline: 2px solid #ff9a1f; }
+.create .create-dice { font-size: 14px; padding: 6px 14px; width: 100%; }
+.create .create-pickers { display: flex; flex-direction: column; gap: 7px; }
+.create .pick-row { display: grid; grid-template-columns: 96px 38px 1fr 38px; gap: 6px; align-items: center; }
+.create .pick-label { font-size: 13px; font-weight: 800; color: #1d4fa8; }
+.create .pick-value { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; border-radius: 10px; background: #eef5ff; border: 2px solid #b9d3f5; font-weight: 800; font-size: 14px; color: #26324f; }
+.create .pick-swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #6a7aa0; display: inline-block; }
+.create .arrow { padding: 0; width: 38px; height: 34px; font-size: 14px; border-radius: 10px; }
+
+@media (max-width: 640px) {
+  .create .create-classes { grid-template-columns: repeat(2, 1fr); }
+  .create .create-layout { grid-template-columns: 1fr; }
+  .create .create-canvas { width: 150px; height: 172px; }
+  .create .pick-row { grid-template-columns: 82px 34px 1fr 34px; }
+  .create .class-blurb { min-height: 0; }
+  .create .create-body { padding: 10px 12px 12px; }
+}
+
+/* title screen: the Quick start button is hidden until a character has been created */
+.btn.quick-start.hidden { display: none; }
+.btn.quick-start { background: linear-gradient(#8fd06a, #3f9a2a); outline-color: #2a6a1a; }

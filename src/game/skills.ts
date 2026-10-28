@@ -1,5 +1,5 @@
 import {
-  CHAIN_FALLOFF, MISSILE_SPEED, POISON_DURATION, POISON_TICK, SKILL_BY_KEY, SLOW_DURATION,
+  CHAIN_FALLOFF, CONE_ANGLE, MISSILE_SPEED, ORBIT_RADIUS, ORBIT_SPIN, POISON_DURATION, POISON_TICK, SKILL_BY_KEY,
   skillCooldown, skillCount, skillDmgMult, skillDuration, skillRadius,
 } from './data.ts';
 import type { SkillDef } from './data.ts';
@@ -16,7 +16,10 @@ export function updateSkills(sim: Sim, dt: number) {
     o.cd -= dt;
     if (o.cd > 0) continue;
     const def = SKILL_BY_KEY[o.key];
-    if (fire(sim, def, o)) o.cd = skillCooldown(def, o.level, sim.haste);
+    if (fire(sim, def, o)) {
+      o.cd = skillCooldown(def, o.level, sim.haste);
+      if (def.kind !== 'orbit') sim.lastFire = sim.t;
+    }
     else o.cd = 0.1;
   }
 }
@@ -40,14 +43,16 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
         const p = sim.newProjectile();
         p.skill = def.key;
         p.x = px; p.y = py;
-        p.vx = Math.cos(ang) * MISSILE_SPEED;
-        p.vy = Math.sin(ang) * MISSILE_SPEED;
+        const spd = def.missile ?? MISSILE_SPEED;
+        p.speed = spd;
+        p.vx = Math.cos(ang) * spd;
+        p.vy = Math.sin(ang) * spd;
         p.dmg = dmg;
-        p.life = def.range / MISSILE_SPEED + 0.4;
+        p.life = def.range / spd + 0.4;
         p.splash = radius;
         if (def.kind === 'pierce') {
           p.pierce = true;
-          p.pierceLeft = 3 + L;
+          p.pierceLeft = (def.pierceBase ?? 3) + L;
           p.target = null;
         } else {
           p.target = tgt;
@@ -63,7 +68,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
         const t = sim.sel[i];
         const tx = t.x, ty = t.y;
         sim.emit({ type: 'cast', skill: def.key, kind: 'strike', x: px, y: py, tx, ty, r: radius, pts: null });
-        if (radius > 0) sim.areaDamage(tx, ty, radius, dmg, skillDuration(SLOW_DURATION, L));
+        if (radius > 0) sim.areaDamage(tx, ty, radius, dmg, def.slow ? skillDuration(def.slow, L) : 0);
         else sim.hit(t, dmg);
       }
       return true;
@@ -97,7 +102,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
         const a = sim.newArea();
         a.skill = def.key;
         a.x = e.x; a.y = e.y; a.r = radius;
-        a.dur = a.t = skillDuration(POISON_DURATION, L);
+        a.dur = a.t = skillDuration(def.dur ?? POISON_DURATION, L);
         a.tick = POISON_TICK * 0.5;
         a.dmg = dmg;
         sim.emit({ type: 'cast', skill: def.key, kind: 'ground', x: px, y: py, tx: a.x, ty: a.y, r: radius, pts: null });
@@ -128,6 +133,53 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
       sim.emit({ type: 'cast', skill: def.key, kind: 'chain', x: px, y: py, tx: pts[pts.length - 2], ty: pts[pts.length - 1], r: radius, pts });
       return true;
     }
+    case 'melee': {
+      const found = sim.nearestN(px, py, def.range, count);
+      if (found === 0) return false;
+      const hits = def.hits ?? 1;
+      for (let i = 0; i < found; i++) {
+        const t = sim.sel[i];
+        sim.emit({ type: 'cast', skill: def.key, kind: 'melee', x: px, y: py, tx: t.x, ty: t.y, r: radius, pts: null });
+        if (radius > 0) sim.areaDamage(t.x, t.y, radius, dmg);
+        else for (let h = 0; h < hits; h++) sim.hit(t, dmg);
+      }
+      return true;
+    }
+    case 'cone': {
+      if (sim.nearestN(px, py, radius, 1) === 0) return false;
+      const t = sim.sel[0];
+      const ang = Math.atan2(t.y - py, t.x - px);
+      const half = CONE_ANGLE / 2;
+      const cnt = sim.grid.query(px, py, radius + 3.4, sim.qbuf2);
+      for (let i = 0; i < cnt; i++) {
+        const e = sim.enemies[sim.qbuf2[i]];
+        if (!e.alive) continue;
+        const dx = e.x - px, dy = e.y - py;
+        const rr = radius + e.r;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > rr * rr) continue;
+        if (d2 > 1) {
+          let da = Math.atan2(dy, dx) - ang;
+          if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
+          if (Math.abs(da) > half) continue;
+        }
+        sim.hit(e, dmg);
+      }
+      sim.emit({ type: 'cast', skill: def.key, kind: 'cone', x: px, y: py, tx: px + Math.cos(ang) * radius, ty: py + Math.sin(ang) * radius, r: radius, pts: null });
+      return true;
+    }
+    case 'orbit': {
+      const found = sim.nearestN(px, py, def.range, count);
+      if (found === 0) return false;
+      const a = sim.t * ORBIT_SPIN;
+      const ox = px + Math.cos(a) * ORBIT_RADIUS, oy = py + Math.sin(a) * ORBIT_RADIUS;
+      for (let i = 0; i < found; i++) {
+        const t = sim.sel[i];
+        sim.emit({ type: 'cast', skill: def.key, kind: 'orbit', x: ox, y: oy, tx: t.x, ty: t.y, r: 0, pts: null });
+        sim.hit(t, dmg);
+      }
+      return true;
+    }
   }
 }
 
@@ -143,8 +195,8 @@ export function updateProjectiles(sim: Sim, dt: number) {
       if (p.target.alive) {
         const dx = p.target.x - p.x, dy = p.target.y - p.y;
         const d = Math.hypot(dx, dy) || 1;
-        p.vx = (dx / d) * MISSILE_SPEED;
-        p.vy = (dy / d) * MISSILE_SPEED;
+        p.vx = (dx / d) * p.speed;
+        p.vy = (dy / d) * p.speed;
       } else {
         p.target = null;
       }

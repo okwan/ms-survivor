@@ -14,7 +14,7 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
     const e = es[i];
     if (!e.alive) continue;
     const dx = px - e.x, dy = py - e.y;
-    const reach = e.boss >= 0 ? 11 : 6.5;
+    const reach = e.boss >= 0 ? sim.cls.botReach + 4.5 : sim.cls.botReach;
     const d2 = dx * dx + dy * dy;
     if (d2 > reach * reach) continue;
     const d = Math.sqrt(d2) || 0.01;

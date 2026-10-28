@@ -1,10 +1,30 @@
+import { CLASS_BY_KEY } from '../game/data.ts';
+import { sanitizeLook } from '../maple/avatar-core.ts';
+import type { Look } from '../maple/avatar-core.ts';
+
+/** The last character the player created: offered as "Quick start" on the title screen. */
+export interface SavedCharacter {
+  cls: string;
+  look: Look;
+  name: string;
+}
 export interface SaveData {
   mesos: number;
   bestTime: number;
   settings: { volume: number; muted: boolean };
+  character: SavedCharacter | null;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, muted: false } };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, muted: false }, character: null };
+
+function readCharacter(c: unknown): SavedCharacter | null {
+  if (!c || typeof c !== 'object') return null;
+  const o = c as Partial<SavedCharacter>;
+  const def = typeof o.cls === 'string' ? CLASS_BY_KEY[o.cls] : undefined;
+  if (!def) return null;
+  const name = typeof o.name === 'string' ? o.name.replace(/[<>&"]/g, '').slice(0, 12).trim() : '';
+  return { cls: def.key, look: sanitizeLook(o.look, def.weapon), name: name || 'Maple' };
+}
 
 export function loadSave(): SaveData {
   try {
@@ -18,6 +38,7 @@ export function loadSave(): SaveData {
         volume: typeof o.settings?.volume === 'number' ? o.settings.volume : DEFAULT.settings.volume,
         muted: o.settings?.muted === true,
       },
+      character: readCharacter(o.character),
     };
   } catch {
     return { ...DEFAULT, settings: { ...DEFAULT.settings } };
