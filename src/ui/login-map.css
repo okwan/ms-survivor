@@ -30,3 +30,5 @@
 .ml-opts input[type=range] { width: 90px; }
 .ml-opts .pet-opt { font-size: 11px; cursor: pointer; }
 .ml-opts .btn { width: auto; padding: 3px 12px; font-size: 12px; }
+.mlogin .ml-diff { position: absolute; pointer-events: auto; }
+.mlogin .ml-continue { white-space: nowrap; }

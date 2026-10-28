@@ -1,5 +1,5 @@
 import { EVOLUTION_PASSIVE_SLOTS } from '../game/evolutions.ts';
-import { BOSSES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
+import { BOSSES, DIFFICULTIES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
 import { AILMENTS } from '../game/ailments.ts';
 import { FIELD_ITEMS } from '../game/fieldItems.ts';
 import type { Sim } from '../game/sim.ts';
@@ -31,7 +31,11 @@ export class Hud {
   readonly radar: Radar;
   readonly pauseBtn: HTMLButtonElement;
   readonly muteBtn: HTMLButtonElement;
+  /** toggles the damage meter (MeterPanel adds the behaviour) */
+  readonly meterBtn: HTMLButtonElement;
   readonly fsBtn: HTMLButtonElement | null = null;
+  /** the top-left column (kills, mesos, buffs): the damage meter hangs under it */
+  get topLeft(): HTMLElement { return this.el.tl; }
   private rotate: HTMLElement | null = null;
   private rotateDismissed = false;
   private cache = new Map<HTMLElement, string>();
@@ -50,12 +54,13 @@ export class Hud {
     const r = (this.root = document.createElement('div'));
     r.className = 'hud';
     r.innerHTML = `
-      <div class="hud-tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div>
+      <div class="hud-tl" data-k="tl"><div class="pill"><b>KILLS</b> <span data-k="kills">0</span></div><div class="pill meso"><i class="coin"></i><span data-k="mesos">0</span></div>
         <div class="buffs">${BUFFS.map((b, i) => `<div class="buff" data-k="buff${i}" title="${FIELD_ITEMS[b.item].name}"><img alt="" data-k="bufficon${i}"><b data-k="bufftime${i}"></b></div>`).join('')}
           ${AILMENTS.map((a) => `<div class="buff ail" data-k="ail${a.id}" title="${a.name}: ${a.desc}" style="border-color:${a.color}"><img alt="" data-k="ailicon${a.id}"><b data-k="ailtime${a.id}"></b></div>`).join('')}</div></div>
       <div class="vignette" data-k="vignette"></div>
       <div class="hud-top">
         <div class="clock" data-k="clock">0:00</div>
+        <div class="diff" data-k="diff"></div>
         <div class="nextboss" data-k="next">NEXT BOSS 2:15</div>
         <div class="bosspanel" data-k="bosspanel">
           ${[0, 1, 2].map((i) => `<div class="bossrow" data-k="bossrow${i}">
@@ -98,9 +103,13 @@ export class Hud {
     this.muteBtn.className = 'pausebtn mutebtn';
     this.muteBtn.textContent = 'M';
     this.muteBtn.title = 'Mute music';
+    this.meterBtn = document.createElement('button');
+    this.meterBtn.className = 'pausebtn meterbtn';
+    this.meterBtn.textContent = 'DPS';
+    this.meterBtn.title = 'Damage meter (T)';
     const btns = document.createElement('div');
     btns.className = 'hud-btns';
-    btns.append(this.muteBtn, this.pauseBtn);
+    btns.append(this.meterBtn, this.muteBtn, this.pauseBtn);
     if (isTouch() && canFullscreen()) {
       const fs = (this.fsBtn = document.createElement('button'));
       fs.className = 'pausebtn mutebtn fsbtn';
@@ -210,6 +219,7 @@ export class Hud {
     this.text(this.el.kills, String(sim.kills));
     this.text(this.el.mesos, String(sim.mesos));
     this.text(this.el.clock, fmtTime(sim.t));
+    this.text(this.el.diff, sim.difficulty ? DIFFICULTIES[sim.difficulty].name.toUpperCase() : '');
     const nb = sim.nextBossIn();
     this.text(this.el.next, nb >= 0 ? `NEXT BOSS ${fmtTime(Math.ceil(nb))}` : `VICTORY IN ${fmtTime(Math.ceil(900 - sim.t))}`);
     this.el.next.classList.toggle('soon', nb >= 0 && nb < 10);
@@ -221,7 +231,7 @@ export class Hud {
     for (let i = 0; i < sim.skills.length; i++) {
       const sk = sim.skills[i];
       const def = SKILL_BY_KEY[sk.key];
-      const r = def ? 1 - Math.max(0, Math.min(1, sk.cd / skillCooldown(def, sk.level, sim.haste))) : 1;
+      const r = def ? 1 - Math.max(0, Math.min(1, sk.cd / (skillCooldown(def, sk.level, sim.haste) * (sim.hyper[sk.key]?.cd ?? 1)))) : 1;
       ready += r;
       this.cdFill(this.skillCd[i], r);
     }

@@ -2,7 +2,8 @@
 import { Sim } from '../src/game/sim.ts';
 import { EVOLUTION_PASSIVE_SLOTS, partnerSlotOpen } from '../src/game/evolutions.ts';
 import { botInput, botPick } from '../src/game/bot.ts';
-import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, ARMOR_CAP, ARMOR_K, armorReduction, mitigated, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER } from '../src/game/data.ts';
+import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, ARMOR_CAP, ARMOR_K, armorReduction, mitigated, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER, DIFFICULTIES } from '../src/game/data.ts';
+import { MESO } from '../src/game/types.ts';
 
 let failed = 0;
 function ok(cond: boolean, msg: string) {
@@ -358,6 +359,42 @@ console.log('-- boss waves');
     ok(n < 2 || s.raidText.startsWith('Boss wave!'), `wave ${n + 1}: "Boss wave!" banner`);
   }
   eq(s.bossesSpawned, 6, 'six waves on the clock');
+}
+
+// ---- difficulty tiers
+console.log('-- difficulty');
+{
+  eq(DIFFICULTIES.length, 4, 'four difficulty tiers');
+  const mk = (d?: number) => new Sim(21, 'warrior', d === undefined ? {} : { difficulty: d });
+  eq(mk().difficulty, 0, 'default difficulty is Normal');
+  eq(mk(-5).difficulty, 0, 'difficulty clamps up to 0');
+  eq(mk(99).difficulty, 3, 'difficulty clamps down to 3');
+  eq(mk(1.7).difficulty, 1, 'difficulty is a whole number');
+  eq(mk(NaN).difficulty, 0, 'NaN difficulty is Normal');
+  eq(mk(2).snapshot().difficulty, 2, 'snapshot carries the difficulty');
+  const A = mk(), N = mk(0);
+  // same seed and inputs: Normal (explicit) is identical to the default
+  for (let i = 0; i < 600; i++) { A.tick(); N.tick(); if (A.offer) A.pick(0); if (N.offer) N.pick(0); }
+  eq(JSON.stringify([A.enemies.length, A.kills, A.px, A.hp]), JSON.stringify([N.enemies.length, N.kills, N.px, N.hp]), 'Normal behaves like the default');
+  for (let tier = 0; tier < DIFFICULTIES.length; tier++) {
+    const D = DIFFICULTIES[tier];
+    const a = mk(0), b = mk(tier);
+    a.t = b.t = 200;
+    const ea = a.spawnEnemy(5, 3, 3, false), eb = b.spawnEnemy(5, 3, 3, false);
+    near(eb.maxHp, ea.maxHp * D.hp, `${D.name}: enemy HP x${D.hp}`);
+    near(eb.dmg, ea.dmg * D.dmg, `${D.name}: enemy damage x${D.dmg}`);
+    ok(eb.speed <= ENEMY_SPEED_CAP * b.cls.speed + 1e-9 && eb.speed >= ea.speed - 1e-9, `${D.name}: mob speed stays under the hero cap`);
+    for (let n = 0; n < LADDER.length; n++) ok(b.spawnEnemy(n, 3, 3, false).speed <= ENEMY_SPEED_CAP * b.cls.speed + 1e-9, `${D.name}: tier ${n} never outruns the hero`);
+    const m0 = a.mesos, m1 = b.mesos;
+    a.dropPickup(MESO, a.px, a.py, 10); b.dropPickup(MESO, b.px, b.py, 10);
+    a.tick(); b.tick();
+    near(b.mesos - m1, (a.mesos - m0) * D.mesos, `${D.name}: meso drops x${D.mesos}`);
+    ok(b.enemies.length <= 600, `${D.name}: enemies stay under the cap`);
+  }
+  const x = mk(3);
+  x.t = 899;
+  for (let i = 0; i < 400; i++) { x.god = true; x.tick(); if (x.offer) x.pick(0); }
+  ok(x.enemies.length <= 600, "Extreme: the alive count stays under MAX_ENEMIES");
 }
 
 // normal run: informational

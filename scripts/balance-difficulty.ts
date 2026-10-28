@@ -1,3 +1,4 @@
+// Env: PROBE_DIFF=<0..3> plays on that difficulty tier.
 // Run: node --experimental-strip-types scripts/balance-difficulty.ts [seeds=4] [classes=all]
 // Difficulty probe: each class plays with the kiting bot and standing still (no input, always card 0). Prints how long each survives,
 // damage taken per minute, the hero's armor and the average hit that lands. Informational (no asserts).
@@ -10,7 +11,7 @@ const only = process.argv[3];
 const MINUTES = [1, 2, 3, 5, 8, 12, 15];
 
 function play(seed: number, cls: string, still: boolean) {
-  const sim = new Sim(seed, cls);
+  const sim = new Sim(seed, cls, { difficulty: Number(process.env.PROBE_DIFF ?? 0) });
   const taken: number[] = [];
   const armor: number[] = [];
   let hits = 0, sum = 0, ticks = 0;

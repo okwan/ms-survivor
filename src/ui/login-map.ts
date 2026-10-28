@@ -63,6 +63,8 @@ export const LAYOUT = {
     back: [8, 540] as Pt,
     /** the character's feet */
     feet: [330, 368] as Pt,
+    /** top-left of the difficulty picker */
+    diff: [250, 470] as Pt,
     /** name tag offset from the feet (centred) */
     tag: [0, 4] as Pt,
     /** relative to the CharSelect signboard */
@@ -129,6 +131,9 @@ export class MapLogin implements LoginLike {
   private idEl!: HTMLInputElement;
   private pwEl!: HTMLInputElement;
   private tabsEl = el('div', 'hidden');
+  /** the difficulty picker's place on the select step */
+  private diffSlot = el('div', 'ml-diff hidden');
+  private contBtn: HTMLButtonElement;
   private chansEl = el('div');
   private tabs: HTMLButtonElement[] = [];
   private placeSel: ((i: number) => void) | null = null;
@@ -178,7 +183,8 @@ export class MapLogin implements LoginLike {
     this.panels = { title: el('div', 'ml-panel hidden'), world: el('div', 'ml-panel hidden'), select: el('div', 'ml-panel hidden') };
     this.dock = el('div', 'ml-dock hidden');
     this.dock.style.cssText = `left:${LAYOUT.dock.x}px;bottom:${LAYOUT.dock.bottom}px;width:${LAYOUT.dock.w}px`;
-    ui.append(this.panels.title, this.panels.world, this.panels.select, this.dock);
+    this.diffSlot.style.cssText = `left:${LAYOUT.select.diff[0]}px;top:${LAYOUT.select.diff[1]}px`;
+    ui.append(this.panels.title, this.panels.world, this.panels.select, this.diffSlot, this.dock);
     stage.append(canvas, ui);
     root.appendChild(stage);
 
@@ -195,7 +201,9 @@ export class MapLogin implements LoginLike {
     this.opts.appendChild(petOpt);
     const optBtn = this.dockBtn('Options', () => this.opts.classList.toggle('hidden'));
     optBtn.dataset.shot = 'options';
-    this.dock.append(optBtn, this.opts);
+    this.contBtn = this.dockBtn('Continue', () => this.h.continueRun());
+    this.contBtn.classList.add('hidden', 'ml-continue');
+    this.dock.append(this.contBtn, optBtn, this.opts);
 
     this.buildTitle();
     parent.appendChild(root);
@@ -270,10 +278,20 @@ export class MapLogin implements LoginLike {
     this.muteBtn.textContent = m ? 'Unmute' : 'Mute';
   }
 
+  mountDifficulty(e: HTMLElement) {
+    this.diffSlot.appendChild(e);
+  }
+
+  /** Shows (label) or hides (null) the Continue button for a run in progress (top of the dock). */
+  setContinue(label: string | null) {
+    this.contBtn.classList.toggle('hidden', !label);
+    if (label) { this.contBtn.textContent = label; this.contBtn.setAttribute('aria-label', label); }
+  }
+
   /** Adds a button to the extras dock (e.g. the Monster Book). */
   addButton(label: string, fn: () => void): HTMLButtonElement {
     const b = this.dockBtn(label, fn);
-    this.dock.insertBefore(b, this.opts);
+    this.dock.insertBefore(b, this.opts.previousSibling);
     return b;
   }
 
@@ -299,12 +317,14 @@ export class MapLogin implements LoginLike {
     else if (step === 'select') this.buildSelect();
     if (step !== 'create') this.panels[step].classList.remove('hidden');
     this.dock.classList.toggle('hidden', step !== 'title' && step !== 'select');
+    this.diffSlot.classList.toggle('hidden', step !== 'select');
     then?.();
   }
 
   private hidePanels() {
     for (const p of Object.values(this.panels)) p.classList.add('hidden');
     this.dock.classList.add('hidden');
+    this.diffSlot.classList.add('hidden');
     this.opts.classList.add('hidden');
   }
 

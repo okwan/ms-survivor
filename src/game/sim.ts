@@ -3,9 +3,9 @@ import {
   CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY,
   JOB2_LEVEL, JOB3_LEVEL, JOB_BY_CODE, PASSIVES, jobOfId, unlockedJobs, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mitigated, mesoValue, poolLo, progress, xpToNext,
-  enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
+  DIFFICULTIES, clampDifficulty, enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
   BOSS_COMPANION_HP, BOSS_WAVES, BOSS_BARS, GEAR_BOSS_DROP_STEP, GEAR_BOSS_DROPS_MAX, GEAR_RARE_CHANCE, MASTERIES, MASTERY_BY_KEY, MASTERY_FILLER_CHANCE, SKILL_MASTERY_PER,
-  SKILL_MASTERY_PREFIX, VITALITY_HEAL, enemySpeed, masteryMax,
+  SKILL_MASTERY_PREFIX, VITALITY_HEAL, ENEMY_SPEED_CAP, enemySpeed, masteryMax,
 } from './data.ts';
 import { regionAt } from './regions.ts';
 import { SpatialGrid } from './grid.ts';
@@ -25,7 +25,10 @@ import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
 import type { BookData } from './book.ts';
 import { REVIVE_HP, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_STUN, sanitizeMeta } from './meta.ts';
 import type { MetaRanks } from './meta.ts';
+import { hyperMods } from './hyper.ts';
+import type { HyperMods } from './hyper.ts';
 import { Pet } from './pet.ts';
+import { DamageMeter } from './meter.ts';
 import { SCROLL_BOSS_DROPS, SCROLL_DROP_NORMAL, SCROLL_PICKUP_LIFE, ScrollPool, slotsLeft } from './scrolls.ts';
 import type { ScrollDef } from './scrolls.ts';
 import type { ClassDef, MasteryKey, SkillDef } from './data.ts';
@@ -56,6 +59,8 @@ export class Sim {
   facing = 1;
   /** key of the skill currently dealing damage; carried on 'hit' events so the renderer can pick hit art */
   curSkill = '';
+  /** damage dealt per source this run (read by the HUD meter and the results screen) */
+  readonly meter = new DamageMeter();
   inputX = 0;
   inputY = 0;
   moving = false;
@@ -76,6 +81,8 @@ export class Sim {
   xpNeed = xpToNext(1);
   kills = 0;
   mesos = 0;
+  /** difficulty tier (index into DIFFICULTIES) */
+  readonly difficulty: number;
   bossKills = 0;
   bossesSpawned = 0;
 
@@ -137,11 +144,13 @@ export class Sim {
   bookBonus = 0;
   /** Henesys shop ranks bought before the run (src/game/meta.ts), folded into the stats by recalc() */
   meta: MetaRanks;
+  /** Hyper Skill modifiers per skill key (src/game/hyper.ts), built once from the class's ranks; a skill without ranks has no entry */
+  hyper: Record<string, HyperMods>;
   /** Safety Charm: true once the revive was used; the hero cannot be hurt while reviveT counts down */
   reviveUsed = false;
   reviveT = 0;
   /** fraction of a meso that Greed has not paid out yet */
-  private mesoCarry = 0;
+  mesoCarry = 0;
 
   offer: Card[] | null = null;
   pendingLevels = 0;
@@ -151,7 +160,8 @@ export class Sim {
   /** chosen 2nd job code (0 = not yet; the choice is offered at JOB2_LEVEL) and the job codes whose skills and passives are on offer */
   branch = 0;
   jobs: number[];
-  private pendingJob = false;
+  /** the 2nd job choice is waiting to be offered (public for src/game/runsave.ts) */
+  pendingJob = false;
 
   enemies: Enemy[] = [];
   pickups: Pickup[] = [];
@@ -176,8 +186,9 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; /** Hyper Skill ranks of this class by node key (default none) */ hyper?: Record<string, number>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean; /** difficulty tier 0..3 (default 0 = Normal) */ difficulty?: number } = {}) {
     this.seed = seed;
+    this.difficulty = clampDifficulty(opts.difficulty);
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
     this.itemRng = new Rng((seed ^ 0x5bd1e995) >>> 0);
@@ -198,14 +209,16 @@ export class Sim {
     this.gender = opts.gender ?? 0;
     this.autoEquip = opts.autoEquip ?? true;
     this.cls = CLASS_BY_KEY[classKey] ?? CLASS_BY_KEY[DEFAULT_CLASS];
+    this.hyper = hyperMods(this.cls.key, opts.hyper);
     this.skills = [{ key: this.cls.skills[0], level: 1, cd: 0.2 }];
     this.jobs = [this.cls.firstJob];
     this.speed = this.cls.speed;
     this.crit = this.cls.crit;
     this.hp = this.maxHp = this.cls.hp;
     const ms = opts.mobSpeeds;
-    this.tierSpeed = LADDER.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
-    this.bossSpeed = BOSSES.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
+    const dsp = DIFFICULTIES[this.difficulty].speed, cap = ENEMY_SPEED_CAP * this.cls.speed;
+    this.tierSpeed = LADDER.map((d) => Math.min(enemySpeed(d.speed, ms?.[d.id], this.cls.speed) * dsp, cap));
+    this.bossSpeed = BOSSES.map((d) => Math.min(enemySpeed(d.speed, ms?.[d.id], this.cls.speed) * dsp, cap));
     if (opts.pet) this.pet = new Pet(0, 0);
     this.recalc();
   }
@@ -322,10 +335,13 @@ export class Sim {
   hit(e: Enemy, base: number) {
     if (!e.alive) return;
     let amt = base * this.might * (1 + SKILL_MASTERY_PER * (this.skillMastery[this.curSkill] ?? 0));
+    const hm = this.hyper[this.curSkill];
+    if (hm !== undefined) amt *= hm.dmg;
     const crit = this.rng.next() < this.crit && !this.ail.dark;
     if (crit) amt *= PLAYER_BASE.critMult;
     if (this.field.elixirT > 0) amt *= ELIXIR_DAMAGE;
     amt = eliteDamage(e, Math.max(1, Math.round(amt)));
+    if (e.ev !== EV_BOX) this.meter.add(this.curSkill || 'other', Math.min(amt, Math.max(0, e.hp)), crit, this.t);
     e.hp -= amt;
     e.flash = 0.08;
     e.lastHit = this.t;
@@ -369,6 +385,7 @@ export class Sim {
   /** Flat damage that bypasses the hero's multipliers (Powder Keg against Elites and bosses) */
   hurt(e: Enemy, amt: number) {
     if (!e.alive) return;
+    if (e.ev !== EV_BOX) this.meter.add('keg', Math.min(amt, Math.max(0, e.hp)), false, this.t);
     e.hp -= amt;
     e.flash = 0.08;
     e.lastHit = this.t;
@@ -404,7 +421,7 @@ export class Sim {
     this.dropPickup(GEM, e.x, e.y, gv);
     if (this.rng.next() < 0.015) this.dropPickup(POTION, e.x, e.y, 0.25);
     if (this.rng.next() < 0.3) this.dropPickup(MESO, e.x, e.y, mesoValue(e.tier));
-    if (this.gearRng.next() < (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL)) this.dropGear(e.x, e.y, false);
+    if (this.gearRng.next() < Math.min(1, (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL) * DIFFICULTIES[this.difficulty].gear)) this.dropGear(e.x, e.y, false);
     if (this.itemRng.next() < SCROLL_DROP_NORMAL) this.dropScroll(e.x, e.y + 0.4);
     maybeDropMastery(this, e.x, e.y);
     if (e.elite) eliteKilled(this, e);
@@ -648,9 +665,9 @@ export class Sim {
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = x; e.y = y;
-    e.maxHp = e.hp = d.hp * enemyHpMult(p);
+    e.maxHp = e.hp = d.hp * enemyHpMult(p) * DIFFICULTIES[this.difficulty].hp;
     e.speed = this.tierSpeed[tier];
-    e.dmg = d.dmg * enemyDmgMult(p);
+    e.dmg = d.dmg * enemyDmgMult(p) * DIFFICULTIES[this.difficulty].dmg;
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
     e.tier = tier; e.boss = -1; e.lead = false; e.big = d.big; e.add = add; e.alive = true;
@@ -668,9 +685,9 @@ export class Sim {
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = this.px + Math.cos(a) * dist; e.y = this.py + Math.sin(a) * dist;
-    e.maxHp = e.hp = def.hp * enemyHpMult(p) * hpFrac;
+    e.maxHp = e.hp = def.hp * enemyHpMult(p) * DIFFICULTIES[this.difficulty].hp * hpFrac;
     e.speed = this.bossSpeed[n];
-    e.dmg = def.dmg * enemyDmgMult(p);
+    e.dmg = def.dmg * enemyDmgMult(p) * DIFFICULTIES[this.difficulty].dmg;
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
     e.tier = LADDER.length - 1; e.boss = n; e.lead = hpFrac >= 1; e.big = true; e.add = false; e.alive = true;
@@ -724,7 +741,7 @@ export class Sim {
     if (this.spawnT > 0) return;
     this.spawnT += SPAWN_INTERVAL;
     if (this.spawnT < 0) this.spawnT = 0;
-    const target = aliveTarget(this.t);
+    const target = Math.floor(aliveTarget(this.t) * DIFFICULTIES[this.difficulty].alive);
     const alive = this.enemies.length - this.extras;
     if (alive >= target || alive >= MAX_ENEMIES - 20) return;
     const n = Math.min(4, target - alive);
@@ -952,7 +969,7 @@ export class Sim {
       case GEM: this.addXp((this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value) * (this.ail.curse ? CURSE_GEM : 1)); break;
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
       case ELIXIR: this.hp = this.maxHp; cureAilments(this); break;
-      case MESO: case BAG: this.gainMesos(p.value); break;
+      case MESO: case BAG: this.gainMesos(p.value * DIFFICULTIES[this.difficulty].mesos); break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
       case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
       case GACHA: if (p.value >= ELITE_CAPSULE) openGacha(this, p.value - ELITE_CAPSULE, true); else openGacha(this, p.value - 1); break;
@@ -1271,6 +1288,7 @@ export class Sim {
       ailments: { applied: this.ail.applied, left: [...this.ail.left] },
       field: { boxes: this.field.boxesBroken, used: this.field.itemsUsed, coupon: this.field.couponT, elixir: this.field.elixirT, clock: this.field.clockT },
       mesos: this.mesos,
+      difficulty: this.difficulty,
       alive: this.enemies.length,
       x: this.px,
       y: this.py,

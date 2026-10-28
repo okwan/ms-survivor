@@ -62,6 +62,15 @@ export function enemySpeed(fallback: number, factor: number | undefined, heroSpe
   const v = factor === undefined ? fallback : BASE_ENEMY_SPEED * factor;
   return Math.min(v, ENEMY_SPEED_CAP * heroSpeed);
 }
+/** Difficulty tiers (MapleStory boss-difficulty style) on top of the time scaling; index 0 is the baseline. Cleared tier n unlocks n+1 (src/ui/save.ts). */
+export interface Difficulty { key: string; name: string; hp: number; dmg: number; alive: number; speed: number; mesos: number; gear: number; desc: string }
+export const DIFFICULTIES: Difficulty[] = [
+  { key: 'normal', name: 'Normal', hp: 1, dmg: 1, alive: 1, speed: 1, mesos: 1, gear: 1, desc: 'The standard run.' },
+  { key: 'hard', name: 'Hard', hp: 1.6, dmg: 1.4, alive: 1.1, speed: 1, mesos: 1.6, gear: 1.3, desc: 'Enemies x1.6 HP, x1.4 damage. Mesos x1.6, more gear.' },
+  { key: 'chaos', name: 'Chaos', hp: 2.6, dmg: 1.9, alive: 1.2, speed: 1.05, mesos: 2.5, gear: 1.6, desc: 'Enemies x2.6 HP, x1.9 damage, faster and denser. Mesos x2.5, much more gear.' },
+  { key: 'extreme', name: 'Extreme', hp: 4, dmg: 2.6, alive: 1.3, speed: 1.1, mesos: 4, gear: 2, desc: 'Enemies x4 HP, x2.6 damage, faster and denser. Mesos x4, double gear drops.' },
+];
+export const clampDifficulty = (d: unknown) => (typeof d === 'number' && Number.isFinite(d) ? Math.max(0, Math.min(DIFFICULTIES.length - 1, Math.floor(d))) : 0);
 export const START_REROLLS = 2;
 export const START_BANISHES = 2;
 

@@ -19,7 +19,8 @@ export function updateSkills(sim: Sim, dt: number) {
     if (o.cd > 0 || sim.ail.seal) continue;
     const def = SKILL_BY_KEY[o.key];
     if (fire(sim, def, o)) {
-      o.cd = skillCooldown(def, o.level, sim.haste);
+      const hm = sim.hyper[o.key];
+      o.cd = skillCooldown(def, o.level, sim.haste) * (hm !== undefined ? hm.cd : 1);
       if (def.kind !== 'orbit') sim.lastFire = sim.t;
     }
     else o.cd = 0.1;
@@ -30,8 +31,9 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
   sim.curSkill = def.key;
   const L = o.level;
   const dmg = def.dmg * skillDmgMult(L);
-  const count = skillCount(def, L);
-  const radius = skillRadius(def, L, sim.area);
+  const hm = sim.hyper[def.key];
+  const count = skillCount(def, L) + (hm !== undefined ? hm.count : 0);
+  const radius = skillRadius(def, L, sim.area * (hm !== undefined ? hm.area : 1));
   const px = sim.px, py = sim.py;
   switch (def.kind) {
     case 'bolt':

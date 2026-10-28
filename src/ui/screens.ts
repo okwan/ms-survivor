@@ -4,12 +4,17 @@ import { evolutionHint } from '../game/evolutions.ts';
 import type { Card } from '../game/types.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
+import { compact } from '../game/meter.ts';
+import type { MeterRow } from '../game/meter.ts';
+import { BAR_COLORS, sourceInfo } from './meter.ts';
 import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
 import type { LoginSection } from '../maple/login-scene.ts';
 import { LoginScreen, classic } from './login.ts';
 import type { LoginLike } from './login.ts';
 import { MapLogin, mapLoginOk } from './login-map.ts';
-import type { SaveData } from './save.ts';
+import { difficultyPicker } from './difficulty.ts';
+import { CLASS_BY_KEY, JOB_BY_CODE, unlockedJobs } from '../game/data.ts';
+import type { SaveData, StoredRun } from './save.ts';
 import { theme } from './theme.ts';
 
 export interface ScreenHandlers {
@@ -18,6 +23,10 @@ export interface ScreenHandlers {
   /** starts straight away with the last created character */
   quick(): void;
   resume(): void;
+  /** resumes the saved run from the title screen */
+  continueRun(): void;
+  /** pause menu: writes the run save and returns to the title (mesos are banked when the resumed run ends) */
+  saveQuit(): void;
   quit(): void;
   retry(): void;
   menu(): void;
@@ -29,6 +38,10 @@ export interface ScreenHandlers {
   book(): void;
   /** opens the Henesys shop */
   shop(): void;
+  /** the player picked a difficulty tier */
+  difficulty(i: number): void;
+  /** opens the Hyper Skills window */
+  hyper(): void;
   pet(on: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
@@ -43,6 +56,13 @@ export interface Results {
   bosses: number;
   elites: number;
   best: boolean;
+  /** the tier played, and the name of the tier this win unlocked (if any) */
+  difficulty?: number;
+  unlocked?: string;
+  /** damage dealt per source (Sim.meter), highest first */
+  damage: { rows: MeterRow[]; total: number; time: number };
+  /** Hyper SP earned this run for the hero's class (shown when above 0) */
+  hyperSp?: { name: string; sp: number };
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, html = ''): HTMLElementTagNameMap[K] {
@@ -50,6 +70,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, html = '
   e.className = cls;
   if (html) e.innerHTML = html;
   return e;
+}
+
+/** "Continue: Lv 34 Hunter, 7:12": level, deepest job reached and run time */
+export function continueLabel(r: StoredRun): string {
+  const cls = CLASS_BY_KEY[r.run.cls];
+  const jobs = unlockedJobs(cls, r.run.branch, r.run.level);
+  return `Continue: Lv ${r.run.level} ${JOB_BY_CODE[jobs[jobs.length - 1]]?.name ?? cls.name}, ${fmtTime(r.run.t)}`;
 }
 
 export class Screens {
@@ -65,6 +92,7 @@ export class Screens {
   private h: ScreenHandlers;
   private icons: Record<string, string>;
   private quickBtn!: HTMLButtonElement;
+  private continueBtn!: HTMLButtonElement;
   private petEl!: HTMLInputElement;
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
@@ -75,16 +103,21 @@ export class Screens {
   /** the MapleStory login map or the classic signboard screen (null: the plain title window is used) */
   readonly login: LoginLike | null = null;
   private titleExtra!: HTMLDivElement;
+  private diff = difficultyPicker((i) => this.h.difficulty(i));
 
   constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null, loginScene: LoginSection | null = null) {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    const lh = { create: () => h.start(), select: () => h.quick(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
+    const lh = { create: () => h.start(), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
     if (mapLoginOk(loginScene)) this.login = new MapLogin(parent, lh, avatar, loginScene);
     else if (classic()) this.login = new LoginScreen(parent, lh, avatar);
+    // the difficulty picker: ONE element, mounted by the login screen (signboard / character select), else above START on the plain title
+    if (this.login) this.login.mountDifficulty(this.diff.el);
+    else this.title.querySelector('.win-body')!.insertBefore(this.diff.el, this.title.querySelector('.btn.big'));
     this.login?.addButton('Monster Book', () => h.book());
     this.login?.addButton('Henesys Shop', () => h.shop());
+    this.login?.addButton('Hyper Skills', () => h.hyper());
     this.pause = this.buildPause();
     this.levelup = this.buildLevelUp();
     this.results = el('div', 'screen results hidden');
@@ -120,12 +153,16 @@ export class Screens {
     body.appendChild(stats);
     this.titleExtra = el('div', 'title-extra');
     body.appendChild(this.titleExtra);
+    this.continueBtn = this.btn('Continue', 'primary continue-run', () => this.h.continueRun());
+    this.continueBtn.classList.add('hidden');
+    body.appendChild(this.continueBtn);
     this.quickBtn = this.btn('Quick start', 'quick-start', () => this.h.quick());
     this.quickBtn.classList.add('hidden');
     body.appendChild(this.quickBtn);
     body.appendChild(this.btn('START', 'primary big', () => this.h.start()));
     body.appendChild(this.btn('Monster Book', 'book-btn', () => this.h.book()));
     body.appendChild(this.btn('Henesys Shop', 'book-btn', () => this.h.shop()));
+    body.appendChild(this.btn('Hyper Skills', 'book-btn', () => this.h.hyper()));
     const petOpt = el('label', 'pet-opt', '<input type="checkbox"> Pet (follows you and picks up mesos and potions)');
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
@@ -151,7 +188,7 @@ export class Screens {
 
   private buildPause(): HTMLDivElement {
     const { root, body } = this.win('Paused', 'small');
-    body.append(this.btn('Resume', 'primary', () => this.h.resume()), this.btn('Quit to menu', '', () => this.h.quit()));
+    body.append(this.btn('Resume', 'primary', () => this.h.resume()), this.btn('Save & Quit', '', () => this.h.saveQuit()), this.btn('Quit to menu', '', () => this.h.quit()));
     return root;
   }
 
@@ -196,12 +233,18 @@ export class Screens {
     this.muteEl.textContent = m ? 'Unmute' : 'Mute';
   }
 
-  showTitle(save: SaveData) {
+  /** `run`: the saved run in progress, if any (shows the Continue button) */
+  showTitle(save: SaveData, run: StoredRun | null = null) {
+    const label = run ? continueLabel(run) : null;
+    this.continueBtn.classList.toggle('hidden', !run);
+    if (label) this.continueBtn.textContent = label;
+    this.login?.setContinue(label);
     this.bestEl.textContent = save.bestTime > 0 ? fmtTime(save.bestTime) : '-';
     this.mesoEl.textContent = String(save.mesos);
     const ch = save.character;
     this.quickBtn.classList.toggle('hidden', !ch);
     if (ch) this.quickBtn.textContent = `Quick start: ${ch.name} the ${ch.cls[0].toUpperCase()}${ch.cls.slice(1)}`;
+    this.setDifficulty(save);
     this.petEl.checked = save.settings.pet;
     this.volEl.value = String(save.settings.volume);
     this.sfxVolEl.value = String(save.settings.sfxVolume);
@@ -210,6 +253,11 @@ export class Screens {
     this.hideAll({ keepLogin: !!this.login?.visible });
     if (this.login) this.login.show(save);
     else this.title.classList.remove('hidden');
+  }
+
+  /** Redraws the difficulty picker from the save */
+  setDifficulty(save: SaveData) {
+    this.diff.set(save.settings.difficulty, save.cleared);
   }
 
   /** The banked mesos changed (the shop): the menu shows the new total. */
@@ -272,23 +320,48 @@ export class Screens {
     this.rerollBtn.disabled = sim.rerolls <= 0 || job;
   }
 
+  /** "Damage breakdown": a scrolling list with a row per damage source (icon, bar, total, share, DPS while owned, hits, crit rate) */
+  private breakdown(d: Results['damage']): HTMLElement {
+    const box = el('div', 'dmgbox');
+    box.appendChild(el('div', 'dmg-h', 'Damage breakdown'));
+    const list = el('div', 'dmg-list');
+    const top = d.rows[0].dmg;
+    d.rows.forEach((s, i) => {
+      const info = sourceInfo(s.key, this.icons);
+      const dps = s.dmg / Math.max(1, d.time - s.first);
+      const row = el('div', 'dmg-row');
+      row.title = `${info.name}: ${compact(dps)}/s while active, ${s.hits} hits, ${s.hits ? Math.round((s.crits / s.hits) * 100) : 0}% crit`;
+      row.innerHTML = `<i class="mt-bar" style="width:${Math.max(2, Math.round((s.dmg / top) * 100))}%;background:${BAR_COLORS[i % BAR_COLORS.length]}"></i>${info.icon ? `<img src="${info.icon}" alt="">` : '<img alt="" style="visibility:hidden">'}<span class="mt-nm">${info.name}</span><b>${compact(s.dmg)}</b><u>${d.total > 0 ? Math.round((s.dmg / d.total) * 100) : 0}%</u><em>${compact(dps)}/s</em><small>${s.hits} hits</small><small>${s.hits ? Math.round((s.crits / s.hits) * 100) : 0}% crit</small>`;
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+    return box;
+  }
+
   showResults(r: Results) {
     this.hideAll();
     this.results.innerHTML = '';
-    const w = el('div', 'win small');
+    const w = el('div', 'win small resw');
     w.appendChild(el('div', 'win-head ' + (r.won ? 'victory' : 'defeat'), r.won ? 'VICTORY!' : 'You Died'));
     const b = el('div', 'win-body');
     b.appendChild(el('p', 'tagline', r.won ? 'You survived the full 15 minutes!' : 'The monsters got you this time.'));
+    if (r.unlocked) b.appendChild(el('p', 'tagline', `<b>${r.unlocked} unlocked!</b>`));
     b.appendChild(el('table', 'res', `
       <tr><td>Time survived</td><td>${fmtTime(r.time)}${r.best ? ' <em>NEW BEST</em>' : ''}</td></tr>
       <tr><td>Level</td><td>${r.level}</td></tr>
       <tr><td>Monsters slain</td><td>${r.kills}</td></tr>
       <tr><td>Bosses slain</td><td>${r.bosses} / ${BOSS_TOTAL}</td></tr>
       <tr><td>Elites slain</td><td>${r.elites}</td></tr>
-      <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>`));
+      <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>
+      <tr><td>Total damage</td><td>${compact(r.damage.total)}</td></tr>
+      <tr><td>Average DPS</td><td>${compact(r.damage.total / Math.max(1, r.damage.time))}</td></tr>`));
+    if (r.hyperSp && r.hyperSp.sp > 0) b.appendChild(el('p', 'res-sp', `+${r.hyperSp.sp} Hyper SP for ${r.hyperSp.name}`));
+    if (r.damage.rows.length) b.appendChild(this.breakdown(r.damage));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    b.append(row, this.btn('Henesys Shop', 'res-shop', () => this.h.shop()));
+    const more = el('div', 'btnrow res-more');
+    more.append(this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
+    b.append(row, more);
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');
