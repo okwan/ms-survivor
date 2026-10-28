@@ -5,16 +5,16 @@
 export interface RegionWant {
   /** map ids in order of preference: the first that exists and has tiles wins */
   candidates: number[];
-  /** String.wz streetName that identifies the area when none of the candidates exists */
+  /** matches String.wz streetName or mapName (Ellinia maps have streetName "Victoria Road") and identifies the area when none of the candidates exists */
   street: RegExp;
   label: string;
-  /** accept only a map whose String.wz streetName matches `street` (when String.wz names are available) */
+  /** accept only a map whose String.wz streetName or mapName matches `street` (when String.wz names are available) */
   strict?: boolean;
 }
 
 export const REGION_WANTS: RegionWant[] = [
   { label: 'Henesys fields', candidates: [104040000, 104040001, 100010000, 100020000], street: /henesys/i },
-  { label: 'Ellinia forest', candidates: [101010000, 101010001, 101010100, 101010101, 101020000, 101020100, 101030000, 101040000, 101000000], street: /ellinia/i, strict: true },
+  { label: 'Ellinia forest', candidates: [101010000, 101010001, 101010100, 101010101, 101020000, 101020100, 101030000, 101040000, 101000000], street: /ellinia|tree that grew/i, strict: true },
   { label: 'Perion rocks', candidates: [102010000, 102020000, 102030000, 102040000], street: /perion/i },
   { label: 'Sleepywood / Ant Tunnel', candidates: [105040300, 105040310, 105040000, 105040100, 105040200, 105070001, 105050000, 105050100], street: /sleepywood/i },
   { label: 'Kerning swamp', candidates: [107000000, 107000100, 107000200, 107000300, 103000000, 103000101, 103010000, 103020000], street: /kerning|swamp/i },
@@ -22,8 +22,12 @@ export const REGION_WANTS: RegionWant[] = [
   { label: "Zakum's area", candidates: [211042300, 280010000, 280020000, 280030000], street: /zakum|el nath/i },
 ];
 
-/** A candidate map is acceptable only with a ground at least this bright (0.299R+0.587G+0.114B), this many decor objects, and a tile set no earlier region uses. */
-export const MIN_GROUND_LUMA = 45;
+/** A candidate map is acceptable only with a ground at least this bright (0.299R+0.587G+0.114B; pure black caves fail), this many decor objects, and a tile set no earlier region uses. */
+export const MIN_GROUND_LUMA = 10;
+/** accepted grounds darker than this are gamma-lifted to it at extraction (decor is lifted to DECOR_LIFT_TO when its average is below DECOR_DARK) */
+export const GROUND_LIFT_TO = 70;
+export const DECOR_DARK = 50;
+export const DECOR_LIFT_TO = 60;
 export const MIN_DECOR = 4;
 /** the scan over a folder looks at no more than this many street-matching maps */
 export const SCAN_CAP = 40;

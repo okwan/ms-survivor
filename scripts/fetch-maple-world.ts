@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import type { FrameRec } from '../src/maple/assets.ts';
 import type { AtlasRef, EffectsSection, MapObjItem, MapSection, UiPiece, UiSection } from '../src/maple/world-types.ts';
 import { asciiPreview, encodePng } from './png.mjs';
+import { gammaFor, liftColor, liftRgba, lumaOf } from './lift.ts';
 import { canvasRgba } from './wz.mjs';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -209,7 +210,9 @@ export class World {
   }
 
   /** `file` is the PNG path under maple/ (regions write one ground per region) */
-  buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>, file = 'map/ground.png'): MapSection['ground'] {
+  /** `lift`: grounds darker than that target luminance (but not nearly black, < 10) are gamma-lifted to it; the unlifted luma is left in lastLuma */
+  lastLuma = 0;
+  buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>, file = 'map/ground.png', lift = 0): MapSection['ground'] {
     const { log, warn } = this.d;
     const img = wz.image(`Tile/${tileSet}.img`);
     if (!img) {
@@ -243,7 +246,7 @@ export class World {
         if (t.rgba[i * 4 + 3] < 200) continue;
         r += t.rgba[i * 4]; g += t.rgba[i * 4 + 1]; b += t.rgba[i * 4 + 2]; n++;
       }
-    const avg: [number, number, number] = n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : [79, 154, 60];
+    let avg: [number, number, number] = n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : [79, 154, 60];
     const cov = tiles.map((t) => {
       let o = 0;
       for (let i = 0; i < t.w * t.h; i++) if (t.rgba[i * 4 + 3] >= 200) o++;
@@ -281,6 +284,15 @@ export class World {
             for (let c = 0; c < 3; c++) rgba[o + c] = (t.rgba[s + c] * a + rgba[o + c] * (255 - a)) / 255;
           }
       }
+    const luma = lumaOf(avg[0], avg[1], avg[2]);
+    this.lastLuma = luma;
+    if (lift && luma >= 10 && luma < lift) {
+      const g = gammaFor(avg, lift);
+      liftRgba(rgba, g);
+      const after = liftColor(avg, g);
+      log(`ground ${file}: dark (luma ${luma.toFixed(0)}, rgb(${avg.join(',')})), gamma lift ${g.toFixed(2)} -> rgb(${after.join(',')}) luma ${lumaOf(...after).toFixed(0)}`);
+      avg = after;
+    }
     const image = this.write(file, W, H, rgba);
     this.preview(`ground tile (${tileSet}/bsc/0)`, tiles[0]);
     log(`ground texture ${image} ${W}x${H}`);

@@ -285,10 +285,12 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
     'Map.img': {
       victoria: {
         104040000: { streetName: 'Henesys', mapName: 'Hunting Ground I' },
-        101010000: { streetName: 'Ellinia', mapName: 'Forest of Patience' },
+        101010000: { streetName: 'Victoria Road', mapName: 'The Field North of Ellinia' },
         102000100: { streetName: 'Perion', mapName: 'Rocky Hill' },
-        105040300: { streetName: 'Sleepywood', mapName: 'Deep Cave' },
-        107000000: { streetName: 'Kerning City', mapName: 'Swamp' },
+        105040300: { streetName: 'Victoria Road', mapName: 'The Forest of Sleepywood' },
+        107000000: { streetName: 'Victoria Road', mapName: 'The Swamp of Despair I' },
+        107000100: { streetName: 'Victoria Road', mapName: 'The Swamp of Despair II' },
+        107000200: { streetName: 'Victoria Road', mapName: 'The Swamp of Despair III' },
       },
     },
   };
@@ -419,7 +421,7 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     1: { info: { tS: 'grassySoil' }, tile: {}, obj: {} },
     foothold: {},
   };
-  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([90, 110, 100])) } }, 'Tile/dryRock.img': { bsc: { 0: canvas(8, 8, solid([170, 130, 90])) } }, 'Tile/darkCave.img': { bsc: { 0: canvas(8, 8, solid([0, 0, 0])) } }, ...objs };
+  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([90, 110, 100])) } }, 'Tile/darkWood.img': { bsc: { 0: canvas(8, 8, solid([35, 26, 7])) } }, 'Tile/swamp.img': { bsc: { 0: canvas(8, 8, solid([40, 41, 38])) } }, 'Tile/dryRock.img': { bsc: { 0: canvas(8, 8, solid([170, 130, 90])) } }, 'Tile/darkCave.img': { bsc: { 0: canvas(8, 8, solid([0, 0, 0])) } }, ...objs };
   if (!noTown) mapImgs['Map/Map1/100000000.img'] = town;
   // run regions: 0 and 1 are candidates, 2 is found by its String.wz street name (no candidate exists), 3 to 6 have no map at all
   objs['Obj/acc2.img'] = { nature: { rock: { a: { 0: objFrame(80, 50, bushPx(80, 50)) } } } };
@@ -436,9 +438,11 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
   mapImgs['Map/Map1/104040000.img'] = regionMap('grassySoil', natureRefs, 'Bgm00/FloralLife');
   mapImgs['Map/Map1/101010000.img'] = regionMap('darkMountain', [['acc1', 'nature', 'tree', '0', 12], ['acc2', 'nature', 'rock', 'a', 9], ['acc1', 'nature', 'bush', '0', 6], ['acc1', 'flower', 'b', '0', 4], ['signboard', 'sign', 'a', '0', 5]], 'Bgm00/Henesys', 12);
   mapImgs['Map/Map1/102000100.img'] = regionMap('dryRock', natureRefs.slice(0, 4), 'Bgm00/FloralLife');
-  // rejected on purpose: a black cave ground (region 3), a tile set an earlier region already uses (region 4)
-  mapImgs['Map/Map1/105040300.img'] = regionMap('darkCave', natureRefs.slice(0, 4), 'Bgm00/Henesys');
-  mapImgs['Map/Map1/107000000.img'] = regionMap('grassySoil', natureRefs.slice(0, 4), 'Bgm00/Henesys');
+  // region 3: Sleepywood by map name; region 4: first two candidates are rejected on purpose (tile set in use, pure black)
+  mapImgs['Map/Map1/105040300.img'] = regionMap('darkWood', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // dim: accepted and brightened
+  mapImgs['Map/Map1/107000000.img'] = regionMap('grassySoil', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // tile set already used
+  mapImgs['Map/Map1/107000100.img'] = regionMap('darkCave', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // black
+  mapImgs['Map/Map1/107000200.img'] = regionMap('swamp', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // dim: accepted and brightened
   mapImgs['Back/grassySoil.img'] = { back: { 0: canvas(16, 16, solid([200, 230, 255])) } };
   writeFileSync(join(dir, 'Map.wz'), buildWz(mapImgs));
 

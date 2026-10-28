@@ -99,7 +99,7 @@ try {
   // run regions
   const rg = m!.regions!.list;
   eq(rg.length, 7, 'one slot per region');
-  eq(rg.map((r) => r?.mapId ?? null), [104040000, 101010000, 102000100, null, null, null, null], 'candidates first, street-name scan next, null when nothing exists');
+  eq(rg.map((r) => r?.mapId ?? null), [104040000, 101010000, 102000100, 105040300, 107000200, null, null], 'candidates first, street-name scan next, null when nothing exists');
   const g0 = rg[0]!, g1 = rg[1]!;
   eq([g0.street, g0.name, g0.tileSet], ['Henesys', 'Hunting Ground I', 'grassySoil'], 'region 0 names and dominant tile set');
   eq(g1.tileSet, 'darkMountain', 'region 1 uses its own dominant tile set (12 of 13 tiles)');
@@ -108,8 +108,10 @@ try {
   ok(existsSync(maple(g0.ground!.image)) && existsSync(maple(g0.objects!.atlas)) && g0.ground!.image !== g1.ground!.image, 'per-region ground and atlas PNGs');
   eq(png(maple(g1.objects!.atlas)).w, g1.objects!.size[0], 'region atlas size matches');
   eq([g0.bgm, g1.bgm, rg[2]!.bgm], ['bgm/region-0.mp3', 'bgm/region-1.mp3', 'bgm/region-0.mp3'], 'regions sharing a track share the file');
+  const luma = (a: number[]) => 0.299 * a[0] + 0.587 * a[1] + 0.114 * a[2];
+  ok(luma(rg[3]!.ground!.avg) > 60 && luma(rg[4]!.ground!.avg) > 60, 'dim grounds (darkWood, swamp) are brightened toward luma 70');
   ok(existsSync(maple(g1.bgm!)), 'region bgm file written');
-  ok(/region 3 .*candidate 105040300 .*REJECTED, ground too dark/.test(out) && /region 4 .*candidate 107000000 .*already used/.test(out) && /region 2 .*scanning 1 maps/.test(out) && /region 2 .*candidate 102000100 .*ACCEPTED/.test(out) && /oS\/l0\/l1 seen/.test(out) && /region 0 decor cluster/.test(out), 'log shows the scan, the object paths and a cluster preview');
+  ok(/region 3 .*candidate 105040300 .*ACCEPTED/.test(out) && /gamma lift/.test(out) && /region 4 .*candidate 107000000 .*already used/.test(out) && /region 4 .*candidate 107000100 .*too dark/.test(out) && /region 2 .*scanning 1 maps/.test(out) && /region 2 .*candidate 102000100 .*ACCEPTED/.test(out) && /oS\/l0\/l1 seen/.test(out) && /region 0 decor cluster/.test(out), 'log shows the scan, the object paths and a cluster preview');
 
   // sound effects: MP3 as is, PCM wrapped into a WAV, the oversized one skipped
   const sf = m!.sfx!;

@@ -6,11 +6,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { BIG, Placements, clusterAt } from '../src/render/cluster.ts';
-import { BIG_MIN_H, DECOR_CAP, DECOR_EXCLUDE, DECOR_FALLBACK_EXCLUDE, DECOR_FALLBACK_INCLUDE, DECOR_INCLUDE, MIN_DECOR, MIN_GROUND_LUMA, REGION_WANTS, SCAN_CAP, SMALL_MAX_H, mapImagePath } from '../src/maple/region-data.ts';
+import { BIG_MIN_H, DECOR_CAP, DECOR_DARK, DECOR_EXCLUDE, DECOR_FALLBACK_EXCLUDE, DECOR_FALLBACK_INCLUDE, DECOR_INCLUDE, DECOR_LIFT_TO, GROUND_LIFT_TO, MIN_DECOR, MIN_GROUND_LUMA, REGION_WANTS, SCAN_CAP, SMALL_MAX_H, mapImagePath } from '../src/maple/region-data.ts';
 import type { DecorSize, RegionEntry, RegionObj, RegionsSection } from '../src/maple/region-types.ts';
 import { asciiPreview } from './png.mjs';
 import { worldTools } from './fetch-maple-world.ts';
 import type { Px, SetLike, WorldDeps } from './fetch-maple-world.ts';
+import { gammaFor, liftColor, liftRgba, lumaOf } from './lift.ts';
 import { childOf, decodeSound } from './wz-audio.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -159,10 +160,11 @@ export function buildRegions(d: RegionDeps): RegionsResult {
     const want = REGION_WANTS[index];
     interface Pick { id: number; img: { root: Any; key: Any }; info: MapInfo; tileSet: string; ground: NonNullable<RegionEntry['ground']> | null }
     const hasNames = names.size > 0;
+    const inArea = (c: number) => { const n = names.get(c); return want.street.test(n?.street ?? '') || want.street.test(n?.name ?? ''); };
     /** cheap verdict first (street, tiles, decor, tile set), then the ground brightness; null reason = acceptable */
     const evaluate = (c: number, path: string, cheap: { img: { root: Any; key: Any }; info: MapInfo; decor: number } | null = null): { reason: string | null; pick?: Pick; decor: number } => {
       const nm = names.get(c);
-      if (want.strict && hasNames && !want.street.test(nm?.street ?? '')) return { reason: `street "${nm?.street ?? '?'}" is not ${want.street}`, decor: 0 };
+      if (want.strict && hasNames && !inArea(c)) return { reason: `neither street "${nm?.street ?? '?'}" nor name "${nm?.name ?? '?'}" matches ${want.street}`, decor: 0 };
       let im = cheap?.img ?? wz!.image(path);
       if (!im) return { reason: 'absent', decor: 0 };
       const inf = cheap?.info ?? analyse(im.root);
@@ -171,15 +173,15 @@ export function buildRegions(d: RegionDeps): RegionsResult {
       const ranked = [...inf.tileSets].sort((a, b) => b[1] - a[1]);
       if (ranked[0] && usedSets.has(ranked[0][0])) return { reason: `tile set ${ranked[0][0]} already used by an earlier region`, decor };
       if (decor < MIN_DECOR) return { reason: `only ${decor} decor objects pass the filter`, decor };
+      let luma0 = 0;
       let ground: Pick['ground'] = null, tileSet = ranked[0]?.[0] ?? 'grassySoil';
       for (const [ts] of ranked.length ? ranked : ([['grassySoil', 0]] as [string, number][])) {
         if (usedSets.has(ts)) continue;
-        ground = tools.buildGround(wz!, ts, inf.bsc.get(ts) ?? new Map(), `map/region-${index}-ground.png`);
-        if (ground) { tileSet = ts; break; }
+        ground = tools.buildGround(wz!, ts, inf.bsc.get(ts) ?? new Map(), `map/region-${index}-ground.png`, GROUND_LIFT_TO);
+        if (ground) { tileSet = ts; luma0 = tools.lastLuma; break; }
       }
       if (!ground) return { reason: 'no usable ground tile set', decor };
-      const luma = 0.299 * ground.avg[0] + 0.587 * ground.avg[1] + 0.114 * ground.avg[2];
-      if (luma < MIN_GROUND_LUMA) return { reason: `ground too dark (luma ${luma.toFixed(0)}, rgb(${ground.avg.join(',')}), tile set ${tileSet})`, decor };
+      if (luma0 < MIN_GROUND_LUMA) return { reason: `ground too dark (luma ${luma0.toFixed(0)}, tile set ${tileSet})`, decor };
       return { reason: null, decor, pick: { id: c, img: im, info: inf, tileSet, ground } };
     };
     const verdict = (c: number, r: { reason: string | null; decor: number }) => d.log(`region ${index} ${want.label}: candidate ${c} "${names.get(c)?.street ?? '?'}" / "${names.get(c)?.name ?? '?'}": ${r.reason ? 'REJECTED, ' + r.reason : `ACCEPTED, ${r.decor} decor objects`}`);
@@ -196,7 +198,7 @@ export function buildRegions(d: RegionDeps): RegionsResult {
       const hits = mapPaths
         .filter((p) => p.toLowerCase().includes(`/map${folder}/`))
         .map((p) => ({ p, id: Number(p.slice(-13, -4)) }))
-        .filter((m) => want.street.test(names.get(m.id)?.street ?? '') && !want.candidates.includes(m.id))
+        .filter((m) => inArea(m.id) && !want.candidates.includes(m.id))
         .sort((a, b) => a.id - b.id)
         .slice(0, SCAN_CAP);
       d.log(`region ${index} ${want.label}: no candidate acceptable; scanning ${hits.length} maps whose street matches ${want.street}`);
@@ -228,7 +230,7 @@ export function buildRegions(d: RegionDeps): RegionsResult {
 
     // the winning candidate's ground again (candidates tried after it would have overwritten the file; the build is deterministic)
     const tileSet = chosen.tileSet;
-    const ground = tools.buildGround(wz!, tileSet, info.bsc.get(tileSet) ?? new Map(), `map/region-${index}-ground.png`);
+    const ground = tools.buildGround(wz!, tileSet, info.bsc.get(tileSet) ?? new Map(), `map/region-${index}-ground.png`, GROUND_LIFT_TO);
 
     const objects = decor(index, wz!, info, ground?.avg ?? [79, 154, 60]);
     const bgm = music(index, info.bgm);
@@ -278,6 +280,19 @@ export function buildRegions(d: RegionDeps): RegionsResult {
     if (!picked.length) {
       d.warn(`region ${index}: no usable nature decor (${keep.length} passed the filter); the region has ground only`);
       return null;
+    }
+    // dark decor would vanish against the brightened ground: lift it when its average luminance is low
+    let sum = 0, cnt = 0;
+    const acc = [0, 0, 0];
+    for (const c of picked) for (const f of c.frames) for (let i = 0; i < f.w * f.h; i++) if (f.rgba[i * 4 + 3] >= 128) { acc[0] += f.rgba[i * 4]; acc[1] += f.rgba[i * 4 + 1]; acc[2] += f.rgba[i * 4 + 2]; cnt++; }
+    if (cnt) {
+      const av = acc.map((v) => v / cnt);
+      sum = lumaOf(av[0], av[1], av[2]);
+      if (sum < DECOR_DARK) {
+        const g = gammaFor(av, DECOR_LIFT_TO);
+        for (const c of picked) c.frames = c.frames.map((f) => { const rgba = Buffer.from(f.rgba); liftRgba(rgba, g); return { ...f, rgba }; });
+        d.log(`region ${index}: decor is dark (luma ${sum.toFixed(0)}), gamma lift ${g.toFixed(2)} -> rgb(${liftColor(av, g).join(',')})`);
+      }
     }
     let use = picked;
     const pack = () => d.packAtlas(use.flatMap((p) => p.frames.map((f, i) => ({ action: p.key, index: i, w: f.w, h: f.h, ox: f.ox, oy: f.oy, delay: f.hasDelay ? f.delay : 100, rgba: f.rgba, id: f.id }))));
