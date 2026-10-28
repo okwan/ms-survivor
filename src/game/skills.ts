@@ -76,7 +76,8 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     case 'nova': {
       if (sim.countNear(px, py, radius) === 0) return false;
       sim.emit({ type: 'cast', skill: def.key, kind: 'nova', x: px, y: py, tx: px, ty: py, r: radius, pts: null });
-      sim.areaDamage(px, py, radius, dmg);
+      sim.areaDamage(px, py, radius, dmg, def.slow ? skillDuration(def.slow, L) : 0);
+      if (def.heal) sim.hp = Math.min(sim.maxHp, sim.hp + def.heal * skillDmgMult(L));
       return true;
     }
     case 'ground': {

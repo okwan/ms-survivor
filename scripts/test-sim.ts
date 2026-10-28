@@ -1,7 +1,7 @@
 // Run: node --experimental-strip-types scripts/test-sim.ts
 import { Sim } from '../src/game/sim.ts';
 import { botInput } from '../src/game/bot.ts';
-import { BOSSES, BOSS_EVERY, CLASSES, CLASS_BY_KEY, MAX_ALIVE, PASSIVES, SKILLS, aliveTarget, poolLo, xpToNext, LADDER } from '../src/game/data.ts';
+import { BOSSES, BOSS_EVERY, CLASSES, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER } from '../src/game/data.ts';
 
 let failed = 0;
 function ok(cond: boolean, msg: string) {
@@ -80,24 +80,73 @@ for (const c of CLASSES) {
 console.log('-- level 10 (god-mode bot runs): ' + CLASSES.map((c) => `${c.name} ${lvlTimes[c.key]?.toFixed(1)} s`).join(', '));
 console.log('-- class kits');
 eq(CLASSES.length, 4, 'four classes');
+ok(new Set(SKILLS.map((s) => s.key)).size === SKILLS.length && new Set(PASSIVES.map((p) => p.key)).size === PASSIVES.length, 'skill keys and passive keys are unique');
+{
+  const ids = [...SKILLS.map((s) => s.id), ...PASSIVES.map((p) => p.id)];
+  ok(new Set(ids).size === ids.length, 'skill and passive ids are unique');
+  ok(!SKILLS.some((s) => s.key === 'chain_lightning'), 'no 4th-job skills');
+  ok([...SKILLS.map((s) => s.id), ...PASSIVES.map((p) => p.id)].every((id) => JOB_BY_CODE[jobOfId(id)] !== undefined), 'every skill and passive belongs to a job');
+  ok(JOBS.every((j) => j.sig.every((k) => SKILLS.some((s) => s.key === k) || PASSIVES.some((p) => p.key === k))), 'job signature keys exist');
+}
 for (const c of CLASSES) {
-  eq(c.skills.length, 8, `${c.name} has 8 skills`);
+  ok(c.skills.length >= 8, `${c.name} has ${c.skills.length} skills`);
   ok(c.skills.every((k) => SKILLS.some((s) => s.key === k)), `${c.name} skill keys exist`);
-  ok(PASSIVES.some((p) => p.key === c.statPassive && p.cls === c.key) && PASSIVES.some((p) => p.key === c.armorPassive && p.cls === c.key), `${c.name} has its class-named passives`);
+  const own = (id: number) => JOB_BY_CODE[jobOfId(id)]?.cls === c.key;
+  ok(c.skills.every((k) => own(SKILLS.find((s) => s.key === k)!.id)), `${c.name} skills belong to ${c.name} jobs`);
+  ok(c.branches.every((b) => JOB_BY_CODE[b]?.tier === 2 && JOB_BY_CODE[b + 1]?.tier === 3 && JOB_BY_CODE[b].cls === c.key), `${c.name} branches have a 2nd and a 3rd job`);
   const s0 = new Sim(1, c.key);
   eq(s0.maxHp, c.hp, `${c.name} base HP`); eq(s0.speed, c.speed, `${c.name} base speed`); eq(s0.skills[0].key, c.skills[0], `${c.name} starts with ${c.skills[0]}`);
-  // offers never contain another class's skills or passives
-  const keys = new Set<string>();
-  for (let i = 0; i < 60; i++) { s0.offer = null; s0.pendingLevels = 1; s0.tick(); for (const cd of s0.offer ?? []) keys.add(cd.key); s0.offer = null; }
-  const foreign = [...keys].filter((k) => (SKILLS.find((s) => s.key === k) && !c.skills.includes(k)) || PASSIVES.find((p) => p.key === k && p.cls !== undefined && p.cls !== c.key));
-  eq(foreign.length, 0, `${c.name} is only offered its own cards`);
 }
+// job advancement: every class and branch, god-mode bot, picks the card chosen below
+function jobRun(clsKey: string, branchIdx: number) {
+  const c = CLASS_BY_KEY[clsKey];
+  const sim = new Sim(99, clsKey);
+  sim.god = true;
+  const seen: Record<string, Set<number>> = { pre: new Set(), mid: new Set(), post: new Set() };
+  let t30 = -1, t70 = -1, jobOffers = 0, advances = 0, jobOfferLevel = 0;
+  const jobsSeen: string[] = [];
+  let ticks = 0;
+  while (!sim.over && sim.level < 72 && ticks < 900 * 60) {
+    if (sim.offer) {
+      const job = sim.offer[0].kind === 'job';
+      if (job) { jobOffers++; jobOfferLevel = sim.level; eq(sim.offer.map((x) => x.key).join(), c.branches.join(), `${c.name}: job offer lists the class's 2nd jobs`); }
+      else {
+        const phase = sim.level < 30 ? 'pre' : sim.level < 70 ? 'mid' : 'post';
+        for (const x of sim.offer) if (x.kind === 'skill' || x.kind === 'passive') seen[phase].add(jobOfId((x.kind === 'skill' ? SKILLS.find((s) => s.key === x.key)! : PASSIVES.find((p) => p.key === x.key)!).id));
+      }
+      sim.pick(job ? branchIdx : 0);
+      continue;
+    }
+    const inp = botInput(sim, 1);
+    sim.setInput(inp.x, inp.y);
+    sim.tick();
+    ticks++;
+    if (t30 < 0 && sim.level >= 30) t30 = sim.t;
+    if (t70 < 0 && sim.level >= 70) t70 = sim.t;
+    for (const e of sim.events) if (e.type === 'jobAdvance') { advances++; jobsSeen.push(e.name); }
+    sim.events.length = 0;
+  }
+  const b = c.branches[branchIdx];
+  const label = `${c.name} -> ${JOB_BY_CODE[b].name}`;
+  ok(sim.skills.length <= MAX_SKILLS && sim.passives.length <= MAX_PASSIVES, `${label}: at most ${MAX_SKILLS} skills and ${MAX_PASSIVES} passives`);
+  ok(t30 > 0 && t70 > 0, `${label}: reached level 30 (${t30.toFixed(0)} s) and 70 (${t70.toFixed(0)} s)`);
+  eq(jobOffers, 1, `${label}: one job choice`);
+  eq(jobOfferLevel, 30, `${label}: job choice at level 30`);
+  eq(jobsSeen.join(' > '), `${JOB_BY_CODE[b].name} > ${JOB_BY_CODE[b + 1].name}`, `${label}: 2nd then 3rd job advancement events`);
+  eq(sim.jobs.join(), [c.firstJob, b, b + 1].join(), `${label}: unlocked jobs`);
+  ok([...seen.pre].every((j) => j === c.firstJob), `${label}: only 1st-job cards before level 30 (${[...seen.pre]})`);
+  ok([...seen.mid].every((j) => j === c.firstJob || j === b) && seen.mid.has(b), `${label}: only 1st job and ${b} cards from 30 to 69 (${[...seen.mid]})`);
+  ok([...seen.post].every((j) => j === c.firstJob || j === b || j === b + 1) && seen.post.has(b + 1), `${label}: 3rd job cards join at 70 (${[...seen.post]})`);
+  ok(sim.skills.every((s) => c.skills.includes(s.key)) && sim.passives.every((p) => JOB_BY_CODE[jobOfId(PASSIVES.find((q) => q.key === p.key)!.id)].cls === c.key), `${label}: no card of another class owned`);
+}
+console.log('-- job advancement');
+for (const c of CLASSES) for (let i = 0; i < c.branches.length; i++) jobRun(c.key, i);
 {
   // effects: stun stops contact hits, root stops movement, drain heals (capped), weaken lowers damage
   const w = new Sim(5, 'warrior');
   w.recalc();
   const spawn = (x: number) => {
-    const e = { x, y: 0, hp: 1e6, maxHp: 1e6, speed: 4, dmg: 10, r: 0.6, xp: 1, tier: 0, boss: -1, big: false, add: false, alive: true, hitCd: 0, slowT: 0, stunT: 0, rootT: 0, weakT: 0, flash: 0, facing: 1, phase: 0, moving: true, berserk: false, age: 0, novaT: 0, castT: 0, summonT: 0, idx: -1 };
+    const e = { x, y: 0, hp: 1e6, maxHp: 1e6, speed: 4, dmg: 10, r: 0.6, xp: 1, tier: 0, boss: -1, big: false, add: false, alive: true, hitCd: 0, slowT: 0, stunT: 0, rootT: 0, weakT: 0, flash: 0, lastHit: -99, facing: 1, phase: 0, moving: true, berserk: false, age: 0, novaT: 0, castT: 0, summonT: 0, idx: -1 };
     w.enemies.push(e);
     return e;
   };
@@ -119,6 +168,19 @@ for (const c of CLASSES) {
   t.curSkill = 'shadow_web';
   t.hit(e2, 1);
   ok(e2.rootT > 2.9, 'shadow web roots');
+  eq(e2.lastHit, t.t, 'a hit stamps lastHit (HP bar shows for 3 s)');
+  t.curSkill = 'steal';
+  const mesos0 = t.pickups.length;
+  for (let i = 0; i < 100; i++) t.hit(e2, 1);
+  ok(t.pickups.length > mesos0, 'steal sometimes drops mesos');
+  // Heal: the nova heals the hero
+  const m = new Sim(8, 'magician');
+  m.jobs.push(230);
+  m.skills.push({ key: 'heal', level: 1, cd: 0 });
+  m.hp = 50;
+  m.enemies.push({ ...e1, x: 2, stunT: 0 });
+  m.tick();
+  ok(m.hp > 50, 'heal restores hero HP when it fires');
   t.curSkill = 'panic';
   t.hit(e2, 1);
   ok(e2.weakT > 3.9, 'panic weakens');

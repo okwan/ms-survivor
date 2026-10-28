@@ -186,10 +186,18 @@ export class Screens {
     this.offerRef = offer;
     this.offerSig = sig;
     this.levelup.classList.remove('hidden');
-    this.luHead.innerHTML = theme.has('lv.0') ? `LEVEL UP! ${theme.lv(sim.level)}` : 'LEVEL UP!';
+    const job = offer[0]?.kind === 'job';
+    this.luHead.innerHTML = job ? `JOB ADVANCEMENT! Lv ${sim.level}` : theme.has('lv.0') ? `LEVEL UP! ${theme.lv(sim.level)}` : 'LEVEL UP!';
     this.cardsEl.textContent = '';
     offer.forEach((c, i) => {
       const card = el('div', 'card ' + c.kind);
+      if (c.kind === 'job') {
+        const sig = (c.sig ?? []).map((s) => `<div class="sig"><img src="${this.icons[s.key] ?? ''}" alt=""><div><b>${s.name}</b><span>${s.desc}</span></div></div>`).join('');
+        card.innerHTML = `<div class="key">${i + 1}</div><h3>${c.name}</h3><p>${c.desc}</p>${sig}<div class="kind">Job advancement</div>`;
+        card.addEventListener('click', () => this.h.pick(i));
+        this.cardsEl.appendChild(card);
+        return;
+      }
       const tag = c.isNew ? '<span class="tag new">NEW</span>' : c.kind === 'skill' || c.kind === 'passive' ? `<span class="tag">Lv ${c.from} &gt; ${c.to}</span>` : '';
       card.innerHTML = `<div class="key">${i + 1}</div><img src="${this.icons[c.key] ?? ''}" alt=""><h3>${c.name}</h3>${tag}<p>${c.desc}</p>`;
       const kind = el('div', 'kind', c.kind === 'skill' ? 'Skill' : c.kind === 'passive' ? 'Passive' : 'Bonus');
@@ -204,7 +212,7 @@ export class Screens {
       this.cardsEl.appendChild(card);
     });
     this.rerollBtn.textContent = `Reroll (${sim.rerolls})`;
-    this.rerollBtn.disabled = sim.rerolls <= 0;
+    this.rerollBtn.disabled = sim.rerolls <= 0 || job;
   }
 
   showResults(r: Results) {

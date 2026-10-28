@@ -94,6 +94,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .card img { width: 56px; height: 56px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,.35); }
 .card h3 { margin: 4px 0 0; font-size: 17px; color: var(--blue3); }
 .card p { margin: 0; font-size: 13px; min-height: 34px; }
+.card.job { width: 250px; border-color: #ffd23a; }
+.card .sig { display: flex; gap: 8px; align-items: center; text-align: left; width: 100%; margin-top: 4px; }
+.card .sig img { width: 36px; height: 36px; flex: none; }
+.card .sig b { display: block; font-size: 13px; color: var(--blue3); }
+.card .sig span { display: block; font-size: 11px; line-height: 1.25; }
 .card .key { position: absolute; left: 8px; top: 6px; font-weight: 900; color: #8a98c8; font-size: 14px; }
 .card .kind { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #8a98c8; font-weight: bold; }
 .tag { background: #dfe9fb; color: var(--blue3); font-weight: 900; font-size: 12px; padding: 1px 10px; border-radius: 10px; }
