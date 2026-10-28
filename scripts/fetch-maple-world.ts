@@ -14,6 +14,7 @@ import type { AtlasRef, EffectsSection, MapObjItem, MapSection, UiPiece, UiSecti
 import { asciiPreview, encodePng } from './png.mjs';
 import { gammaFor, liftColor, liftRgba, lumaOf } from './lift.ts';
 import { canvasRgba } from './wz.mjs';
+import { detectSlots, overlayAscii } from './slot-detect.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -561,10 +562,12 @@ export class World {
     if (uiw) {
       for (const k of ['Stat', 'Skill', 'Item', 'Equip', 'ToolTip', 'MiniMap', 'GameMenu', 'Notice', 'UtilDlgEx']) log(`UIWindow.img ${k}: ${this.describe(uiw.root.get(k), 2)}`);
       take(uiw, 'Stat/backgrnd', 'uiw.stat');
-      takeAny(uiw, ['Equip/backgrnd'], 'uiw.equip');
+      const eqBg = takeAny(uiw, ['Equip/backgrnd'], 'uiw.equip');
+      if (eqBg) this.findSlots('uiw.equip', eqBg, pieces);
       takeAny(uiw, ['Equip/backgrnd2'], 'uiw.equip2', true);
       takeAny(uiw, ['Equip/backgrnd3'], 'uiw.equip3', true);
-      takeAny(uiw, ['Item/backgrnd'], 'uiw.item');
+      const itBg = takeAny(uiw, ['Item/backgrnd'], 'uiw.item');
+      if (itBg) this.findSlots('uiw.item', itBg, pieces);
       takeAny(uiw, ['Item/FullBackgrnd', 'Item/backgrnd2'], 'uiw.item2', true);
       takeAny(uiw, ['Stat/backgrnd2'], 'uiw.stat2', true);
       for (let i = 0; i < 6; i++) {
@@ -633,6 +636,20 @@ export class World {
     }
     if (!n) missing.push('login.back (no canvases under back/ or ani/)');
     log(`login backdrop: ${n} layers, ${(spent / 1e3).toFixed(0)} KB`);
+  }
+
+  /** Detects the baked slot frames of a window background, logs each rect and an ASCII overlay, and stores them as piece.rects. */
+  private findSlots(name: string, bg: Px, pieces: Record<string, UiPiece>) {
+    let rects = detectSlots(bg.rgba, bg.w, bg.h);
+    if (rects.length < 10) {
+      this.d.log(`${name}: only ${rects.length} frames at the default thresholds, retrying with softer ones`);
+      const soft = detectSlots(bg.rgba, bg.w, bg.h, { minEdge: 7, maxInner: 50 });
+      if (soft.length > rects.length) rects = soft;
+    }
+    const { log } = this.d;
+    log(`${name}: ${bg.w}x${bg.h}, ${rects.length} slot frames detected: ${rects.map((r) => `${r.x},${r.y} ${r.w}x${r.h}`).join(' | ') || '-'}`);
+    console.log(`--- ${name} slot overlay (3x5 px per char, o/O/# = inside a detected frame) ---\n${overlayAscii(bg.rgba, bg.w, bg.h, rects)}`);
+    if (rects.length && pieces[name]) pieces[name].rects = rects;
   }
 
   /** normal / mouseOver / pressed / disabled of a button node, stored as <name>.normal, .hover, .pressed, .disabled */

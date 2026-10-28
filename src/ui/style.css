@@ -364,6 +364,22 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .eqs .plus { position: absolute; right: 1px; bottom: 0; font-size: 9px; color: #ffe066; text-shadow: -1px 0 #000, 1px 0 #000, 0 1px #000, 0 -1px #000; }
 .login-options .pet-opt { font-size: 11px; display: flex; gap: 4px; align-items: center; cursor: pointer; }
 
+/* windows on the real UI.wz backgrounds (windows.ts adds .real when the slot frames were detected): the art shows through, our icons sit in its frames */
+.mwin.real { background-color: transparent; background-repeat: no-repeat; background-position: 0 0; background-size: 100% 100%; border: 0; border-radius: 0; box-shadow: none; image-rendering: pixelated; }
+.mwin.real .mwin-title { background: none; }
+.mwin.real .mwin-title span { visibility: hidden; }
+.mwin.real .mwin-x { top: 6px; right: 8px; }
+.mwin.real .eqs, .mwin.real .invc { background: none; border: 0; box-shadow: none; border-radius: 0; }
+.mwin.real .eqs.empty::after { content: none; }
+.mwin.real .eqs.show { opacity: 1; }
+.mwin.real .eqs img, .mwin.real .invc img { width: 32px; height: 32px; }
+.mwin.real .eq-preview { background: none; border: 0; }
+.mwin.real .eq-foot, .mwin.real .inv-foot { background: rgba(8,12,30,.88); border: 1px solid #fff; }
+.mwin-stats.real .stat-rows { left: 9px; right: 9px; top: 30px; bottom: 9px; padding: 6px; gap: 3px; background: #efe9d4; border: 1px solid #8a8466; justify-content: space-between; }
+.invtab.real { font-size: 0; border: 0; border-radius: 0; padding: 0; background: no-repeat 0 0 / 100% 100% transparent; image-rendering: pixelated; }
+.invtab.real:disabled { cursor: default; }
+/* Maple's dark item tooltip */
+.mtip { background: rgba(0,0,12,.92); border: 1px solid #8fb2e8; box-shadow: 0 0 0 1px #000; }
 /* ---------- Gachapon reveal (src/ui/gachapon.ts): never blocks the game ---------- */
 .gacha { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); min-width: 250px; max-width: 92vw; padding: 8px 14px 10px; display: none; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; z-index: 7; background: linear-gradient(#2a4f92ee, #12285cee); border: 2px solid #fff; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,.5); color: #fff; }
 .gacha.show { display: flex; animation: gacha-in .25s ease-out; }

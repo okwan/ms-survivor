@@ -36,6 +36,8 @@ export interface UiPiece {
   ox: number;
   oy: number;
   meta?: Record<string, number>;
+  /** baked slot frames found in a window background (reading order), see scripts/slot-detect.ts */
+  rects?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface UiSection {

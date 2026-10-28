@@ -46,4 +46,28 @@ ok(Object.values(WINDOW_SIZE).every(([w, h]) => w > 100 && h > 100), 'window siz
 eq([statusScale(SB_W), statusScale(1280), statusScale(1600), statusScale(2500)], [1, 1, 2, 3], 'integer scales for wide windows');
 ok(Math.abs(statusScale(400) - 0.5) < 1e-9 && statusScale(360) * SB_W <= 360, 'a phone-width window shrinks the bar to fit');
 
+// ---- real-window mapping from detected frame rectangles ----
+import { mapEquip, mapInventory } from '../src/ui/realwin.ts';
+import { EQUIP_FIXTURE_RECTS, ITEM_FIXTURE_HEADER_RECTS, ITEM_FIXTURE_RECTS } from './maple-fixture.mjs';
+// the 26 frames the detector found on the REAL Equip/backgrnd (175x304) in CI (x, y, size)
+const REAL_EQUIP = ([[38, 35, 32], [38, 68, 32], [70, 71, 34], [104, 68, 33], [137, 68, 32], [39, 100, 34], [71, 101, 33], [103, 101, 33], [136, 100, 36], [5, 134, 33], [38, 134, 32], [70, 137, 33], [104, 134, 33], [136, 134, 33], [5, 167, 32], [38, 166, 33], [71, 167, 32], [104, 167, 32], [137, 167, 32], [3, 199, 35], [38, 199, 31], [72, 201, 32], [104, 199, 34], [5, 233, 32], [38, 233, 32], [71, 233, 32]] as number[][]).map(([x, y, s]) => ({ x, y, w: s, h: s }));
+const ov = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 4 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 4;
+for (const [label, rects] of [['real CI rects', REAL_EQUIP], ['fixture rects', EQUIP_FIXTURE_RECTS]] as const) {
+  const re = mapEquip(rects)!;
+  ok(re, `${label}: map to the Equip window`);
+  const rs = (p: string) => re.slots.find((s) => s.pos === p)!;
+  eq(re.slots.length, 22, `${label}: the four character-area frames are dropped, 22 slots remain`);
+  for (const p of ['cap', 'coat', 'pants', 'shoes', 'weapon', 'glove', 'cape', 'shield']) ok(rs(p), `${label}: ${p} has a frame`);
+  eq(new Set(re.slots.map((s) => `${s.x},${s.y}`)).size, re.slots.length, `${label}: every slot has its own frame`);
+  ok(re.slots.every((a, i) => re.slots.every((b, j) => i === j || !ov(a, b))), `${label}: no two slots overlap`);
+  ok(rs('weapon').y > rs('cap').y && rs('shoes').y > rs('coat').y && rs('pants').y === rs('weapon').y + 33 || rs('pants').y > rs('coat').y, `${label}: lower body below upper body`);
+  ok(re.slots.every((s) => !(s.x > 62 && s.x < 100 && s.y > 60 && s.y < 130)), `${label}: nothing is left in the character area`);
+  ok(re.preview.x >= 60 && re.preview.x + re.preview.w <= 140 && re.preview.y < 75 && re.preview.y + re.preview.h <= 134, `${label}: the preview covers the dropped area (${JSON.stringify(re.preview)})`);
+}
+eq(mapEquip(EQUIP_FIXTURE_RECTS.slice(0, 6)), null, 'too few frames: fall back to the CSS skin');
+eq(mapEquip(ITEM_FIXTURE_RECTS), null, 'an inventory grid is not the equip window');
+const ri = mapInventory([...ITEM_FIXTURE_HEADER_RECTS, ...ITEM_FIXTURE_RECTS])!;
+eq([ri.cells.length, ri.cells[0].x, ri.cells[0].y, ri.cells[4].y > ri.cells[0].y, ri.cells[3].x > ri.cells[0].x], [24, 8, 50, true, true], 'bag cells: header frames above y 40 are ignored, 24 in reading order');
+eq(mapInventory(EQUIP_FIXTURE_RECTS), null, 'five columns are not an inventory');
+
 console.log(`test-ui: ok (${checks} checks)`);

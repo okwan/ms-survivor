@@ -8,14 +8,17 @@
 import { CLASS_BY_KEY, JOB_BY_CODE } from '../game/data.ts';
 import { plusOf, slotsLeft } from '../game/scrolls.ts';
 import { BAG_SIZE, GEAR_SLOT_NAMES, JOB_BIT, describeBonus, itemBonus, totalBonus } from '../game/gear.ts';
-import type { GearItem, GearStats } from '../game/gear.ts';
+import type { GearItem, GearSlot, GearStats } from '../game/gear.ts';
 import type { Sim } from '../game/sim.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { frameIndexAt } from '../maple/avatar.ts';
 import type { Look } from '../maple/avatar-core.ts';
 import type { GearIcons } from '../render/gear-icons.ts';
-import { EQUIP_FOOT, EQUIP_PREVIEW, EQUIP_SLOTS, EQUIP_W, INV_COLS, INV_FOOT, INV_ROWS, INV_TABS, INV_W, WINDOW_SIZE, clampWindow, invCell } from './layout.ts';
+import { EQUIP_FOOT, EQUIP_PREVIEW, EQUIP_SLOTS, INV_COLS, INV_FOOT, INV_ROWS, INV_TABS, SLOT, WINDOW_SIZE, clampWindow, invCell } from './layout.ts';
 import type { WindowName } from './layout.ts';
+import { mapEquip, mapInventory } from './realwin.ts';
+import type { RealEquip, RealInventory } from './realwin.ts';
+import { theme } from './theme.ts';
 
 export interface WindowHooks {
   /** true while a run is being played (keys do nothing on the menus) */
@@ -97,11 +100,27 @@ export class GearWindows {
   private statsSig = '';
   private mesoEl!: HTMLElement;
   private invBody!: HTMLElement;
+  /** real UI.wz backgrounds with detected slot frames (null: the CSS windows are used) */
+  private realEq: RealEquip | null = null;
+  private realInv: RealInventory | null = null;
+  private sizes: Record<WindowName, [number, number]> = { equip: [...WINDOW_SIZE.equip], inventory: [...WINDOW_SIZE.inventory], stats: [...WINDOW_SIZE.stats] };
+  private equipSlots: { pos: string; label: string; gear: GearSlot | null; x: number; y: number; w: number; h: number }[] = [];
 
   constructor(parent: HTMLElement, private icons: GearIcons, private avatar: Avatar | null, private hooks: WindowHooks, autoEquip: boolean) {
     this.tip = document.createElement('div');
     this.tip.className = 'mtip';
     this.tip.style.display = 'none';
+    const P = theme.art?.pieces ?? {};
+    if (P['uiw.equip']) {
+      this.realEq = mapEquip(P['uiw.equip'].rects);
+      if (this.realEq) this.sizes.equip = [P['uiw.equip'].w, P['uiw.equip'].h];
+    }
+    if (P['uiw.item']) {
+      this.realInv = mapInventory(P['uiw.item'].rects);
+      if (this.realInv) this.sizes.inventory = [P['uiw.item'].w, P['uiw.item'].h];
+    }
+    if (P['uiw.stat']) this.sizes.stats = [P['uiw.stat'].w, P['uiw.stat'].h];
+    console.info(`maple windows: equip ${this.realEq ? `real (${this.realEq.slots.length} frames)` : 'css'}, inventory ${this.realInv ? `real (${this.realInv.cells.length} cells)` : 'css'}, stats ${P['uiw.stat'] ? 'real' : 'css'}`);
     this.buildEquip(parent);
     this.buildInventory(parent);
     this.buildStats(parent);
@@ -121,7 +140,7 @@ export class GearWindows {
   // ---- window shell -------------------------------------------------------------------------------------------------
 
   private shell(parent: HTMLElement, name: WindowName, x: number, y: number): Win {
-    const [w, h] = WINDOW_SIZE[name];
+    const [w, h] = this.sizes[name];
     const el = document.createElement('div');
     el.className = `mwin mwin-${name}`;
     el.style.width = w + 'px';
@@ -150,8 +169,14 @@ export class GearWindows {
     return win;
   }
 
+  /** Skins a window with a real UI.wz background piece. */
+  private skin(win: Win, piece: string) {
+    win.el.classList.add('real');
+    win.el.style.backgroundImage = `url("${theme.url(piece)}")`;
+  }
+
   private place(win: Win, x: number, y: number) {
-    const [w, h] = WINDOW_SIZE[win.name];
+    const [w, h] = this.sizes[win.name];
     const p = clampWindow(x, y, w, h, window.innerWidth, window.innerHeight);
     win.x = p.x;
     win.y = p.y;
@@ -220,11 +245,17 @@ export class GearWindows {
     const body = document.createElement('div');
     body.className = 'mwin-body';
     win.el.appendChild(body);
-    for (const s of EQUIP_SLOTS) {
+    const real = this.realEq;
+    if (real) this.skin(win, 'uiw.equip');
+    this.equipSlots = real ? real.slots : EQUIP_SLOTS.map((s) => ({ ...s, w: SLOT, h: SLOT }));
+    const pv = real ? real.preview : EQUIP_PREVIEW;
+    for (const s of this.equipSlots) {
       const d = document.createElement('div');
       d.className = 'eqs empty' + (s.gear ? '' : ' show');
       d.style.left = s.x + 'px';
       d.style.top = s.y + 'px';
+      d.style.width = s.w + 'px';
+      d.style.height = s.h + 'px';
       d.dataset.pos = s.pos;
       d.dataset.label = s.label;
       body.appendChild(d);
@@ -238,14 +269,16 @@ export class GearWindows {
     }
     this.preview = document.createElement('canvas');
     this.preview.className = 'eq-preview';
-    this.preview.width = EQUIP_PREVIEW.w;
-    this.preview.height = EQUIP_PREVIEW.h;
-    this.preview.style.left = EQUIP_PREVIEW.x + 'px';
-    this.preview.style.top = EQUIP_PREVIEW.y + 'px';
+    this.preview.width = pv.w;
+    this.preview.height = pv.h;
+    this.preview.style.left = pv.x + 'px';
+    this.preview.style.top = pv.y + 'px';
     body.appendChild(this.preview);
     const foot = document.createElement('div');
     foot.className = 'eq-foot';
-    Object.assign(foot.style, { left: EQUIP_FOOT.x + 'px', top: EQUIP_FOOT.y + 'px', width: EQUIP_FOOT.w + 'px', height: EQUIP_FOOT.h + 'px' });
+    // the real background has no room for the totals: they hang below the window
+    if (real) Object.assign(foot.style, { left: '0', top: this.sizes.equip[1] + 3 + 'px', width: this.sizes.equip[0] + 'px', height: '44px' });
+    else Object.assign(foot.style, { left: EQUIP_FOOT.x + 'px', top: EQUIP_FOOT.y + 'px', width: EQUIP_FOOT.w + 'px', height: EQUIP_FOOT.h + 'px' });
     foot.innerHTML = `<div class="gear-totals"></div><label class="gear-auto"><input type="checkbox"> Auto-equip upgrades</label>`;
     body.appendChild(foot);
     this.totalsEl = foot.querySelector('.gear-totals')!;
@@ -254,7 +287,7 @@ export class GearWindows {
   }
 
   private refreshEquip(sim: Sim) {
-    for (const s of EQUIP_SLOTS) {
+    for (const s of this.equipSlots) {
       if (!s.gear) continue;
       const el = this.slotEls.get(s.pos)!;
       const it = sim.equipped[s.gear];
@@ -296,11 +329,32 @@ export class GearWindows {
   // ---- inventory ------------------------------------------------------------------------------------------------------------
 
   private buildInventory(parent: HTMLElement) {
-    const win = this.shell(parent, 'inventory', 12 + EQUIP_W + 10, 64);
+    const win = this.shell(parent, 'inventory', 12 + this.sizes.equip[0] + 10, 64);
     const body = document.createElement('div');
     body.className = 'mwin-body';
     win.el.appendChild(body);
-    ['Equip', 'Use', 'Etc'].forEach((label, i) => {
+    const real = this.realInv;
+    if (real) this.skin(win, 'uiw.item');
+    const realTabs = !!real && theme.has('item.tab.on.0') && theme.has('item.tab.off.0');
+    if (realTabs) {
+      // five Maple tabs (Equip, Use, Setup, Etc, Cash) above the grid; only Equip, Use and Etc are ours
+      const first = real!.cells[0];
+      const tw = theme.art!.pieces['item.tab.on.0'].w, th = theme.art!.pieces['item.tab.on.0'].h;
+      const mine = [0, 1, -1, 2, -1];
+      mine.forEach((ours, k) => {
+        const t = document.createElement('button');
+        t.className = 'invtab real' + (ours === 0 ? ' on' : '');
+        if (ours >= 0) t.dataset.tab = String(ours);
+        t.disabled = ours < 0;
+        t.dataset.img = String(k);
+        t.title = ['Equip', 'Use', 'Setup', 'Etc', 'Cash'][k];
+        Object.assign(t.style, { left: first.x - 3 + k * tw + 'px', top: Math.max(26, first.y - th - 3) + 'px', width: tw + 'px', height: th + 'px' });
+        if (ours >= 0) t.addEventListener('click', () => { this.tab = ours; this.seen.bag = -1; });
+        body.appendChild(t);
+        if (ours >= 0) this.tabEls.push(t);
+      });
+    }
+    if (!realTabs) ['Equip', 'Use', 'Etc'].forEach((label, i) => {
       const t = document.createElement('button');
       t.className = 'invtab' + (i === 0 ? ' on' : '');
       t.dataset.tab = String(i);
@@ -314,12 +368,14 @@ export class GearWindows {
     this.invBody = document.createElement('div');
     this.invBody.className = 'inv-body';
     body.appendChild(this.invBody);
-    for (let i = 0; i < INV_COLS * INV_ROWS; i++) {
+    const nCells = real ? real.cells.length : INV_COLS * INV_ROWS;
+    for (let i = 0; i < nCells; i++) {
       const c = document.createElement('div');
       c.className = 'invc';
-      const p = invCell(i);
+      const p = real ? real.cells[i] : invCell(i);
       c.style.left = p.x + 'px';
       c.style.top = p.y + 'px';
+      if (real) { c.style.width = real.cells[i].w + 'px'; c.style.height = real.cells[i].h + 'px'; }
       c.dataset.i = String(i);
       this.invBody.appendChild(c);
       this.cells.push(c);
@@ -332,7 +388,8 @@ export class GearWindows {
     }
     const foot = document.createElement('div');
     foot.className = 'inv-foot';
-    Object.assign(foot.style, { left: INV_FOOT.x + 'px', top: INV_FOOT.y + 'px', width: INV_FOOT.w + 'px', height: INV_FOOT.h + 'px' });
+    if (real) Object.assign(foot.style, { left: '0', top: this.sizes.inventory[1] + 3 + 'px', width: this.sizes.inventory[0] + 'px', height: '22px' });
+    else Object.assign(foot.style, { left: INV_FOOT.x + 'px', top: INV_FOOT.y + 'px', width: INV_FOOT.w + 'px', height: INV_FOOT.h + 'px' });
     foot.innerHTML = '<i class="coin"></i><span></span>';
     body.appendChild(foot);
     this.mesoEl = foot.querySelector('span')!;
@@ -349,6 +406,13 @@ export class GearWindows {
 
   private refreshInventory(sim: Sim) {
     this.tabEls.forEach((t, i) => t.classList.toggle('on', i === this.tab));
+    // the real tab art: the enabled image on the open tab, the disabled one elsewhere (Setup and Cash are never open)
+    this.wins.get('inventory')!.el.querySelectorAll<HTMLElement>('.invtab.real').forEach((t) => {
+      const k = t.dataset.img!;
+      const on = t.classList.contains('on');
+      const pick = (kind: string) => (theme.has(`item.tab.${kind}.${k}`) ? `item.tab.${kind}.${k}` : `item.tab.${kind}.0`);
+      t.style.backgroundImage = `url("${theme.url(pick(on ? 'on' : 'off'))}")`;
+    });
     for (let i = 0; i < this.cells.length; i++) {
       const c = this.cells[i];
       const it = this.tab === 0 && i < BAG_SIZE ? sim.bag[i] : undefined;
@@ -364,7 +428,9 @@ export class GearWindows {
   // ---- stats ----------------------------------------------------------------------------------------------------------------
 
   private buildStats(parent: HTMLElement) {
-    this.shell(parent, 'stats', 12 + EQUIP_W + INV_W + 20, 64).el.insertAdjacentHTML('beforeend', '<div class="mwin-body"><div class="stat-rows"></div></div>');
+    const win = this.shell(parent, 'stats', 12 + this.sizes.equip[0] + this.sizes.inventory[0] + 20, 64);
+    if (theme.has('uiw.stat')) this.skin(win, 'uiw.stat');
+    win.el.insertAdjacentHTML('beforeend', '<div class="mwin-body"><div class="stat-rows"></div></div>');
     this.statsEl = this.wins.get('stats')!.el.querySelector('.stat-rows')!;
   }
 
