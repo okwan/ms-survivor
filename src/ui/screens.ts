@@ -17,6 +17,7 @@ export interface ScreenHandlers {
   reroll(): void;
   banish(i: number): void;
   volume(v: number): void;
+  sfxVolume(v: number): void;
   mute(m: boolean): void;
 }
 
@@ -53,6 +54,7 @@ export class Screens {
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
   private volEl!: HTMLInputElement;
+  private sfxVolEl!: HTMLInputElement;
   private muteEl!: HTMLButtonElement;
   private muted = false;
 
@@ -102,9 +104,15 @@ export class Screens {
     this.volEl.type = 'range'; this.volEl.min = '0'; this.volEl.max = '1'; this.volEl.step = '0.05';
     this.volEl.addEventListener('input', () => this.h.volume(parseFloat(this.volEl.value)));
     vol.appendChild(this.volEl);
+    const sfxVol = el('label', 'volume', 'SFX ');
+    this.sfxVolEl = el('input', '');
+    this.sfxVolEl.type = 'range'; this.sfxVolEl.min = '0'; this.sfxVolEl.max = '1'; this.sfxVolEl.step = '0.05';
+    this.sfxVolEl.addEventListener('input', () => this.h.sfxVolume(parseFloat(this.sfxVolEl.value)));
+    sfxVol.appendChild(this.sfxVolEl);
     this.muteEl = this.btn('Mute', 'mute', () => this.h.mute(!this.muted));
     vol.appendChild(this.muteEl);
     body.appendChild(vol);
+    body.appendChild(sfxVol);
     body.appendChild(el('p', 'hint', 'Move: WASD / arrow keys, or drag on the left half of a touch screen.<br>Skills fire automatically. Pause: Esc or P.'));
     return root;
   }
@@ -150,6 +158,7 @@ export class Screens {
     this.quickBtn.classList.toggle('hidden', !ch);
     if (ch) this.quickBtn.textContent = `Quick start: ${ch.name} the ${ch.cls[0].toUpperCase()}${ch.cls.slice(1)}`;
     this.volEl.value = String(save.settings.volume);
+    this.sfxVolEl.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
     this.hideAll();
     this.title.classList.remove('hidden');

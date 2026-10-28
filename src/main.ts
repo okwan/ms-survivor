@@ -10,9 +10,11 @@ import { Avatar } from './maple/avatar.ts';
 import { defaultLook, sanitizeLook } from './maple/avatar-core.ts';
 import type { AvatarManifest, Look } from './maple/avatar-core.ts';
 import { Bgm } from './maple/audio.ts';
+import { Sfx, playSimEvents } from './maple/sfx.ts';
 import { Renderer } from './render/renderer.ts';
 import { CreateScreen } from './ui/create.ts';
 import type { CreateResult } from './ui/create.ts';
+import { MapBanner } from './ui/banner.ts';
 import { Hud } from './ui/hud.ts';
 import { applyUiTheme } from './ui/theme.ts';
 import { Input } from './ui/input.ts';
@@ -62,7 +64,15 @@ async function boot() {
   app.renderer.on('resize', () => renderer.resize());
 
   const save = loadSave();
-  const bgm = art ? new Bgm(art.bgm, save.settings.volume, save.settings.muted) : null;
+  const bgm = art ? new Bgm(art.bgm, save.settings.volume, save.settings.muted, art.bgmRegions) : null;
+  const sfx = art && Object.keys(art.sfx).length ? new Sfx(art.sfx, save.settings.sfxVolume, save.settings.muted) : null;
+  const banner = new MapBanner(uiRoot);
+  /** banner text and music for a region (the run starts in region 0) */
+  const enterRegion = (r: number) => {
+    const ra = art?.regions[r];
+    if (ra) banner.show(ra.street, ra.name);
+    bgm?.setRegion(r);
+  };
   let mode: Mode = 'title';
   let sim = new Sim(1);
   // the character of the current/next run: the saved one, or a Magician with the default look
@@ -89,7 +99,9 @@ async function boot() {
     sim.god = god;
     acc = 0;
     mode = 'playing';
+    bgm?.setRegion(0);
     bgm?.play('run');
+    enterRegion(0);
     screens.hideAll();
     hud.show(true);
   }
@@ -112,6 +124,7 @@ async function boot() {
     sim = new Sim(1);
     mode = 'title';
     bgm?.play('title');
+    banner.hide();
     hud.show(false);
     screens.showTitle(save);
   }
@@ -141,6 +154,7 @@ async function boot() {
       reroll: () => sim.reroll(),
       banish: (i) => sim.banish(i),
       volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
+      sfxVolume: (v) => { save.settings.sfxVolume = v; writeSave(save); sfx?.setVolume(v); sfx?.play('ui.click'); },
       mute: (m) => setMuted(m),
     },
     renderer.tex.icons,
@@ -161,9 +175,18 @@ async function boot() {
     save.settings.muted = m;
     writeSave(save);
     bgm?.setMuted(m);
+    sfx?.setMuted(m);
     screens.setMuted(m);
     hud.setMuted(m);
   }
+  // button and card sounds for every UI element (clicks, and a soft tick when the pointer enters one)
+  uiRoot.addEventListener('click', (e) => { if ((e.target as Element).closest('button, .card')) sfx?.play('ui.click'); });
+  let hoverEl: Element | null = null;
+  uiRoot.addEventListener('pointerover', (e) => {
+    const t = (e.target as Element).closest('button, .card');
+    if (t && t !== hoverEl && (e as PointerEvent).pointerType === 'mouse') sfx?.play('ui.hover', { volume: 0.5 });
+    hoverEl = t;
+  });
   hud.muteBtn.addEventListener('click', () => setMuted(!save.settings.muted));
   hud.setMuted(save.settings.muted);
   screens.showTitle(save);
@@ -192,6 +215,13 @@ async function boot() {
       }
       if (sim.offer) acc = 0;
       if (sim.over) endRun();
+    }
+    if (sim.events.length) {
+      if (sfx) playSimEvents(sfx, sim.events, sim.cls.key);
+      for (let i = 0; i < sim.events.length; i++) {
+        const ev = sim.events[i];
+        if (ev.type === 'region') enterRegion(ev.region);
+      }
     }
     renderer.render(sim, dt);
     if (mode !== 'title') {
@@ -228,6 +258,9 @@ async function boot() {
       hero: () => hero,
       avatar: () => (avatar ? { ready: avatar.ready(hero.look) } : null),
       /** what real Maple art was loaded (null = placeholders) */
+      region: () => sim.region,
+      /** sound effects: keys that can play, decoded so far, plays in the last second */
+      sfx: () => (sfx ? sfx.stats() : null),
       maple: () => (art ? { ...art.counts, bgm: art.bgm, ground: !!art.map?.ground, levelUp: !!art.levelUp } : null),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),
     };

@@ -185,3 +185,13 @@ anchored at the WZ origin and mirrored so they face their travel direction (art 
 placeholder icons in the HUD and level-up cards; `ball` frames replace missiles, `hit` frames play on impact, `effect` frames on nova, ground and strike casts.
 BGM (`src/maple/audio.ts`) plays the title track on the menu and FloralLife in runs, looped, after the first user gesture, with the saved volume
 and a mute toggle (title screen button, HUD `M` button).
+
+## Regions and sound effects
+
+The run is split into 7 regions that change when each boss spawns (`regionAt` in `src/game/regions.ts`; the sim keeps `sim.region`
+and emits a `region` event). Each region is built by the asset step from one real field map (`src/maple/region-data.ts` lists the
+candidates): its dominant tile set as the ground, its nature objects as clustered decor (`src/render/cluster.ts`), its BGM and its
+String.wz name for the map banner. The renderer cross-fades ground and decor over 2.5 s; music cross-fades over 1.5 s.
+Sound effects come from Sound.wz (`scripts/fetch-maple-sfx.ts`, keys in `src/maple/region-types.ts`) and play through
+`src/maple/sfx.ts`, which maps the sim's events to sounds; the sim itself stays free of audio. Everything degrades to the old look
+and silence when the manifest lacks `regions` / `sfx`.

@@ -96,6 +96,34 @@ try {
   ok(existsSync(maple(p['sb.hp'].src)) && existsSync(maple(p['title.logo'].src)), 'ui PNGs exist');
   ok(/UI pieces missing \(0\)/.test(out) && /status bar background/.test(out), 'log lists found/missing UI pieces and previews the bar');
 
+  // run regions
+  const rg = m!.regions!.list;
+  eq(rg.length, 7, 'one slot per region');
+  eq(rg.map((r) => r?.mapId ?? null), [104040000, 101010000, 102000100, null, null, null, null], 'candidates first, street-name scan next, null when nothing exists');
+  const g0 = rg[0]!, g1 = rg[1]!;
+  eq([g0.street, g0.name, g0.tileSet], ['Henesys', 'Hunting Ground I', 'grassySoil'], 'region 0 names and dominant tile set');
+  eq(g1.tileSet, 'darkMountain', 'region 1 uses its own dominant tile set (12 of 13 tiles)');
+  eq(g0.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.flower.a.0:small', 'acc1.flower.b.0:small', 'acc1.nature.bush.0:small', 'acc1.nature.tree.0:big'], 'region 0 keeps nature decor only, with size classes');
+  eq(g1.objects!.items.map((i) => `${i.key}:${i.size}`).sort(), ['acc1.nature.tree.0:big', 'acc2.nature.rock.a:medium'], 'region 1 decor: tree and rock, signboard dropped');
+  ok(existsSync(maple(g0.ground!.image)) && existsSync(maple(g0.objects!.atlas)) && g0.ground!.image !== g1.ground!.image, 'per-region ground and atlas PNGs');
+  eq(png(maple(g1.objects!.atlas)).w, g1.objects!.size[0], 'region atlas size matches');
+  eq([g0.bgm, g1.bgm, rg[2]!.bgm], ['bgm/region-0.mp3', 'bgm/region-1.mp3', 'bgm/region-0.mp3'], 'regions sharing a track share the file');
+  ok(existsSync(maple(g1.bgm!)), 'region bgm file written');
+  ok(/region 2 Perion rocks: candidates failed/.test(out) && /street scan found 1 maps/.test(out) && /oS\/l0\/l1 seen/.test(out) && /region 0 decor cluster/.test(out), 'log shows the scan, the object paths and a cluster preview');
+
+  // sound effects: MP3 as is, PCM wrapped into a WAV, the oversized one skipped
+  const sf = m!.sfx!;
+  eq(sf['mob.100100.damage'], 'sfx/mob.100100.damage.mp3', 'MP3 sound keeps its container');
+  eq(sf['mob.100100.die'], 'sfx/mob.100100.die.wav', 'PCM sound becomes a wav');
+  const wav = readFileSync(maple(sf['mob.100100.die']));
+  eq([wav.toString('latin1', 0, 4), wav.toString('latin1', 8, 12), wav.readUInt16LE(22), wav.readUInt32LE(24), wav.readUInt16LE(34), wav.length], ['RIFF', 'WAVE', 1, 22050, 16, 44 + 4000], 'wav header from the WAVEFORMATEX');
+  const mp3 = readFileSync(maple(sf['mob.100100.damage']));
+  ok(mp3[0] === 0xff && mp3.length === 2004, 'mp3 bytes untouched');
+  ok(sf['mob.2220000.attack'] && sf['skill.2001005.use'] && sf['skill.2001005.hit'] && sf['skill.2101004.use'] && !sf['skill.2101004.hit'], 'boss attack, skill use/hit keys');
+  ok(sf['game.levelup']?.endsWith('.wav') && sf['game.pickup'] && sf['game.drop'] && sf['game.portal'] && sf['ui.click'] && sf['ui.hover'], 'game and ui sounds');
+  ok(sf['weapon.warrior.attack'] && sf['weapon.magician.attack'] && !sf['weapon.bowman.attack'] && !sf['weapon.thief.attack'], 'one weapon sound per class that has one; 400 KB limit applies');
+  ok(/format tag 0x55/.test(out) && /format tag 0x1/.test(out) && /sfx totals: 17 sounds/.test(out) && /over the 400 KB limit/.test(out) && /no Damage\/Die sound/.test(out), 'log shows format tags, totals and skips');
+
   // old sections are untouched
   ok(Object.keys(m!.mobs).length >= 3 && m!.bgm.run, 'mobs and bgm still extracted');
 
@@ -103,7 +131,7 @@ try {
   const old = join(root, 'wz-old');
   await writeFixture(old);
   const r = run('old', old);
-  ok(r.m && !r.m.map && !r.m.damage && !r.m.ui && !r.m.effects, 'without the new .wz files the manifest has no world sections');
+  ok(r.m && !r.m.map && !r.m.damage && !r.m.ui && !r.m.effects && !r.m.regions, 'without the new .wz files the manifest has no world sections');
   ok(/Map\.wz is not available/.test(r.out), 'missing Map.wz is logged');
 
   // no town image and no NoRed digits: defaults and fallbacks
@@ -114,6 +142,7 @@ try {
   ok(q.m!.map!.ground && q.m!.map!.tileSet === 'grassySoil' && !q.m!.map!.objects, 'no town: grassySoil ground, no objects');
   ok(!q.m!.damage!.frames.some((f) => f.action === 'NoRed0') && q.m!.damage!.frames.some((f) => f.action === 'NoCri0'), 'missing NoRed sets are skipped, others kept');
   ok(!q.m!.ui, 'no UI.wz content: no ui section');
+  ok(q.m!.regions && q.m!.regions.list[0] && q.m!.sfx, 'regions and sfx do not depend on the Henesys town image');
   ok(/NoRed0:MISSING/.test(q.out) && /BasicEff\.img keys/.test(q.out), 'log lists BasicEff keys and missing sets');
 
   console.log(`test-maple-world: ok (${checks} checks)`);

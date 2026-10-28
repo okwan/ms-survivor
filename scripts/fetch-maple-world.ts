@@ -27,7 +27,7 @@ export interface WorldDeps {
   canvasList: (node: Any) => Any[];
   packAtlas: (frames: Any[]) => { w: number; h: number; rgba: Buffer; recs: FrameRec[] } | null;
 }
-interface SetLike {
+export interface SetLike {
   image(path: string): { root: Any; key: Any } | null;
   names(): string[];
 }
@@ -46,7 +46,7 @@ const MAX_OBJ_W = 380;
 const MAX_OBJ_H = 420;
 const DAMAGE_SETS = ['NoRed0', 'NoRed1', 'NoCri0', 'NoCri1', 'NoViolet0', 'NoViolet1', 'NoBlue0', 'NoBlue1'];
 
-interface Px {
+export interface Px {
   w: number;
   h: number;
   rgba: Buffer;
@@ -59,6 +59,11 @@ interface Px {
 
 const isNum = (k: string) => /^\d+$/.test(k);
 
+/** The helpers (PNG writing, canvas decoding, ground building) for other extractors such as fetch-maple-regions.ts. */
+export function worldTools(d: WorldDeps): World {
+  return new World(d, { manifest: {}, bytes: 0 });
+}
+
 export function buildWorld(d: WorldDeps): WorldResult {
   const out: WorldResult = { manifest: {}, bytes: 0 };
   const w = new World(d, out);
@@ -66,7 +71,7 @@ export function buildWorld(d: WorldDeps): WorldResult {
   return out;
 }
 
-class World {
+export class World {
   d: WorldDeps;
   out: WorldResult;
   constructor(d: WorldDeps, out: WorldResult) {
@@ -102,7 +107,7 @@ class World {
 
   // ---- helpers -----------------------------------------------------------------------------------------------------
 
-  private write(rel: string, wd: number, ht: number, rgba: Buffer): string {
+  write(rel: string, wd: number, ht: number, rgba: Buffer): string {
     const path = join(this.d.dist, 'maple', rel);
     mkdirSync(dirname(path), { recursive: true });
     const png = encodePng(wd, ht, rgba);
@@ -111,7 +116,7 @@ class World {
     return rel;
   }
 
-  private px(node: Any, key: Any): Px | null {
+  px(node: Any, key: Any): Px | null {
     if (!node || node.type !== 'canvas') return null;
     try {
       const [w, h, rgba] = canvasRgba(node, key);
@@ -142,7 +147,7 @@ class World {
     return { action, index, w: px.w, h: px.h, ox: px.ox, oy: px.oy, delay: px.hasDelay ? px.delay : 100, rgba: px.rgba, id: px.id };
   }
 
-  private preview(title: string, p: { w: number; h: number; rgba: Buffer } | null) {
+  preview(title: string, p: { w: number; h: number; rgba: Buffer } | null) {
     if (!p) return this.d.log(`preview ${title}: not available`);
     console.log(`--- ${title} ${p.w}x${p.h} ---\n${asciiPreview(p.w, p.h, p.rgba, PREVIEW_COLS)}`);
   }
@@ -203,7 +208,8 @@ class World {
     return section.ground || section.objects ? section : undefined;
   }
 
-  private buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>): MapSection['ground'] {
+  /** `file` is the PNG path under maple/ (regions write one ground per region) */
+  buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>, file = 'map/ground.png'): MapSection['ground'] {
     const { log, warn } = this.d;
     const img = wz.image(`Tile/${tileSet}.img`);
     if (!img) {
@@ -275,7 +281,7 @@ class World {
             for (let c = 0; c < 3; c++) rgba[o + c] = (t.rgba[s + c] * a + rgba[o + c] * (255 - a)) / 255;
           }
       }
-    const image = this.write('map/ground.png', W, H, rgba);
+    const image = this.write(file, W, H, rgba);
     this.preview(`ground tile (${tileSet}/bsc/0)`, tiles[0]);
     log(`ground texture ${image} ${W}x${H}`);
     return { image, w: W, h: H, avg };
