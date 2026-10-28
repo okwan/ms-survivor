@@ -21,7 +21,7 @@ export interface PetArt {
 const SCROLL_SIZE = 40;
 const ROLE_NAMES: Record<string, string> = {
   potionRed: 'potion.red', potionOrange: 'potion.orange', potionWhite: 'potion.white', elixir: 'elixir', elixirPower: 'elixir.power',
-  mesoBronze: 'meso.bronze', mesoGold: 'meso.gold', mesoBundle: 'meso.bundle', mesoBag: 'meso.bag',
+  mesoBronze: 'meso.bronze', mesoGold: 'meso.gold', mesoBundle: 'meso.bundle', mesoBag: 'meso.bag', gacha: 'gacha',
 };
 
 export class ItemArt {
@@ -64,6 +64,25 @@ export class ItemArt {
   }
   bag(): Anim | null {
     return this.role('mesoBag') ?? this.role('mesoBundle');
+  }
+  /** Gachapon Ticket icon for the boss capsule (null: the renderer draws a two-colour ball) */
+  gacha(): Texture | null {
+    return this.role('gacha')?.tex[0] ?? null;
+  }
+  /** The same icon as a data URL for the DOM reveal panel (null without the art) */
+  gachaUrl(): string | null {
+    const t = this.gacha();
+    const src = t?.source.resource as CanvasImageSource | undefined;
+    if (!t || !src) return null;
+    try {
+      const f = t.frame;
+      const c = document.createElement('canvas');
+      c.width = f.width; c.height = f.height;
+      c.getContext('2d')!.drawImage(src, f.x, f.y, f.width, f.height, 0, 0, f.width, f.height);
+      return c.toDataURL();
+    } catch {
+      return null;
+    }
   }
 
   /** Glowing texture for a scroll lying on the ground (cached); its own icon when extracted, else a drawn scroll. */

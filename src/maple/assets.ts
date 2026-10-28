@@ -5,6 +5,7 @@
  * This module has no dependency on the DOM or Pixi and no side effects, so Node can import it.
  */
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
+import { EVOLVED_SKILLS } from '../game/evolutions.ts';
 import type { AvatarManifest } from './avatar-core.ts';
 import type { RegionsSection, SfxSection } from './region-types.ts';
 import type { ItemsSection } from './items-types.ts';
@@ -50,7 +51,7 @@ export interface WantedSkill {
 }
 
 export const WANTED_SKILLS: WantedSkill[] = [
-  ...SKILLS.map((s) => ({ id: s.id, key: s.key, name: s.name, passive: false })),
+  ...[...SKILLS, ...EVOLVED_SKILLS].map((s) => ({ id: s.id, key: s.key, name: s.name, passive: false })),
   ...PASSIVES.map((p) => ({ id: p.id, key: p.key, name: p.name, passive: true })),
 ].map((s) => ({ ...s, image: pad3(Math.floor(s.id / 10000)) + '.img', node: pad7(s.id) }));
 

@@ -18,7 +18,7 @@ passives, skill max level 8, passive max level 5, and the same level scaling as 
   Picking one adds only that branch's 2nd-job skills and passives to the pool; 1st-job ones stay on offer.
   Bots and autopick take the first card. Plays the level-up effect and shows "Job Advancement! <job>".
 - Level 70: automatic 3rd job of the same branch (Fighter -> Crusader, ...). Its skills and passives join the pool, same banner.
-- Owned skills stay through advancement. No 4th job. Reroll and banish do not apply to the job card.
+- Owned skills stay through advancement. There is no 4th job; each 3rd job has one evolution instead (see Evolutions below). Reroll and banish do not apply to the job card.
 - Each level-up draw always contains at least one skill card while any skill can still be offered or upgraded
   (the pool of a single job is small and passives would otherwise crowd the skills out).
 - A skill is only ever offered to its own class: the pool is the class's job skills filtered by the jobs unlocked so far.
@@ -276,6 +276,28 @@ Passives: Haste 4201003 (+10% move speed), Dagger Booster 4201002 (+10% cooldown
 
 Passives: Meso Guard 4211005 (+1 armor).
 
+
+## Evolutions (4th-job skills from Mastery Books)
+
+Recipe: the 3rd-job skill at max level (8) AND the partner passive owned (any level). The next boss Gachapon capsule then opens with a Mastery Book, which replaces
+the base skill with the 4th-job skill at max level (see docs/DESIGN.md, "Gachapon and evolutions"). Evolved skills use the kinds above; ids are v83 Skill.wz ids.
+
+| 3rd job | base skill | partner passive | evolved skill | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Crusader | panic | combo_attack | Brandish | 1121008 | cone | 26 | 2.8 | 0 | 9 | 1 | 2 hits, weaken 4 s |
+| White Knight | charge_blow | fire_charge | Blast | 1221009 | melee | 84 | 3 | 6 | 2.8 | 1 | stun 1.2 s |
+| Dragon Knight | dragon_fury | hyper_body | Rush | 1321003 | cone | 62 | 2.2 | 0 | 11 | 1 | stun 0.6 s |
+| Fire/Poison Mage | explosion | element_amp_fp | Meteor Shower | 2121007 | ground | 9 | 5 | 22 | 4.5 | 2 | lasts 2 s |
+| Ice/Lightning Mage | ice_strike | element_amp_il | Blizzard | 2221007 | nova | 52 | 4 | 0 | 10 | 1 | slow 2.5 s |
+| Priest | shining_ray | holy_symbol | Genesis | 2321008 | nova | 70 | 4.4 | 0 | 12 | 1 |  |
+| Ranger | arrow_rain | mortal_blow_ranger | Hurricane | 3121004 | pierce | 11 | 0.5 | 26 | 0 | 2 | passes 8 + level, missile 40 yd/s |
+| Sniper | arrow_eruption | mortal_blow_sniper | Piercing Arrow | 3221001 | pierce | 20 | 2 | 34 | 0 | 1 | passes 8 + level, missile 44 yd/s |
+| Hermit | avenger | shadow_partner | Triple Throw | 4121007 | bolt | 65 | 1.5 | 24 | 1.1 | 3 | splash |
+| Chief Bandit | meso_explosion | meso_guard | Boomerang Step | 4221007 | melee | 54 | 2 | 7 | 2 | 5 |  |
+
+Keys: brandish, blast, rush, meteor_shower, blizzard_mage (the Sniper's Blizzard is `blizzard`), genesis, hurricane, piercing_arrow, triple_throw, boomerang_step.
+The evolved skills are not in the class skill lists, so level-up cards never offer them. A hero who owns a recipe's skill may take its partner passive into one extra
+passive slot (passive slots are otherwise full by level 70).
 
 ## Character creation
 

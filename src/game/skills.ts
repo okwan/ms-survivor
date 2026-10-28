@@ -152,6 +152,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
       const ang = Math.atan2(t.y - py, t.x - px);
       const half = CONE_ANGLE / 2;
       const cnt = sim.grid.query(px, py, radius + 3.4, sim.qbuf2);
+      const hits = def.hits ?? 1;
       for (let i = 0; i < cnt; i++) {
         const e = sim.enemies[sim.qbuf2[i]];
         if (!e.alive) continue;
@@ -164,7 +165,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
           if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
           if (Math.abs(da) > half) continue;
         }
-        sim.hit(e, dmg);
+        for (let h = 0; h < hits; h++) sim.hit(e, dmg);
       }
       sim.emit({ type: 'cast', skill: def.key, kind: 'cone', x: px, y: py, tx: px + Math.cos(ang) * radius, ty: py + Math.sin(ang) * radius, r: radius, pts: null });
       return true;

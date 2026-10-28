@@ -1,5 +1,5 @@
 import type { Sim } from './sim.ts';
-import { GEM } from './types.ts';
+import { GACHA, GEM, MASTERY } from './types.ts';
 
 /**
  * Simple kiting bot: flee close enemies (with a sideways bias so it circles), otherwise
@@ -27,15 +27,18 @@ export function botInput(sim: Sim, spin = 1): { x: number; y: number } {
   const ps = sim.pickups;
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
-    if (p.kind === GEM || p.kind === 1 || p.kind === 3) {
+    if (p.kind === GEM || p.kind === 1 || p.kind === 3 || p.kind === GACHA || p.kind === MASTERY) {
       const dx = p.x - px, dy = p.y - py;
       const d2 = dx * dx + dy * dy;
-      if (d2 < best && d2 < 144) { best = d2; gx = dx; gy = dy; }
+      // capsules and Mastery Books are worth a longer walk and win over nearer gems
+      const rare = p.kind === GACHA || p.kind === MASTERY;
+      const score = rare ? d2 * 0.1 : d2;
+      if (score < best && d2 < (rare ? 900 : 144)) { best = score; gx = dx; gy = dy; }
     }
   }
   let x = 0, y = 0;
   if (best < 1e9) {
-    const d = Math.sqrt(best) || 1;
+    const d = Math.hypot(gx, gy) || 1;
     x += gx / d;
     y += gy / d;
   } else {

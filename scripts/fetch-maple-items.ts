@@ -50,6 +50,8 @@ const PREVIEW_COLS = 28;
 export const MAX_SCROLLS = 30;
 const POTIONS: [keyof ItemIconKeys, number][] = [['potionRed', 2000000], ['potionOrange', 2000001], ['potionWhite', 2000002], ['elixir', 2000004], ['elixirPower', 2000005]];
 const MESOS: [keyof ItemIconKeys, number][] = [['mesoBronze', 9000000], ['mesoGold', 9000001], ['mesoBundle', 9000002], ['mesoBag', 9000003]];
+/** Gachapon Ticket: Item.wz/Cash/0522.img/05220000/info/icon (the boss capsule) */
+const GACHA_ID = 5220000;
 const PET_IDS = [5000000, 5000001, 5000002, 5000004];
 const PET_ACTIONS: [string, string[]][] = [['stand0', ['stand0', 'stand1', 'stand']], ['move', ['move', 'walk']], ['jump', ['jump']]];
 
@@ -235,6 +237,19 @@ class Items {
       got.push(`${role}=${n}(${fr.px[0].w}x${fr.px[0].h} ${fr.from})`);
       if (role === 'potionRed') this.preview('Red Potion icon', fr.px[0]);
       if (role === 'elixirPower') this.preview('Power Elixir icon', fr.px[0]);
+    }
+    // the Gachapon Ticket (Cash/0522.img): the boss capsule; absent art leaves the drawn two-colour ball
+    {
+      const path = `Cash/${id8(GACHA_ID).slice(0, 4)}.img`;
+      const img = wz.image(path);
+      const node = img ? this.itemNode(img.root, GACHA_ID) : null;
+      const fr = img && node ? this.frames(img, node, ['info/icon', 'info/iconRaw', 'icon']) : null;
+      if (fr) {
+        frames.push(this.raw(fr.px[0], id8(GACHA_ID), 0));
+        keys.gacha = id8(GACHA_ID);
+        got.push(`gacha=${GACHA_ID}(${fr.px[0].w}x${fr.px[0].h} ${fr.from})`);
+        this.preview('Gachapon Ticket icon', fr.px[0]);
+      } else log(`items: gacha ${GACHA_ID}: ${!img ? `${path} not found` : !node ? `no node in ${path}; its keys: ${img.root.keys().slice(0, 20).join(',')}` : `no icon canvas; node children: ${node.keys().join(',')}`}; the drawn capsule stays`);
     }
     // mesos: animated iconRaw
     const spec = this.imageOf(wz, 'Special/0900.img');

@@ -1,5 +1,6 @@
 import { BOSS_TOTAL } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
+import { evolutionHint } from '../game/evolutions.ts';
 import type { Card } from '../game/types.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
@@ -233,8 +234,9 @@ export class Screens {
         this.cardsEl.appendChild(card);
         return;
       }
+      const hint = c.kind === 'skill' || c.kind === 'passive' ? evolutionHint(c.key) : null;
       const tag = c.isNew ? '<span class="tag new">NEW</span>' : c.kind === 'skill' || c.kind === 'passive' ? `<span class="tag">Lv ${c.from} &gt; ${c.to}</span>` : c.kind === 'mastery' ? `<span class="tag">x${c.from} &gt; x${c.to}</span>` : '';
-      card.innerHTML = `<div class="key">${i + 1}</div><img src="${this.icons[c.icon ?? c.key] ?? ''}" alt=""><h3>${c.name}</h3>${tag}<p>${c.desc}</p>`;
+      card.innerHTML = `<div class="key">${i + 1}</div><img src="${this.icons[c.icon ?? c.key] ?? ''}" alt=""><h3>${c.name}</h3>${tag}<p>${c.desc}</p>${hint ? `<p class="hint">${hint}</p>` : ''}`;
       const kind = el('div', 'kind', c.kind === 'skill' ? 'Skill' : c.kind === 'passive' ? 'Passive' : c.kind === 'mastery' ? 'Mastery' : 'Bonus');
       card.appendChild(kind);
       card.addEventListener('click', () => this.h.pick(i));

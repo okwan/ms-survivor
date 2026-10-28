@@ -14,6 +14,8 @@ export interface Enemy {
   tier: number;
   /** -1 for normal mobs, else boss index 0..5 */
   boss: number;
+  /** the boss a wave is named after (not a companion); only it drops a Gachapon capsule */
+  lead: boolean;
   big: boolean;
   add: boolean;
   alive: boolean;
@@ -40,8 +42,8 @@ export interface Enemy {
   idx: number;
 }
 
-export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5, SCROLL = 6;
+export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5, SCROLL = 6, GACHA = 7, MASTERY = 8;
 
 export interface Pickup {
   kind: PickupKind;
@@ -109,6 +111,21 @@ export interface Card {
   sig?: { key: string; name: string; desc: string }[];
 }
 
+/** One upgrade of a Gachapon capsule (src/game/gachapon.ts): a skill or passive level, the Mastery Book evolution, or mesos when nothing is left to upgrade. */
+export interface GachaResult {
+  kind: 'skill' | 'passive' | 'evolve' | 'meso';
+  /** skill / passive key (evolve: the evolved skill; meso: 'mesobag') */
+  key: string;
+  name: string;
+  from: number;
+  to: number;
+  /** evolve: the base skill that was replaced */
+  base?: string;
+  baseName?: string;
+  /** meso: the amount */
+  amount?: number;
+}
+
 export type SimEvent =
   | { type: 'hit'; x: number; y: number; amount: number; crit: boolean; boss: boolean; skill: string; tier: number; bossIdx: number }
   | { type: 'playerHit'; x: number; y: number; amount: number }
@@ -125,6 +142,8 @@ export type SimEvent =
   | { type: 'scroll'; ok: boolean; slot: string; name: string; plus: number }
   | { type: 'card'; mob: number; name: string; complete: boolean }
   | { type: 'jobAdvance'; job: number; name: string; level: number }
+  | { type: 'gacha'; boss: number; count: number; results: GachaResult[] }
+  | { type: 'evolve'; from: string; to: string; name: string }
   | { type: 'region'; region: number }
   | { type: 'end'; won: boolean };
 

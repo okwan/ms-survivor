@@ -521,6 +521,7 @@ export function writeItemFixture(dir, strings) {
   writeFileSync(join(dir, 'Item.wz'), buildWz({
     'Consume/0200.img': { '02000000': potion([230, 60, 60]), '02000001': potion([240, 150, 50]), '02000002': potion([240, 240, 240]), '02000004': potion([120, 200, 240]), '02000005': potion([180, 90, 220]) },
     'Consume/0204.img': scrolls,
+    'Cash/0522.img': { '05220000': potion([255, 150, 60]) },
     'Special/0900.img': {
       '09000000': { info: { icon: ico([200, 120, 60]), iconRaw: frames4([200, 120, 60]) } },
       '09000001': { info: { icon: ico([240, 200, 60]), iconRaw: frames4([240, 200, 60], 100) } },
