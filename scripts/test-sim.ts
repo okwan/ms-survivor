@@ -58,7 +58,7 @@ function run(label: string, god: boolean, seed: number, cls = 'magician') {
   console.log(`  perf: ${wall.toFixed(0)} ms wall, ${(wall / Math.max(1, sim.t)).toFixed(2)} ms per simulated second`);
   lvlTimes[cls] = lvl10;
   console.log(`  level 10 reached at ${lvl10.toFixed(1)} s; boss spawns at [${bossAt.map((t) => t.toFixed(2)).join(', ')}]`);
-  ok(lvl10 >= 60 && lvl10 <= 240, `level 10 between 60 and 240 s (${lvl10.toFixed(1)})`);
+  ok(lvl10 >= 45 && lvl10 <= 240, `level 10 between 45 and 240 s (${lvl10.toFixed(1)})`);
   ok(maxNonAdd <= MAX_ALIVE, `non-add enemies never exceed ${MAX_ALIVE} (max ${maxNonAdd}, total incl. adds ${maxAlive})`);
   return { sim, bossAt };
 }

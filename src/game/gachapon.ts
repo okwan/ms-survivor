@@ -20,6 +20,9 @@ export const GACHA_MESOS = 25;
 /** chance per normal kill that a ready recipe drops a Mastery Book once no boss is left to come */
 export const MASTERY_DROP = 0.002;
 
+/** An Elite's capsule has value ELITE_CAPSULE + n (n = boss-number equivalent for the meso fallback) and holds exactly one upgrade */
+export const ELITE_CAPSULE = 100;
+
 /** Odds of [1, 3, 5] upgrades for boss index n: boss #1 is 75 / 22 / 3 %, each later boss moves 6 % to 3 and 2 % to 5 (taken from 1) */
 export function gachaOdds(boss: number): [number, number, number] {
   const p3 = 0.22 + 0.06 * boss, p5 = 0.03 + 0.02 * boss;
@@ -71,12 +74,12 @@ export function applyUpgrades(sim: Sim, count: number, boss: number): GachaResul
   return out;
 }
 
-/** The hero touched the capsule of boss index n: roll and apply the upgrades, and tell the UI */
-export function openGacha(sim: Sim, boss: number) {
-  const count = rollGachaCount(sim.rng, boss);
+/** The hero touched the capsule of boss index n (an Elite's capsule always holds exactly one upgrade): roll and apply the upgrades, and tell the UI */
+export function openGacha(sim: Sim, boss: number, elite = false) {
+  const count = elite ? 1 : rollGachaCount(sim.rng, boss);
   const results = applyUpgrades(sim, count, boss);
-  sim.emit({ type: 'gacha', boss, count, results });
-  sim.note(`${BOSSES[boss]?.name ?? 'Boss'} Gachapon: ${count} upgrade${count > 1 ? 's' : ''}!`, 'good', 3);
+  sim.emit({ type: 'gacha', boss, count, results, ...(elite ? { elite: true } : {}) });
+  sim.note(`${elite ? 'Elite' : BOSSES[boss]?.name ?? 'Boss'} Gachapon: ${count} upgrade${count > 1 ? 's' : ''}!`, 'good', 3);
 }
 
 /** The hero touched a Mastery Book: evolves the ready recipe (mesos when nothing is ready any more) */

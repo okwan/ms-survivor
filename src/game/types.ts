@@ -40,10 +40,32 @@ export interface Enemy {
   castT: number;
   summonT: number;
   idx: number;
+  /** Elite affix 1..5 (src/game/elites.ts), 0 for a normal mob */
+  elite: number;
+  /** Event mark (src/game/events.ts, fieldItems.ts): 0 none, else stampede / ring / treasure mob or a breakable box */
+  ev: number;
+  /** event mobs: fixed march direction (stampede) or flee-angle offset as cos / sin (treasure) */
+  vx: number;
+  vy: number;
+  /** event timer: seconds left of a treasure pig's run, the next fire patch of a Blazing elite */
+  evT: number;
 }
 
-export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5, SCROLL = 6, GACHA = 7, MASTERY = 8;
+export type PickupKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export const GEM = 0, POTION = 1, MESO = 2, ELIXIR = 3, BAG = 4, GEAR = 5, SCROLL = 6, GACHA = 7, MASTERY = 8, FIELD = 9;
+
+/** Enemy.ev values */
+export const EV_STAMPEDE = 1, EV_RING = 2, EV_TREASURE = 3, EV_BOX = 4;
+
+/** A fire patch a Blazing elite left on the ground */
+export interface Fire {
+  x: number;
+  y: number;
+  r: number;
+  /** seconds left */
+  t: number;
+  dmg: number;
+}
 
 export interface Pickup {
   kind: PickupKind;
@@ -142,9 +164,13 @@ export type SimEvent =
   | { type: 'scroll'; ok: boolean; slot: string; name: string; plus: number }
   | { type: 'card'; mob: number; name: string; complete: boolean }
   | { type: 'jobAdvance'; job: number; name: string; level: number }
-  | { type: 'gacha'; boss: number; count: number; results: GachaResult[] }
+  | { type: 'gacha'; boss: number; count: number; results: GachaResult[]; /** dropped by an Elite: not a boss capsule */ elite?: boolean }
   | { type: 'evolve'; from: string; to: string; name: string }
   | { type: 'region'; region: number }
+  | { type: 'elite'; name: string; affix: string; x: number; y: number }
+  | { type: 'swarm'; kind: 'stampede' | 'ring' | 'treasure' }
+  | { type: 'box'; x: number; y: number }
+  | { type: 'fieldItem'; item: number; x: number; y: number }
   | { type: 'end'; won: boolean };
 
 /** A short message for the hero (scroll results, new Monster Book cards); the UI shows the ones whose `until` is still ahead of sim.t. */

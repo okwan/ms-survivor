@@ -17,6 +17,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 .hud-tl { position: absolute; left: 12px; top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .pill { background: linear-gradient(#2a4f92cc, #12285ccc); border: 2px solid #fff; border-radius: 14px; padding: 3px 12px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,.4); display: flex; gap: 6px; align-items: center; }
 .pill b { color: #ffd98a; font-size: 11px; letter-spacing: .08em; }
+.buffs { display: flex; gap: 4px; }
+.buff { position: relative; width: 30px; height: 30px; border-radius: 7px; background: #12285c; border: 2px solid #fff; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,.4); }
+.buff img { width: 100%; height: 100%; display: block; }
+.buff b { position: absolute; right: 0; bottom: 0; background: var(--orange); color: #fff; font-size: 10px; font-weight: 900; border-top-left-radius: 6px; min-width: 13px; padding: 0 2px; text-align: center; line-height: 13px; }
+.buff.low { animation: buff-blink .6s steps(2) infinite; }
+@keyframes buff-blink { 50% { opacity: .45; } }
+.ms-ui .buff { border-radius: 2px; border: 1px solid #fff; background: #1a2036; }
+.ms-ui .buff b { border-radius: 2px; border: 1px solid #000; background: #ff8a1f; text-shadow: var(--ol); }
 .coin { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff2a8, #ffc21f 60%, #b87600); border: 1px solid #8a5a00; display: inline-block; }
 .hud-top { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); text-align: center; width: min(420px, 56vw); }
 .clock { font-size: 34px; font-weight: 900; letter-spacing: .04em; line-height: 1; -webkit-text-stroke: 1px #12285c; text-shadow: 0 2px 0 #12285c, 0 0 8px rgba(0,0,0,.5); }

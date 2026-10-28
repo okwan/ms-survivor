@@ -22,7 +22,9 @@ const SCROLL_SIZE = 40;
 const ROLE_NAMES: Record<string, string> = {
   potionRed: 'potion.red', potionOrange: 'potion.orange', potionWhite: 'potion.white', elixir: 'elixir', elixirPower: 'elixir.power',
   mesoBronze: 'meso.bronze', mesoGold: 'meso.gold', mesoBundle: 'meso.bundle', mesoBag: 'meso.bag', gacha: 'gacha',
+  fieldApple: 'field.apple', fieldCoupon: 'field.coupon', fieldElixir: 'field.elixir', fieldClock: 'field.clock', fieldKeg: 'field.keg',
 };
+const FIELD_ROLES = ['fieldApple', 'fieldCoupon', 'fieldElixir', 'fieldClock', 'fieldKeg'] as const;
 
 export class ItemArt {
   /** icon keys that loaded, for the bot hook: 'potion.red', 'meso.bronze', 'scroll.2040000', 'pet.move', 'enchant.success' ... */
@@ -69,9 +71,19 @@ export class ItemArt {
   gacha(): Texture | null {
     return this.role('gacha')?.tex[0] ?? null;
   }
+  /** Icon of field item n (Apple, Coupon, Elixir, Clock, Keg), null when it was not extracted (the renderer draws a placeholder) */
+  field(n: number): Texture | null {
+    return this.role(FIELD_ROLES[n])?.tex[0] ?? null;
+  }
+  /** The field item icon as a data URL for the HUD buff chips (null without the art) */
+  fieldUrl(n: number): string | null {
+    return this.urlOf(this.field(n));
+  }
   /** The same icon as a data URL for the DOM reveal panel (null without the art) */
   gachaUrl(): string | null {
-    const t = this.gacha();
+    return this.urlOf(this.gacha());
+  }
+  private urlOf(t: Texture | null): string | null {
     const src = t?.source.resource as CanvasImageSource | undefined;
     if (!t || !src) return null;
     try {

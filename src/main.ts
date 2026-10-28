@@ -154,7 +154,7 @@ async function boot() {
   function endRun() {
     mode = 'ended';
     const best = bank(false);
-    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, best });
+    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best });
   }
 
   function toTitle() {

@@ -160,6 +160,44 @@ Neither pauses the run.
   crowd damage x2.9 to x3.6; the two line skills (Hurricane, Piercing Arrow) are x7.7 and x9.9 against a boss but only x0.3 and x0.7 against a dense crowd, since their
   bases (Arrow Rain's carpet, Arrow Eruption's strikes) are crowd or weak-on-bosses skills. Boss lifetimes in bot runs: Zakum 42 s average without evolutions, 30 s with.
 
+## Elites, events and field items
+
+Three systems in new files (`src/game/elites.ts`, `events.ts`, `fieldItems.ts`), each with its own seeded random stream so the run's other draws never shift;
+`sim.ts` only has small hooks, and `new Sim(seed, cls, { events: false })` switches all three off (the baseline of `scripts/balance-events.ts`). None of it pauses the run.
+Event mobs and boxes carry `Enemy.ev` (stampede / ring / treasure / box): the spawner does not count them against the alive target and the recycler leaves them alone.
+
+- **Elites.** From 0:45, every 50 to 70 s one fresh normal spawn is promoted (it waits while 2 or more bosses are alive): 1.5x drawn size and hit radius, HP x(6 + 6p),
+  damage x1.3, xp x2, counts as big (its HP bar is always up), a tint per affix, the name "Elite <Mob>" with the affix under it, and the banner "An Elite <Mob> appears!".
+  One affix each: **Swift** (1.5x speed, still under the hero's), **Armored** (every hit does 40% less), **Splitting** (4 normal mobs of its tier on death, marked as adds),
+  **Blazing** (a fire patch of 1.5 yd every second, lasting 4 s; standing in one for 0.6 s starts a burn of half the Elite's damage every 0.5 s), **Vampiric** (heals 3% max HP
+  per hit on the hero). Kill loot: a Gachapon capsule with exactly one upgrade (`ELITE_CAPSULE + n` as the pickup value; the Mastery Book still comes first when a recipe is
+  ready), a meso bag (20 + 15 x the tier's coin), a scroll, and a field item. Counted in the results ("Elites slain") and `snapshot().elitesKilled`. The radar shows Elites as
+  purple dots.
+- **Swarm events.** About every 100 to 140 s, never within 15 s of a boss spawn (it waits). **Snail stampede**: 30 to 50 Blue / Red Snails (the current low tier from tier 8 on)
+  enter in a 12 wide column from one cardinal edge and march across at 1.6x speed ignoring the hero, then are removed past the far edge (40 yd, 45 s at most; no loot, no kill).
+  **Closing Ring**: 40 mobs of the current top tier in a full ring at 18 yd, walking inward (a ring mob left far behind turns into a plain mob). **Treasure Swarm**: 12 Ribbon Pigs
+  that run away from the hero (at 0.88x the hero's speed, each with its own sideways angle) for 20 s, then vanish; a killed pig drops 5x its coin, and every 4th pig killed (the first included) a field item.
+- **Boxes and field items.** A breakable Maple box (an Enemy with 1 HP that never moves or attacks, so any skill that hits it breaks it) appears on the spawn ring ahead of the
+  hero's movement every 60 to 90 s, at most 3 on the map, and drops one field item. Elites drop one too, and every 4th Treasure Pig. Field items are `FIELD` pickups (value = item): touch
+  only (no magnet, no pet), gone after 75 s. Weights: Apple 35, 2x EXP Coupon 20, Warrior Elixir 20, Ludibrium Clock 15, Powder Keg 10.
+  **Apple** heals 30% max HP. **Coupon** pulls every gem on the map to the hero and makes gems worth 2x for 30 s. **Warrior Elixir** +40% damage for 20 s. **Clock** freezes every
+  non-boss mob (no movement, no contact damage) for 5 s and slows bosses 50%. **Powder Keg** kills every non-boss, non-Elite mob within 20 yd (normal gems and drops) and deals 10%
+  max HP to Elites and bosses in range. Timed buffs show as small icons with the seconds left under the kills pill of the HUD.
+- **Art.** `scripts/fetch-maple-items.ts` tries guessed Item.wz ids per field item (`FIELD_ICONS`: Apple 2010000 is sure, the rest are guesses) and logs every miss; the game draws
+  placeholder icons (apple, ticket, bottle, clock, barrel, crate) for anything missing, so a wrong id costs nothing. Elites tint the mob's sprite; fire patches, boxes and the
+  Powder Keg blast are drawn without any extracted art.
+- **Balance** (`node --experimental-strip-types scripts/balance-events.ts 12`, kiting bot, 12 seeds x 4 classes, with vs without all three): see the table below.
+
+| class | wins without / with | final level without / with | Zakum kill time without / with | lowest HP without / with |
+|---|---|---|---|---|
+| Warrior | 12/12, 12/12 | 195 / 223 | 48 s / 36 s | 59% / 70% |
+| Magician | 12/12, 12/12 | 189 / 282 | 21 s / 10 s | 88% / 86% |
+| Bowman | 12/12, 12/12 | 216 / 272 | 15 s / 15 s | 89% / 92% |
+| Thief | 12/12, 12/12 | 214 / 254 | 25 s / 12 s | 89% / 90% |
+
+About 14 Elites per run (all slain), 2.8 stampedes, 2.4 rings and 1.4 treasure swarms, 6 to 10 boxes broken and 26 to 37 field items used. The bot wins every run either way;
+the extras make it stronger (more levels from Coupons, Elite capsules and Keg kills), not harder, and the early game is a little faster (level 10 about 10 to 25 s sooner).
+
 ## Presentation (placeholder art, Pixi v8 WebGL, menus and HUD as a DOM overlay)
 
 - Camera follows the player. Ground: a tiled grass texture generated at boot (two greens, a few flowers), repeating forever.
