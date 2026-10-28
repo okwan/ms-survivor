@@ -9,7 +9,8 @@ import type { MeterRow } from '../game/meter.ts';
 import { BAR_COLORS, sourceInfo } from './meter.ts';
 import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
 import { LoginScreen, classic } from './login.ts';
-import type { SaveData } from './save.ts';
+import { CLASS_BY_KEY, JOB_BY_CODE, unlockedJobs } from '../game/data.ts';
+import type { SaveData, StoredRun } from './save.ts';
 import { theme } from './theme.ts';
 
 export interface ScreenHandlers {
@@ -18,6 +19,10 @@ export interface ScreenHandlers {
   /** starts straight away with the last created character */
   quick(): void;
   resume(): void;
+  /** resumes the saved run from the title screen */
+  continueRun(): void;
+  /** pause menu: writes the run save and returns to the title (mesos are banked when the resumed run ends) */
+  saveQuit(): void;
   quit(): void;
   retry(): void;
   menu(): void;
@@ -29,6 +34,8 @@ export interface ScreenHandlers {
   book(): void;
   /** opens the Henesys shop */
   shop(): void;
+  /** opens the Hyper Skills window */
+  hyper(): void;
   pet(on: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
@@ -45,6 +52,8 @@ export interface Results {
   best: boolean;
   /** damage dealt per source (Sim.meter), highest first */
   damage: { rows: MeterRow[]; total: number; time: number };
+  /** Hyper SP earned this run for the hero's class (shown when above 0) */
+  hyperSp?: { name: string; sp: number };
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, html = ''): HTMLElementTagNameMap[K] {
@@ -52,6 +61,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, html = '
   e.className = cls;
   if (html) e.innerHTML = html;
   return e;
+}
+
+/** "Continue: Lv 34 Hunter, 7:12": level, deepest job reached and run time */
+export function continueLabel(r: StoredRun): string {
+  const cls = CLASS_BY_KEY[r.run.cls];
+  const jobs = unlockedJobs(cls, r.run.branch, r.run.level);
+  return `Continue: Lv ${r.run.level} ${JOB_BY_CODE[jobs[jobs.length - 1]]?.name ?? cls.name}, ${fmtTime(r.run.t)}`;
 }
 
 export class Screens {
@@ -67,6 +83,7 @@ export class Screens {
   private h: ScreenHandlers;
   private icons: Record<string, string>;
   private quickBtn!: HTMLButtonElement;
+  private continueBtn!: HTMLButtonElement;
   private petEl!: HTMLInputElement;
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
@@ -82,9 +99,10 @@ export class Screens {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
+    if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
     this.login?.addButton('Monster Book', () => h.book());
     this.login?.addButton('Henesys Shop', () => h.shop());
+    this.login?.addButton('Hyper Skills', () => h.hyper());
     this.pause = this.buildPause();
     this.levelup = this.buildLevelUp();
     this.results = el('div', 'screen results hidden');
@@ -120,12 +138,16 @@ export class Screens {
     body.appendChild(stats);
     this.titleExtra = el('div', 'title-extra');
     body.appendChild(this.titleExtra);
+    this.continueBtn = this.btn('Continue', 'primary continue-run', () => this.h.continueRun());
+    this.continueBtn.classList.add('hidden');
+    body.appendChild(this.continueBtn);
     this.quickBtn = this.btn('Quick start', 'quick-start', () => this.h.quick());
     this.quickBtn.classList.add('hidden');
     body.appendChild(this.quickBtn);
     body.appendChild(this.btn('START', 'primary big', () => this.h.start()));
     body.appendChild(this.btn('Monster Book', 'book-btn', () => this.h.book()));
     body.appendChild(this.btn('Henesys Shop', 'book-btn', () => this.h.shop()));
+    body.appendChild(this.btn('Hyper Skills', 'book-btn', () => this.h.hyper()));
     const petOpt = el('label', 'pet-opt', '<input type="checkbox"> Pet (follows you and picks up mesos and potions)');
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
@@ -151,7 +173,7 @@ export class Screens {
 
   private buildPause(): HTMLDivElement {
     const { root, body } = this.win('Paused', 'small');
-    body.append(this.btn('Resume', 'primary', () => this.h.resume()), this.btn('Quit to menu', '', () => this.h.quit()));
+    body.append(this.btn('Resume', 'primary', () => this.h.resume()), this.btn('Save & Quit', '', () => this.h.saveQuit()), this.btn('Quit to menu', '', () => this.h.quit()));
     return root;
   }
 
@@ -196,7 +218,12 @@ export class Screens {
     this.muteEl.textContent = m ? 'Unmute' : 'Mute';
   }
 
-  showTitle(save: SaveData) {
+  /** `run`: the saved run in progress, if any (shows the Continue button) */
+  showTitle(save: SaveData, run: StoredRun | null = null) {
+    const label = run ? continueLabel(run) : null;
+    this.continueBtn.classList.toggle('hidden', !run);
+    if (label) this.continueBtn.textContent = label;
+    this.login?.setContinue(label);
     this.bestEl.textContent = save.bestTime > 0 ? fmtTime(save.bestTime) : '-';
     this.mesoEl.textContent = String(save.mesos);
     const ch = save.character;
@@ -304,10 +331,13 @@ export class Screens {
       <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>
       <tr><td>Total damage</td><td>${compact(r.damage.total)}</td></tr>
       <tr><td>Average DPS</td><td>${compact(r.damage.total / Math.max(1, r.damage.time))}</td></tr>`));
+    if (r.hyperSp && r.hyperSp.sp > 0) b.appendChild(el('p', 'res-sp', `+${r.hyperSp.sp} Hyper SP for ${r.hyperSp.name}`));
     if (r.damage.rows.length) b.appendChild(this.breakdown(r.damage));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    b.append(row, this.btn('Henesys Shop', 'res-shop', () => this.h.shop()));
+    const more = el('div', 'btnrow res-more');
+    more.append(this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
+    b.append(row, more);
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');

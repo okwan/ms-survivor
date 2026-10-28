@@ -555,6 +555,42 @@ html, body { -webkit-touch-callout: none; -webkit-tap-highlight-color: transpare
   .resw .res { font-size: 12px; }
   .resw .res td { padding: 1px 8px; }
   .resw .win-head { font-size: 16px; padding: 4px 12px; }
+  .resw { max-height: 100%; display: flex; flex-direction: column; }
+  .resw .win-body { min-height: 0; overflow-y: auto; }
   .resw .dmg-list { max-height: 66px; }
   .resw .btn { padding: 5px 16px; font-size: 14px; }
 }
+
+/* ---------- Hyper Skills (hyper.ts): the talent tree window, in the shop's look ---------- */
+.hyper .mwin-hyper { position: relative; display: flex; flex-direction: column; width: min(760px, 100%); height: min(500px, 100%); padding-top: 24px; }
+.hyper .mwin-title { cursor: default; }
+.hy-tabs { flex: none; display: flex; gap: 3px; padding: 6px 8px 0; }
+.hy-tab { flex: 1; cursor: pointer; min-height: 26px; padding: 0 4px; border: 1px solid #1b2238; border-bottom: 0; border-radius: 3px 3px 0 0; background: #aaa385; color: #2b3552; font: bold 11px Arial, sans-serif; }
+.hy-tab.on { background: #f3eed9; box-shadow: 0 2px 0 #f3eed9; }
+.hy-info { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 8px; padding: 4px 8px; background: #2b3552; color: #fff; font-size: 12px; }
+.hy-info b { color: #ffd23a; margin: 0 2px; }
+.hy-info i { font-style: normal; font-size: 10px; color: #aab4d0; }
+.hy-info .shop-btn { height: 24px; }
+.hy-scroll { flex: 1; min-height: 0; overflow: auto; margin: 0 8px; padding: 6px; background: #efe9d4; border: 1px solid #8a8466; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; }
+.hy-grid { display: grid; gap: 5px; min-width: min-content; }
+.hy-head { position: sticky; top: -6px; z-index: 1; padding: 4px 3px; background: #4a5a86; color: #fff; border-radius: 3px; text-align: center; font-size: 11px; }
+.hy-rowlabel { align-self: center; text-align: center; font-size: 10px; color: #8a8466; }
+.hy-cell { padding: 3px; background: #f3eed9; border: 1px solid #aaa385; border-radius: 3px; }
+.hy-skill { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+.hy-skill img { width: 24px; height: 24px; flex: none; image-rendering: pixelated; object-fit: contain; border: 1px solid #1b2238; border-radius: 2px; background: linear-gradient(#5a6788, #2a3350); }
+.hy-skill b { font-size: 10px; line-height: 1.1; color: #2b3552; }
+.hy-tiles { display: flex; gap: 3px; }
+.hy-tile { flex: 1; min-width: 0; min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; cursor: pointer; border: 1px solid #1b2238; border-radius: 3px; background: linear-gradient(#8a8fa6, #5a6078); color: #fff; font: bold 10px/1.1 Arial, sans-serif; text-align: center; touch-action: manipulation; }
+.hy-tile .hy-rk { font-size: 11px; color: #dfe4f5; }
+.hy-tile.ready { background: linear-gradient(#6a8ad0, #2b3f7c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+.hy-tile.ready:hover { filter: brightness(1.15); }
+.hy-tile.on { background: linear-gradient(#e8b940, #a8700c); border-color: #5a3a00; }
+.hy-tile.on .hy-rk { color: #fff7c8; }
+.hy-tile.maxed { background: linear-gradient(#58b040, #2a6a1c); border-color: #123a0a; }
+.hy-tile.locked { opacity: .5; filter: grayscale(.8); }
+.hy-say { flex: none; margin: 6px 8px 8px; padding: 5px 8px; min-height: 28px; box-sizing: border-box; background: #fffdf0; border: 1px solid #8a8466; border-radius: 6px; font-size: 11px; line-height: 1.35; font-weight: normal; color: #3a3a30; }
+.res-hyper { margin-top: 2px; }
+.res-more > .btn { flex: 1; }
+.res-sp { margin: 4px 0 0; text-align: center; color: #a05a00; font-weight: bold; }
+.touch .hy-tile { min-height: 46px; }
+@media (max-height: 500px) { .hyper .mwin-hyper { height: 100%; } .hy-say { min-height: 0; margin-top: 3px; } .hy-skill img { display: none; } }

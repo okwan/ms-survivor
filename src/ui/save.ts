@@ -1,7 +1,11 @@
 import { CLASS_BY_KEY } from '../game/data.ts';
 import { sanitizeBook } from '../game/book.ts';
+import { sanitizeRunSave } from '../game/runsave.ts';
+import type { RunSave } from '../game/runsave.ts';
 import { emptyMeta, sanitizeMeta } from '../game/meta.ts';
 import type { MetaRanks } from '../game/meta.ts';
+import { emptyHyper, sanitizeHyper } from '../game/hyper.ts';
+import type { HyperData } from '../game/hyper.ts';
 import type { BookData } from '../game/book.ts';
 import { sanitizeLook } from '../maple/avatar-core.ts';
 import type { Look } from '../maple/avatar-core.ts';
@@ -23,9 +27,11 @@ export interface SaveData {
   book: BookData;
   /** Henesys shop: ranks bought per upgrade (src/game/meta.ts) */
   meta: MetaRanks;
+  /** Hyper Skills: lifetime levels and ranks per class (src/game/hyper.ts) */
+  hyper: HyperData;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {}, meta: emptyMeta() };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {}, meta: emptyMeta(), hyper: emptyHyper() };
 
 function readCharacter(c: unknown): SavedCharacter | null {
   if (!c || typeof c !== 'object') return null;
@@ -40,7 +46,7 @@ function readCharacter(c: unknown): SavedCharacter | null {
 export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta() };
+    if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta(), hyper: emptyHyper() };
     const o = JSON.parse(raw) as Partial<SaveData>;
     return {
       mesos: typeof o.mesos === 'number' ? o.mesos : 0,
@@ -56,9 +62,10 @@ export function loadSave(): SaveData {
       character: readCharacter(o.character),
       book: sanitizeBook(o.book),
       meta: sanitizeMeta(o.meta),
+      hyper: sanitizeHyper(o.hyper),
     };
   } catch {
-    return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta() };
+    return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta(), hyper: emptyHyper() };
   }
 }
 
@@ -67,5 +74,43 @@ export function writeSave(s: SaveData) {
     localStorage.setItem(KEY, JSON.stringify(s));
   } catch {
     /* storage unavailable: progress simply is not kept */
+  }
+}
+
+/** A run in progress (src/game/runsave.ts) with the hero that plays it, so it resumes with the right look even after a new character was made. */
+export interface StoredRun {
+  run: RunSave;
+  hero: SavedCharacter;
+}
+const RUN_KEY = 'maple-survivor-run-v1';
+
+/** The saved run, or null when there is none or it is not valid. */
+export function loadRun(): StoredRun | null {
+  try {
+    const raw = localStorage.getItem(RUN_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as { run?: unknown; hero?: unknown };
+    const run = sanitizeRunSave(o.run);
+    if (!run) return null;
+    const hero = readCharacter({ ...(o.hero as object), cls: run.cls });
+    return hero ? { run, hero } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeRun(r: StoredRun) {
+  try {
+    localStorage.setItem(RUN_KEY, JSON.stringify(r));
+  } catch {
+    /* storage unavailable: the run just cannot be resumed */
+  }
+}
+
+export function clearRun() {
+  try {
+    localStorage.removeItem(RUN_KEY);
+  } catch {
+    /* nothing to clear */
   }
 }

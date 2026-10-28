@@ -21,6 +21,12 @@ export class DamageMeter {
     this.sum[b] += amt;
   }
 
+  /** replaces the totals with saved rows (a resumed run); the rolling DPS starts empty */
+  load(rows: MeterRow[]) {
+    this.rows = {}; this.total = 0; this.stamp.fill(-1); this.sum.fill(0);
+    for (const r of rows) { this.rows[r.key] = { ...r }; this.total += r.dmg; }
+  }
+
   /** rows by damage, highest first */
   sorted(): MeterRow[] { return Object.values(this.rows).sort((a, b) => b.dmg - a.dmg); }
 

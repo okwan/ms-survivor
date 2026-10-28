@@ -25,6 +25,8 @@ import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
 import type { BookData } from './book.ts';
 import { REVIVE_HP, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_STUN, sanitizeMeta } from './meta.ts';
 import type { MetaRanks } from './meta.ts';
+import { hyperMods } from './hyper.ts';
+import type { HyperMods } from './hyper.ts';
 import { Pet } from './pet.ts';
 import { DamageMeter } from './meter.ts';
 import { SCROLL_BOSS_DROPS, SCROLL_DROP_NORMAL, SCROLL_PICKUP_LIFE, ScrollPool, slotsLeft } from './scrolls.ts';
@@ -140,11 +142,13 @@ export class Sim {
   bookBonus = 0;
   /** Henesys shop ranks bought before the run (src/game/meta.ts), folded into the stats by recalc() */
   meta: MetaRanks;
+  /** Hyper Skill modifiers per skill key (src/game/hyper.ts), built once from the class's ranks; a skill without ranks has no entry */
+  hyper: Record<string, HyperMods>;
   /** Safety Charm: true once the revive was used; the hero cannot be hurt while reviveT counts down */
   reviveUsed = false;
   reviveT = 0;
   /** fraction of a meso that Greed has not paid out yet */
-  private mesoCarry = 0;
+  mesoCarry = 0;
 
   offer: Card[] | null = null;
   pendingLevels = 0;
@@ -154,7 +158,8 @@ export class Sim {
   /** chosen 2nd job code (0 = not yet; the choice is offered at JOB2_LEVEL) and the job codes whose skills and passives are on offer */
   branch = 0;
   jobs: number[];
-  private pendingJob = false;
+  /** the 2nd job choice is waiting to be offered (public for src/game/runsave.ts) */
+  pendingJob = false;
 
   enemies: Enemy[] = [];
   pickups: Pickup[] = [];
@@ -179,7 +184,7 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; /** Hyper Skill ranks of this class by node key (default none) */ hyper?: Record<string, number>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
@@ -201,6 +206,7 @@ export class Sim {
     this.gender = opts.gender ?? 0;
     this.autoEquip = opts.autoEquip ?? true;
     this.cls = CLASS_BY_KEY[classKey] ?? CLASS_BY_KEY[DEFAULT_CLASS];
+    this.hyper = hyperMods(this.cls.key, opts.hyper);
     this.skills = [{ key: this.cls.skills[0], level: 1, cd: 0.2 }];
     this.jobs = [this.cls.firstJob];
     this.speed = this.cls.speed;
@@ -325,6 +331,8 @@ export class Sim {
   hit(e: Enemy, base: number) {
     if (!e.alive) return;
     let amt = base * this.might * (1 + SKILL_MASTERY_PER * (this.skillMastery[this.curSkill] ?? 0));
+    const hm = this.hyper[this.curSkill];
+    if (hm !== undefined) amt *= hm.dmg;
     const crit = this.rng.next() < this.crit && !this.ail.dark;
     if (crit) amt *= PLAYER_BASE.critMult;
     if (this.field.elixirT > 0) amt *= ELIXIR_DAMAGE;
