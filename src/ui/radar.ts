@@ -1,5 +1,6 @@
 import type { Sim } from '../game/sim.ts';
 import { GEM, MESO } from '../game/types.ts';
+import { theme } from './theme.ts';
 
 const SIZE = 120;
 const RANGE = 60; // yards from centre to edge
@@ -24,13 +25,21 @@ export class Radar {
     const c = this.ctx;
     const h = SIZE / 2;
     const k = (h - 3) / RANGE;
+    // MapleStory minimap look (square, dark glass, yellow marker) when the real UI art is on; the round radar otherwise
+    const sq = theme.active;
     c.clearRect(0, 0, SIZE, SIZE);
-    c.fillStyle = 'rgba(14,30,60,0.62)';
-    c.beginPath(); c.arc(h, h, h - 1, 0, 7); c.fill();
+    c.fillStyle = sq ? 'rgba(8,12,24,0.7)' : 'rgba(14,30,60,0.62)';
+    c.beginPath();
+    if (sq) c.rect(0, 0, SIZE, SIZE); else c.arc(h, h, h - 1, 0, 7);
+    c.fill();
     c.strokeStyle = 'rgba(255,255,255,0.18)'; c.lineWidth = 1;
-    c.beginPath(); c.arc(h, h, (h - 3) * 0.5, 0, 7); c.stroke();
+    c.beginPath();
+    if (sq) { c.moveTo(h, 0); c.lineTo(h, SIZE); c.moveTo(0, h); c.lineTo(SIZE, h); } else c.arc(h, h, (h - 3) * 0.5, 0, 7);
+    c.stroke();
     c.save();
-    c.beginPath(); c.arc(h, h, h - 2, 0, 7); c.clip();
+    c.beginPath();
+    if (sq) c.rect(1, 1, SIZE - 2, SIZE - 2); else c.arc(h, h, h - 2, 0, 7);
+    c.clip();
     const px = sim.px, py = sim.py;
     const ps = sim.pickups;
     for (let i = 0; i < ps.length; i++) {
@@ -59,9 +68,11 @@ export class Radar {
       c.beginPath(); c.arc(h + dx, h + dy, 4.2, 0, 7); c.fill(); c.stroke();
     }
     c.restore();
-    c.fillStyle = '#fff'; c.strokeStyle = '#1b2447';
+    c.fillStyle = sq ? '#ffe600' : '#fff'; c.strokeStyle = '#1b2447';
     c.beginPath(); c.arc(h, h, 3.2, 0, 7); c.fill(); c.stroke();
-    c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2;
-    c.beginPath(); c.arc(h, h, h - 1, 0, 7); c.stroke();
+    if (!sq) {
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2;
+      c.beginPath(); c.arc(h, h, h - 1, 0, 7); c.stroke();
+    }
   }
 }

@@ -5,6 +5,7 @@
 import { ImageSource, Rectangle, Texture } from 'pixi.js';
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import type { FrameRec, MapleManifest } from './assets.ts';
+import type { UiPiece } from './world-types.ts';
 
 /** A frame sequence. cum[i] is the time (s) at which frame i ends; origin anchors are per frame (ratios of the frame size). */
 export interface Anim {
@@ -39,6 +40,42 @@ export function frameAt(a: Anim, t: number, loop = true): number {
   return n - 1;
 }
 
+/** Damage digits of one colour: digits[i] for 0-9 of the large first-digit set (`first`) and the smaller rest set (`rest`). */
+export interface DigitSet {
+  first: Texture[];
+  rest: Texture[];
+  /** crit spark, when the set has one */
+  effect: Texture | null;
+}
+
+/** Damage number sets by colour name: red (hits on enemies), cri (crits), violet (damage to the player), blue. */
+export type DamageArt = Record<'red' | 'cri' | 'violet' | 'blue', DigitSet | null>;
+
+export interface MapObjArt {
+  anim: Anim;
+  weight: number;
+  w: number;
+  h: number;
+}
+
+export interface MapArt {
+  /** seamless ground tile, or null when the tile set could not be extracted */
+  ground: Texture | null;
+  /** average ground colour as 0xRRGGBB (renderer background) */
+  groundColor: number;
+  objects: MapObjArt[];
+  /** largest decoration frame, used to widen the culling margin */
+  maxW: number;
+  maxH: number;
+}
+
+export interface UiArt {
+  /** URL prefix of the piece PNGs (maple/) */
+  base: string;
+  /** only pieces whose PNG loaded */
+  pieces: Record<string, UiPiece>;
+}
+
 export class MapleArt {
   /** by ladder tier index, null where the mob has no extracted art */
   tiers: (MobArt | null)[] = [];
@@ -49,7 +86,12 @@ export class MapleArt {
   /** icon URLs by skill/passive key */
   icons: Record<string, string> = {};
   bgm: { run: string | null; title: string | null } = { run: null, title: null };
-  counts = { mobs: 0, skills: 0, icons: 0 };
+  counts = { mobs: 0, skills: 0, icons: 0, objects: 0, digitSets: 0, uiPieces: 0 };
+  map: MapArt | null = null;
+  damage: DamageArt | null = null;
+  /** LevelUp effect animation (origin at the player's feet) */
+  levelUp: Anim | null = null;
+  ui: UiArt | null = null;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement | null> {
@@ -145,8 +187,102 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
     ),
     Promise.all([...SKILLS.map((s) => icon(s.key, s.id)), ...PASSIVES.map((p) => icon(p.key, p.id))]),
   ]);
+  await buildWorldArt(m, base, art, atlas);
   art.tiers = tiers;
   art.bosses = bosses;
   art.bgm = { run: m.bgm.run ? base + m.bgm.run : null, title: m.bgm.title ? base + m.bgm.title : null };
   return art;
+}
+
+// ---- world, damage numbers, effects and UI (scripts/fetch-maple-world.ts) ------------------------------------------
+
+const COLORS = [['red', 'NoRed'], ['cri', 'NoCri'], ['violet', 'NoViolet'], ['blue', 'NoBlue']] as const;
+
+function digitTextures(source: ImageSource, frames: FrameRec[], action: string): Texture[] | null {
+  const out: Texture[] = [];
+  for (let i = 0; i < 10; i++) {
+    const f = frames.find((x) => x.action === action && x.index === i);
+    if (!f) return null;
+    out.push(new Texture({ source, frame: new Rectangle(f.x, f.y, f.w, f.h) }));
+  }
+  return out;
+}
+
+/** Never throws: each part that fails to load stays null/absent. */
+async function buildWorldArt(m: MapleManifest, base: string, art: MapleArt, atlas: (path: string) => Promise<ImageSource | null>): Promise<void> {
+  try {
+    if (m.map) {
+      const mp: MapArt = { ground: null, groundColor: 0x4f9a3c, objects: [], maxW: 0, maxH: 0 };
+      if (m.map.ground) {
+        const src = await atlas(m.map.ground.image);
+        if (src) {
+          mp.ground = new Texture({ source: src });
+          const [r, g, b] = m.map.ground.avg;
+          mp.groundColor = (r << 16) | (g << 8) | b;
+        }
+      }
+      const o = m.map.objects;
+      if (o) {
+        const src = await atlas(o.atlas);
+        if (src)
+          for (const it of o.items) {
+            const anim = makeAnim(src, o.frames, it.key);
+            if (!anim) continue;
+            mp.objects.push({ anim, weight: Math.max(1, it.weight), w: it.w, h: it.h });
+            mp.maxW = Math.max(mp.maxW, ...anim.tex.map((t) => t.width));
+            mp.maxH = Math.max(mp.maxH, ...anim.tex.map((t) => t.height));
+          }
+      }
+      art.counts.objects = mp.objects.length;
+      if (mp.ground || mp.objects.length) art.map = mp;
+    }
+  } catch {
+    /* placeholders stay */
+  }
+  try {
+    if (m.damage) {
+      const src = await atlas(m.damage.atlas);
+      if (src) {
+        const dmg = { red: null, cri: null, violet: null, blue: null } as DamageArt;
+        for (const [name, prefix] of COLORS) {
+          const rest = digitTextures(src, m.damage.frames, prefix + '0');
+          const first = digitTextures(src, m.damage.frames, prefix + '1');
+          if (!rest && !first) continue;
+          const eff = m.damage.frames.find((f) => f.action === `${prefix}1.effect` || f.action === `${prefix}0.effect`);
+          dmg[name] = {
+            first: (first ?? rest)!,
+            rest: (rest ?? first)!,
+            effect: eff ? new Texture({ source: src, frame: new Rectangle(eff.x, eff.y, eff.w, eff.h) }) : null,
+          };
+          art.counts.digitSets++;
+        }
+        if (dmg.red) art.damage = dmg;
+      }
+    }
+  } catch {
+    /* text numbers stay */
+  }
+  try {
+    const lu = m.effects?.levelUp;
+    if (lu) {
+      const src = await atlas(lu.atlas);
+      if (src) art.levelUp = makeAnim(src, lu.frames, 'levelUp');
+    }
+  } catch {
+    /* the ring effect stays */
+  }
+  try {
+    if (m.ui) {
+      const pieces: Record<string, UiPiece> = {};
+      await Promise.all(
+        Object.entries(m.ui.pieces).map(async ([name, p]) => {
+          if (await loadImage(base + p.src)) pieces[name] = p;
+        }),
+      );
+      art.counts.uiPieces = Object.keys(pieces).length;
+      if (art.counts.uiPieces) art.ui = { base, pieces };
+    }
+  } catch {
+    /* CSS look stays */
+  }
 }

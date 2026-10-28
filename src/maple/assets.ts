@@ -5,6 +5,7 @@
  * This module has no dependency on the DOM or Pixi and no side effects, so Node can import it.
  */
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
+import type { AtlasRef, EffectsSection, MapSection, UiSection } from './world-types.ts';
 
 export const pad7 = (n: number) => String(n).padStart(7, '0');
 export const pad3 = (n: number) => String(n).padStart(3, '0');
@@ -60,7 +61,7 @@ export const BGM_NODES = {
 };
 
 /** The WZ archives needed (file stems). Later clients split them (Mob001.wz...), which the extractor also accepts. */
-export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound'] as const;
+export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Map', 'Effect', 'UI'] as const;
 
 // ---- legacy lists, kept for later milestones (UI, map art) -------------------------------------------------------
 /** 'Mob/0100100.img' for every wanted mob. */
@@ -114,6 +115,11 @@ export interface MapleManifest {
   /** keyed by skill id without leading zeros */
   skills: Record<string, SkillEntry>;
   bgm: { run: string | null; title: string | null };
+  /** world/UI art from scripts/fetch-maple-world.ts, each absent when its .wz could not be read */
+  map?: MapSection;
+  damage?: AtlasRef;
+  ui?: UiSection;
+  effects?: EffectsSection;
 }
 
 /** Fetches maple/manifest.json. Returns null on any failure so the game falls back to placeholder art. */
@@ -129,6 +135,10 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       mobs: data.mobs && typeof data.mobs === 'object' ? data.mobs : {},
       skills: data.skills && typeof data.skills === 'object' ? data.skills : {},
       bgm: { run: data.bgm?.run ?? null, title: data.bgm?.title ?? null },
+      map: data.map,
+      damage: data.damage,
+      ui: data.ui,
+      effects: data.effects,
     };
   } catch {
     return null;

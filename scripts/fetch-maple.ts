@@ -14,6 +14,7 @@ import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
 import { BGM_NODES, MOB_ACTIONS, SKILL_ANIMS, WANTED_MOBS, WANTED_SKILLS, WZ_FILES, pad7 } from '../src/maple/assets.ts';
 import type { FrameRec, MapleManifest, MobEntry, SkillEntry } from '../src/maple/assets.ts';
+import { buildWorld } from './fetch-maple-world.ts';
 import { asciiPreview, encodePng } from './png.mjs';
 import { canvasRgba, openWz } from './wz.mjs';
 
@@ -503,6 +504,9 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     const skills = extractSkills(sets.Skill, distDir, report);
     report.bgm = extractBgm(sets.Sound, distDir, report);
 
+    const world = buildWorld({ dist: distDir, sets: { Map: sets.Map, Effect: sets.Effect, UI: sets.UI }, log, warn, canvasList, packAtlas });
+    report.bytes += world.bytes;
+
     const primary = sets.Mob ?? sets.Skill ?? sets.Sound ?? sets.String;
     const manifest: MapleManifest = {
       version: 1,
@@ -510,6 +514,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
       mobs,
       skills,
       bgm: report.bgm,
+      ...world.manifest,
     };
     log(`totals: mobs ${report.mobsOk}/${WANTED_MOBS.length} (${report.mobFrames} frames), skills+passives ${report.skillsOk}/${WANTED_SKILLS.length} (${report.skillFrames} animation frames), bgm run=${report.bgm.run ?? 'none'} title=${report.bgm.title ?? 'none'}, ${(report.bytes / 1e6).toFixed(2)} MB written in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     if (report.mobsMissing.length) log(`missing mobs (${report.mobsMissing.length}): ${report.mobsMissing.join('; ')}`);
@@ -517,7 +522,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     if (report.mobsMismatch.length) log(`mob NAME MISMATCHES (${report.mobsMismatch.length}): ${report.mobsMismatch.join('; ')}`);
     if (report.skillsMissing.length) log(`missing skills (${report.skillsMissing.length}): ${report.skillsMissing.join('; ')}`);
 
-    if (!report.mobsOk && !report.skillsOk && !report.bgm.run && !report.bgm.title) {
+    if (!report.mobsOk && !report.skillsOk && !report.bgm.run && !report.bgm.title && !Object.keys(world.manifest).length) {
       warn('nothing could be extracted; no manifest written, the game keeps placeholder art');
       return { manifest: null, report };
     }
@@ -655,16 +660,22 @@ async function acquire(cacheDir: string): Promise<{ wzDir: string; mirror: strin
   const marker = join(wzDir, '.source.json');
   mkdirSync(cacheDir, { recursive: true });
   const have = present(wzDir);
-  if (have.includes('Mob') && (have.length === WZ_FILES.length || existsSync(marker))) {
+  // reuse the cache only when it holds every listed file: a cache from before a name was added to the list re-extracts
+  const readMirror = () => {
     let mirror = 'cache';
     try {
       mirror = JSON.parse(readFileSync(marker, 'utf8')).mirror ?? mirror;
     } catch {
       /* marker is optional */
     }
+    return mirror;
+  };
+  if (have.length === WZ_FILES.length) {
+    const mirror = readMirror();
     log(`reusing cached WZ files in ${wzDir}: ${have.join(', ')} (from ${mirror})`);
     return { wzDir, mirror };
   }
+  if (have.length) log(`cached WZ files ${have.join(', ')} lack ${WZ_FILES.filter((n) => !have.includes(n)).join(', ')}: fetching the client again`);
   for (const url of mirrorList()) {
     const file = join(cacheDir, basename(new URL(url).pathname) || 'client.bin');
     try {
@@ -682,6 +693,10 @@ async function acquire(cacheDir: string): Promise<{ wzDir: string; mirror: strin
       // keep only the small .wz files in the cache, never the multi-GB installer
       rmSync(file, { force: true });
     }
+  }
+  if (have.includes('Mob')) {
+    warn(`could not fetch ${WZ_FILES.filter((n) => !have.includes(n)).join(', ')}; using the incomplete cache (${have.join(', ')})`);
+    return { wzDir, mirror: readMirror() };
   }
   return null;
 }

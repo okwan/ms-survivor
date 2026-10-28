@@ -4,3 +4,4 @@ probe-out
 .maple-cache
 *.log
 shots
+.wz-dump.txt

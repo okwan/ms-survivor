@@ -1,6 +1,7 @@
 import { BOSSES, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import { Radar } from './radar.ts';
+import { theme } from './theme.ts';
 
 export const fmtTime = (s: number) => {
   const t = Math.max(0, Math.floor(s));
@@ -76,6 +77,10 @@ export class Hud {
     const v = pct.toFixed(1) + '%';
     if (this.cache.get(el) !== v) { this.cache.set(el, v); el.style.width = v; }
   }
+  /** like text() but for markup built from our own digit images; cached so the DOM is touched only on change */
+  private html(el: HTMLElement, v: string) {
+    if (this.cache.get(el) !== v) { this.cache.set(el, v); el.innerHTML = v; }
+  }
   private disp(el: HTMLElement, show: boolean) {
     const v = show ? 'b' : 'n';
     if (this.cache.get(el) !== v) { this.cache.set(el, v); el.style.display = show ? '' : 'none'; }
@@ -113,12 +118,19 @@ export class Hud {
     this.text(this.el.next, nb >= 0 ? `NEXT BOSS ${fmtTime(Math.ceil(nb))}` : `VICTORY IN ${fmtTime(Math.ceil(900 - sim.t))}`);
     this.el.next.classList.toggle('soon', nb >= 0 && nb < 10);
 
-    this.text(this.el.lv, String(sim.level));
-    this.width(this.el.hpfill, (sim.hp / sim.maxHp) * 100);
-    this.text(this.el.hptext, `${Math.ceil(sim.hp)} / ${Math.round(sim.maxHp)}`);
     const xp = sim.xp / sim.xpNeed;
+    this.width(this.el.hpfill, (sim.hp / sim.maxHp) * 100);
     this.width(this.el.expfill, xp * 100);
-    this.text(this.el.exptext, `EXP ${Math.floor(sim.xp)} / ${sim.xpNeed} [${(xp * 100).toFixed(1)}%]`);
+    if (theme.active) {
+      // MapleStory status bar: level in the big level digits, "HP [120/120]" and "EXP 1234[12.34%]" in the tiny bar digits
+      this.html(this.el.lv, theme.lv(sim.level));
+      this.html(this.el.hptext, theme.num(`HP [${Math.ceil(sim.hp)}/${Math.round(sim.maxHp)}]`));
+      this.html(this.el.exptext, theme.num(`EXP ${Math.floor(sim.xp)}[${(xp * 100).toFixed(2)}%]`));
+    } else {
+      this.text(this.el.lv, String(sim.level));
+      this.text(this.el.hptext, `${Math.ceil(sim.hp)} / ${Math.round(sim.maxHp)}`);
+      this.text(this.el.exptext, `EXP ${Math.floor(sim.xp)} / ${sim.xpNeed} [${(xp * 100).toFixed(1)}%]`);
+    }
 
     for (let i = 0; i < MAX_SKILLS; i++) {
       const s = sim.skills[i];
