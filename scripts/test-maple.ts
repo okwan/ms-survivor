@@ -180,7 +180,7 @@ try {
   const ids = Object.keys(gi);
   ok(ids.length > 60 && ids.length <= 320, `gear items extracted (${ids.length})`);
   for (const skip of ['01002999', '01002998', '01002997', '01009998', '01009997', '01009999', '01432000', '01092002']) ok(!(skip in gi), `${skip} (no tuc, event flag, no stats, cash, pirate-only, no walk frames, spear, mage shield) is skipped`);
-  eq(gi['01302103'], { slot: 'weapon', name: 'Test Sword 3', level: 30, job: 1, stats: { pad: 24 }, icon: gi['01302103'].icon }, 'a sword: name from String.wz, level, job, stats from info/inc*');
+  eq(gi['01302103'], { slot: 'weapon', name: 'Test Sword 3', level: 30, job: 1, tuc: 7, stats: { pad: 24 }, icon: gi['01302103'].icon }, 'a sword: name from String.wz, level, job, stats from info/inc*');
   eq(gi['01372103'].stats, { mad: 29, int: 3 }, 'wand stats: incMAD and incINT map to mad / int');
   eq(gi['01072103'].stats, { pdd: 5, speed: 3 }, 'boots stats: incPDD, incSPEED');
   eq([gi['01040103'].g, gi['01041103'].g, gi['01060103'].g, gi['01061103'].g], [0, 1, 0, 1], 'gendered coats and pants carry their gender');
