@@ -292,7 +292,7 @@ export function gearImages() {
  * Default: a handful of entries that exercise links, fly, UOL frames, big frames, name mismatches and missing nodes.
  * `all`: every mob and skill the game lists, so the built game can be viewed with "real" art.
  */
-export async function writeFixture(dir, { all = false, noTitle = false, character = true, items = false } = {}) {
+export async function writeFixture(dir, { all = false, noTitle = false, character = true, items = false, npc = '' } = {}) {
   mkdirSync(dir, { recursive: true });
   const { WANTED_MOBS, WANTED_SKILLS } = await import('../src/maple/assets.ts');
   const mobs = {};
@@ -377,6 +377,7 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
   };
 
   if (items) writeItemFixture(dir, strings);
+  if (npc) writeNpcFixture(dir, strings, npc);
   writeFileSync(join(dir, 'Mob.wz'), buildWz(mobs));
   writeFileSync(join(dir, 'Skill.wz'), buildWz(skillImgs));
   writeFileSync(join(dir, 'String.wz'), buildWz(strings));
@@ -524,6 +525,7 @@ export function writeItemFixture(dir, strings) {
     'Consume/0200.img': { '02000000': potion([230, 60, 60]), '02000001': potion([240, 150, 50]), '02000002': potion([240, 240, 240]), '02000004': potion([120, 200, 240]), '02000005': potion([180, 90, 220]) },
     'Consume/0204.img': scrolls,
     'Cash/0522.img': { '05220000': potion([255, 150, 60]) },
+    'Cash/0513.img': { '05130000': potion([90, 200, 230]) },
     'Special/0900.img': {
       '09000000': { info: { icon: ico([200, 120, 60]), iconRaw: frames4([200, 120, 60]) } },
       '09000001': { info: { icon: ico([240, 200, 60]), iconRaw: frames4([240, 200, 60], 100) } },
@@ -541,6 +543,23 @@ export function writeItemFixture(dir, strings) {
   }));
   strings['Consume.img'] = Object.fromEntries(Object.entries(FIXTURE_SCROLLS).map(([id, name]) => [id, { name }]));
   strings['Pet.img'] = { 5000000: { name: 'Brown Kitty' }, 5000001: { name: 'Black Kitty' } };
+}
+
+/**
+ * Npc.wz (Rina's stand frames) and the String.wz Npc.img names. `variant`: 'rina' = 1012100 is Rina; 'moved' = 1012100 is someone else and
+ * Rina is 1012101 (found by name); 'absent' = nobody is named Rina; 'nostring' = Rina's image only, no Npc.img in String.wz.
+ */
+export function writeNpcFixture(dir, strings, variant = 'rina') {
+  const stand = (col, n = 3) => ({ info: { speak: {} }, stand: seq(n, (i) => canvas(40 + i, 64, blob(40 + i, 64, col), { origin: vec(20, 64), delay: 200 })), say: seq(1, () => canvas(40, 64, blob(40, 64, col), { origin: vec(20, 64) })) });
+  const imgs = { '1012100.img': stand([230, 150, 160]) };
+  if (variant === 'moved') imgs['1012101.img'] = stand([120, 200, 140], 2);
+  writeFileSync(join(dir, 'Npc.wz'), buildWz(imgs));
+  if (variant === 'nostring') return;
+  strings['Npc.img'] = {
+    1012100: { name: variant === 'rina' ? 'Rina' : variant === 'moved' ? 'Mr. Smith' : 'Maria' },
+    1012101: { name: variant === 'moved' ? 'Rina' : 'Pan' },
+    1012102: { name: 'Rini' },
+  };
 }
 
 export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, noUi = false } = {}) {

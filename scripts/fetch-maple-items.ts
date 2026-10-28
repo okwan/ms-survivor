@@ -63,6 +63,10 @@ const FIELD_ICONS: [keyof ItemIconKeys, string, number[]][] = [
   ['fieldClock', 'Ludibrium Clock', [2022012, 4031020]],
   ['fieldKeg', 'Powder Keg', [2270000, 4031136]],
 ];
+/** Henesys shop (src/game/meta.ts): the Safety Charm is a Cash item; a miss leaves the shop's placeholder tile */
+const SHOP_ICONS: [keyof ItemIconKeys, string, number[]][] = [
+  ['metaRevive', 'Safety Charm', [5130000]],
+];
 const PET_IDS = [5000000, 5000001, 5000002, 5000004];
 const PET_ACTIONS: [string, string[]][] = [['stand0', ['stand0', 'stand1', 'stand']], ['move', ['move', 'walk']], ['jump', ['jump']]];
 
@@ -113,7 +117,7 @@ export function parseScroll(name: string): ScrollEntry | null {
 }
 
 /** Names under a String.wz image: every node with a `name` child whose key is a number, searched to a modest depth. */
-function namesOf(img: Any, depth = 4): Map<number, string> {
+export function namesOf(img: Any, depth = 4): Map<number, string> {
   const out = new Map<number, string>();
   const walk = (node: Any, d: number) => {
     for (const k of node.keys()) {
@@ -262,8 +266,8 @@ class Items {
         this.preview('Gachapon Ticket icon', fr.px[0]);
       } else log(`items: gacha ${GACHA_ID}: ${!img ? `${path} not found` : !node ? `no node in ${path}; its keys: ${img.root.keys().slice(0, 20).join(',')}` : `no icon canvas; node children: ${node.keys().join(',')}`}; the drawn capsule stays`);
     }
-    // field items: the first candidate id of each role that has an icon in Consume, Cash or Etc
-    for (const [role, label, ids] of FIELD_ICONS) {
+    // field items and the shop's Safety Charm: the first candidate id of each role that has an icon in Consume, Cash or Etc
+    for (const [role, label, ids] of [...FIELD_ICONS, ...SHOP_ICONS]) {
       let hit = '';
       for (const n of ids) {
         for (const folder of ['Consume', 'Cash', 'Etc']) {
@@ -280,7 +284,7 @@ class Items {
         if (hit) break;
       }
       if (hit) got.push(hit);
-      else log(`items: field item ${label}: none of ${ids.join(', ')} has an icon in Consume / Cash / Etc; the drawn ${label} stays`);
+      else log(`items: ${label}: none of ${ids.join(', ')} has an icon in Consume / Cash / Etc; the drawn ${label} stays`);
     }
     // mesos: animated iconRaw
     const spec = this.imageOf(wz, 'Special/0900.img');

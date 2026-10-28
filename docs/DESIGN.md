@@ -164,6 +164,58 @@ Neither pauses the run.
   crowd damage x2.9 to x3.6; the two line skills (Hurricane, Piercing Arrow) are x7.7 and x9.9 against a boss but only x0.3 and x0.7 against a dense crowd, since their
   bases (Arrow Rain's carpet, Arrow Eruption's strikes) are crowd or weak-on-bosses skills. Boss lifetimes in bot runs: Zakum 42 s average without evolutions, 30 s with.
 
+## Henesys shop
+
+Mesos banked at the end of a run (a quit counts too) are spent on permanent upgrades in Rina's shop in Henesys (VS PowerUps / Halls of Torment blessings).
+The "Henesys Shop" button sits on the title / signboard, the character select stage and the results screen (`src/ui/shop.ts`). The window uses the Equip /
+Inventory look (navy title bar, cream body, X to close, Esc closes): Rina's portrait and a speech line on the left, one row per upgrade on the right (icon,
+name, rank pips and "Rank 2/5", the next rank's effect, price in mesos, Buy), the hero's banked mesos at the bottom with "Refund all". Refund needs a second click
+("Yes, refund N", Cancel next to it); there are no `confirm()` dialogs. Buying and refunding write the save at once.
+
+Rank r+1 costs `base x growth^r`, rounded to the nearest 10 (`metaCost` in `src/game/meta.ts`). A refund returns every meso spent at the current prices.
+
+| key | name | per rank | max | base cost | growth | total cost |
+|---|---|---|---|---|---|---|
+| hp | Max HP | +8% max HP | 5 | 3000 | 1.6 | 47430 |
+| might | Might | +5% damage | 5 | 4500 | 1.6 | 71140 |
+| haste | Haste | +4% cooldown speed | 5 | 4500 | 1.6 | 71140 |
+| armor | Armor | +1 flat armor | 3 | 6000 | 1.8 | 36240 |
+| speed | Speed | +3% move speed | 3 | 3750 | 1.6 | 19350 |
+| magnet | Magnet | +12% pickup radius | 3 | 2250 | 1.5 | 10690 |
+| growth | Growth | +4% EXP | 5 | 5250 | 1.6 | 83000 |
+| greed | Greed | +8% mesos | 5 | 3750 | 1.6 | 59290 |
+| reroll | Gachapon Ticket | +1 reroll per run | 3 | 7500 | 2.0 | 52500 |
+| banish | Trash Can | +1 banish per run | 3 | 7500 | 2.0 | 52500 |
+| revive | Safety Charm | one revive per run at 50% HP | 1 | 45000 | 1 | 45000 |
+
+Everything costs 548280 mesos (`metaTotalCost()`), about 18 bot runs of income with an empty shop, so the shop fills over many runs.
+
+- **Save.** `SaveData.meta` holds the rank per key; a save without it (or with junk in it) loads as all zeros, ranks are clamped to 0..max.
+- **In the run.** `main.ts` passes `meta: save.meta` to the Sim. `recalc()` adds the ranks to the other sources: Might and Haste add to the passive and Mastery sums
+  (Might is then scaled by the level bonus like the rest), Max HP adds to the +% max HP sum, Armor is flat, Speed, Magnet and Growth add to their sums. Rerolls and
+  banishes start at `START_REROLLS + rank` / `START_BANISHES + rank`. Greed goes through `Sim.gainMesos()` (every meso source: coins, bags, Mastery meso bags, capsule
+  and Mastery Book mesos); the fraction a pickup does not pay out carries over to the next one.
+- **Safety Charm.** When a hit would kill the hero (not in god mode) and the charm is owned and unused, `hurtPlayer` calls `revive()` instead of ending the run:
+  the hero comes back at 50% max HP with their ailments cured, no damage lands for 3 s, and a burst pushes every enemy within 9 yd out to 10 yd and stuns normal
+  mobs for 1.5 s (bosses are pushed, not stunned). It emits `{ type: 'revive', x, y, r }` and the raid warning "Safety Charm activated!"; `playSimEvents` plays
+  `game.levelup`. Once per run.
+- **Art.** Icons are the level-up card icons: passives from Skill.wz (Improved MaxHP Increase, Rage, Sword Booster, Iron Body, Nimble Body, Keen Eyes, Holy Symbol, Meso Up),
+  the Gachapon Ticket (Cash 5220000) and the Safety Charm (Cash 5130000, role `metaRevive` of the items icon atlas); Trash Can has no item and shows a plain tile, as does any icon that
+  was not extracted. Rina's portrait is the `stand` frame of `Npc.wz` `1012100.img` (manifest `npc`, `scripts/fetch-maple-npc.ts`); the id is checked against String.wz
+  `Npc.img/1012100/name` and, when that is not "Rina", the name is searched (a 1012xxx id first). Without art the shop shows a silhouette.
+- **Balance** (`scripts/balance-meta.ts`, 12 seeds x 4 classes, the kiting bot, card 0, empty shop vs everything bought). The bot wins 48/48 either way, so the shop shows
+  up in damage taken and kill speed, not in wins. The Safety Charm never fired (the bot never died):
+
+| class | damage taken, empty > full | Zakum kill from its spawn, empty > full | mesos per run, empty > full |
+|---|---|---|---|
+| Warrior | 1401 > 925 | 48 s > 24 s | 27.8k > 44.9k |
+| Magician | 82 > 18 | 8 s > 8 s | 21.0k > 34.0k |
+| Bowman | 91 > 39 | 7 s > 11 s | 34.4k > 51.7k |
+| Thief | 837 > 632 | 9 s > 12 s | 37.4k > 54.5k |
+
+  A run banks about 30k mesos for the bot (20-37k), so the whole shop (548280) is about 18 runs of bot income (prices were raised 15x from the first draft, which emptied the shop in about one run). Kill times of the ranged classes are noise (a different
+  build and a different fight position, 7-12 s); the Warrior melee bot halves its time. Human runs are shorter and poorer, but the prices are probably low by a factor of 10 or more.
+
 ## Elites, events and field items
 
 Three systems in new files (`src/game/elites.ts`, `events.ts`, `fieldItems.ts`), each with its own seeded random stream so the run's other draws never shift;
@@ -242,6 +294,7 @@ BGM nodes and the manifest types. `scripts/fetch-maple.ts` (run in CI after `vit
   `{action,index,x,y,w,h,ox,oy,delay}`, info (maxHP, speed, level, bodyAttack), name from String.wz.
 - `skills/<id7>.png` atlas (effect, ball, hit) and `skills/<id7>-icon.png` per skill and passive.
 - `bgm/run.mp3` (Bgm00.img/FloralLife) and `bgm/title.mp3` (BgmUI.img/Title), raw Sound_DX8 payload.
+- `npc/shop.png` (Npc.wz, Rina's `stand` frames for the Henesys shop; see "Henesys shop") and the Safety Charm icon in `items/icons.png`.
 - `manifest.json`: `{version, source:{mirror,region,wzVersion}, mobs, skills, bgm}`, paths relative to `maple/`.
 
 The step never fails the build. The CI log has a mob table (tier, id, expected name, String.wz name, MISMATCH/MISSING), totals, missing

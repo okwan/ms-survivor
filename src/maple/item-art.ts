@@ -22,7 +22,7 @@ const SCROLL_SIZE = 40;
 const ROLE_NAMES: Record<string, string> = {
   potionRed: 'potion.red', potionOrange: 'potion.orange', potionWhite: 'potion.white', elixir: 'elixir', elixirPower: 'elixir.power',
   mesoBronze: 'meso.bronze', mesoGold: 'meso.gold', mesoBundle: 'meso.bundle', mesoBag: 'meso.bag', gacha: 'gacha',
-  fieldApple: 'field.apple', fieldCoupon: 'field.coupon', fieldElixir: 'field.elixir', fieldClock: 'field.clock', fieldKeg: 'field.keg',
+  fieldApple: 'field.apple', fieldCoupon: 'field.coupon', fieldElixir: 'field.elixir', fieldClock: 'field.clock', fieldKeg: 'field.keg', metaRevive: 'meta.revive',
 };
 const FIELD_ROLES = ['fieldApple', 'fieldCoupon', 'fieldElixir', 'fieldClock', 'fieldKeg'] as const;
 
@@ -78,6 +78,10 @@ export class ItemArt {
   /** The field item icon as a data URL for the HUD buff chips (null without the art) */
   fieldUrl(n: number): string | null {
     return this.urlOf(this.field(n));
+  }
+  /** Safety Charm icon as a data URL for the Henesys shop (null without the art: the shop draws a placeholder tile) */
+  reviveUrl(): string | null {
+    return this.urlOf(this.role('metaRevive')?.tex[0] ?? null);
   }
   /** The same icon as a data URL for the DOM reveal panel (null without the art) */
   gachaUrl(): string | null {

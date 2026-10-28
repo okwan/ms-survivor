@@ -10,7 +10,8 @@
     "UI.wz",
     "Base.wz",
     "Character.wz",
-    "Item.wz"
+    "Item.wz",
+    "Npc.wz"
   ],
   "mirrors": [
     {

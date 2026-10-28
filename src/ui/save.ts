@@ -1,5 +1,7 @@
 import { CLASS_BY_KEY } from '../game/data.ts';
 import { sanitizeBook } from '../game/book.ts';
+import { emptyMeta, sanitizeMeta } from '../game/meta.ts';
+import type { MetaRanks } from '../game/meta.ts';
 import type { BookData } from '../game/book.ts';
 import { sanitizeLook } from '../maple/avatar-core.ts';
 import type { Look } from '../maple/avatar-core.ts';
@@ -19,9 +21,11 @@ export interface SaveData {
   character: SavedCharacter | null;
   /** Monster Book: kills per mob id, kept across runs (src/game/book.ts) */
   book: BookData;
+  /** Henesys shop: ranks bought per upgrade (src/game/meta.ts) */
+  meta: MetaRanks;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {} };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {}, meta: emptyMeta() };
 
 function readCharacter(c: unknown): SavedCharacter | null {
   if (!c || typeof c !== 'object') return null;
@@ -36,7 +40,7 @@ function readCharacter(c: unknown): SavedCharacter | null {
 export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {} };
+    if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta() };
     const o = JSON.parse(raw) as Partial<SaveData>;
     return {
       mesos: typeof o.mesos === 'number' ? o.mesos : 0,
@@ -50,9 +54,10 @@ export function loadSave(): SaveData {
       },
       character: readCharacter(o.character),
       book: sanitizeBook(o.book),
+      meta: sanitizeMeta(o.meta),
     };
   } catch {
-    return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {} };
+    return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta() };
   }
 }
 

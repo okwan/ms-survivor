@@ -19,6 +19,7 @@ import { extractAvatar } from './fetch-maple-character.ts';
 import { buildRegions } from './fetch-maple-regions.ts';
 import { buildSfx } from './fetch-maple-sfx.ts';
 import { buildItems } from './fetch-maple-items.ts';
+import { buildNpc } from './fetch-maple-npc.ts';
 import { buildWorld } from './fetch-maple-world.ts';
 import { asciiPreview, encodePng } from './png.mjs';
 import { canvasRgba, openWz } from './wz.mjs';
@@ -538,7 +539,8 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     const regions = buildRegions({ dist: distDir, sets: { Map: sets.Map, String: sets.String, Sound: sets.Sound }, log, warn, canvasList, packAtlas, sniffAudio });
     const sfx = buildSfx({ dist: distDir, sound: sets.Sound, log, warn, sniffAudio });
     const items = buildItems({ dist: distDir, sets: { Item: sets.Item, String: sets.String, Effect: sets.Effect }, log, warn, canvasList, packAtlas });
-    report.bytes += regions.bytes + sfx.bytes + items.bytes;
+    const npc = buildNpc({ dist: distDir, sets: { Npc: sets.Npc, String: sets.String }, log, warn, canvasList, packAtlas });
+    report.bytes += regions.bytes + sfx.bytes + items.bytes + npc.bytes;
 
     const primary = sets.Mob ?? sets.Skill ?? sets.Sound ?? sets.String;
     const manifest: MapleManifest = {
@@ -552,6 +554,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
       ...regions.manifest,
       ...sfx.manifest,
       ...items.manifest,
+      ...npc.manifest,
     };
     log(`totals: mobs ${report.mobsOk}/${WANTED_MOBS.length} (${report.mobFrames} frames), skills+passives ${report.skillsOk}/${WANTED_SKILLS.length} (${report.skillFrames} animation frames), bgm run=${report.bgm.run ?? 'none'} title=${report.bgm.title ?? 'none'}, ${(report.bytes / 1e6).toFixed(2)} MB written in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     if (report.mobsMissing.length) log(`missing mobs (${report.mobsMissing.length}): ${report.mobsMissing.join('; ')}`);

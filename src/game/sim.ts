@@ -23,6 +23,8 @@ import { MOVE_WALK, MobAi, behaveStep, bossAilment, mobBehave, resetMob, updateS
 import { partnerSlotOpen, pickCard, readyRecipe } from './evolutions.ts';
 import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
 import type { BookData } from './book.ts';
+import { REVIVE_HP, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_STUN, sanitizeMeta } from './meta.ts';
+import type { MetaRanks } from './meta.ts';
 import { Pet } from './pet.ts';
 import { SCROLL_BOSS_DROPS, SCROLL_DROP_NORMAL, SCROLL_PICKUP_LIFE, ScrollPool, slotsLeft } from './scrolls.ts';
 import type { ScrollDef } from './scrolls.ts';
@@ -133,6 +135,13 @@ export class Sim {
   book: BookData = {};
   /** damage bonus of the Monster Book as a fraction, fixed for the run */
   bookBonus = 0;
+  /** Henesys shop ranks bought before the run (src/game/meta.ts), folded into the stats by recalc() */
+  meta: MetaRanks;
+  /** Safety Charm: true once the revive was used; the hero cannot be hurt while reviveT counts down */
+  reviveUsed = false;
+  reviveT = 0;
+  /** fraction of a meso that Greed has not paid out yet */
+  private mesoCarry = 0;
 
   offer: Card[] | null = null;
   pendingLevels = 0;
@@ -167,7 +176,7 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
@@ -182,6 +191,9 @@ export class Sim {
     this.scrollPool = opts.scrolls ?? ScrollPool.placeholder();
     this.book = { ...(opts.book ?? {}) };
     this.bookBonus = Math.max(0, Math.min(BOOK_BONUS_CAP, opts.bookBonus ?? bookBonus(opts.book)));
+    this.meta = sanitizeMeta(opts.meta);
+    this.rerolls = START_REROLLS + this.meta.reroll;
+    this.banishes = START_BANISHES + this.meta.banish;
     this.gearPool = opts.pool ?? GearPool.placeholder();
     this.gender = opts.gender ?? 0;
     this.autoEquip = opts.autoEquip ?? true;
@@ -195,7 +207,7 @@ export class Sim {
     this.tierSpeed = LADDER.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
     this.bossSpeed = BOSSES.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
     if (opts.pet) this.pet = new Pet(0, 0);
-    if (this.bookBonus > 0) this.recalc();
+    this.recalc();
   }
 
   // ---- events ----------------------------------------------------------------------------------
@@ -228,6 +240,14 @@ export class Sim {
         case 'crit': crit += v; break;
       }
     }
+    const mt = this.meta;
+    might += 0.05 * mt.might;
+    hpMul += 0.08 * mt.hp;
+    haste += 0.04 * mt.haste;
+    armor += mt.armor;
+    speed += 0.03 * mt.speed;
+    magnet += 0.12 * mt.magnet;
+    growth += 0.04 * mt.growth;
     const ml = this.masteryLv;
     might += MASTERY_BY_KEY.mastery.per * ml.mastery;
     hpMul += MASTERY_BY_KEY.vitality.per * ml.vitality;
@@ -719,14 +739,46 @@ export class Sim {
   }
 
   hurtPlayer(amount: number, x: number, y: number) {
+    if (this.reviveT > 0) return;
     this.damageTaken += amount;
     this.emit({ type: 'playerHit', x, y, amount });
     if (this.god) return;
     this.hp -= amount;
     if (this.hp <= 0) {
+      if (this.meta.revive > 0 && !this.reviveUsed) { this.revive(); return; }
       this.hp = 0;
       this.finish(false);
     }
+  }
+
+  /** Safety Charm: back up at REVIVE_HP of max HP, untouchable for a moment, and a burst throws every enemy nearby out of reach and stuns it. Once per run. */
+  private revive() {
+    this.reviveUsed = true;
+    this.reviveT = REVIVE_INVULN;
+    this.hp = this.maxHp * REVIVE_HP;
+    cureAilments(this);
+    const out = REVIVE_RADIUS + 1;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i];
+      if (!e.alive) continue;
+      let dx = e.x - this.px, dy = e.y - this.py;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d >= REVIVE_RADIUS) continue;
+      if (d < 0.01) { dx = 1; dy = 0; } else { dx /= d; dy /= d; }
+      e.x = this.px + dx * out;
+      e.y = this.py + dy * out;
+      if (e.boss < 0) e.stunT = Math.max(e.stunT, REVIVE_STUN);
+    }
+    this.emit({ type: 'revive', x: this.px, y: this.py, r: REVIVE_RADIUS });
+    this.raid('Safety Charm activated!');
+  }
+
+  /** Adds mesos, topped up by the shop's Greed rank (the fractions carry over, so small coins profit too). */
+  gainMesos(n: number) {
+    const total = n * (1 + 0.08 * this.meta.greed) + this.mesoCarry;
+    const whole = Math.floor(total + 1e-9);
+    this.mesoCarry = Math.max(0, total - whole);
+    this.mesos += whole;
   }
 
   private finish(won: boolean) {
@@ -897,7 +949,7 @@ export class Sim {
       case GEM: this.addXp((this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value) * (this.ail.curse ? CURSE_GEM : 1)); break;
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
       case ELIXIR: this.hp = this.maxHp; cureAilments(this); break;
-      case MESO: case BAG: this.mesos += p.value; break;
+      case MESO: case BAG: this.gainMesos(p.value); break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
       case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
       case GACHA: if (p.value >= ELITE_CAPSULE) openGacha(this, p.value - ELITE_CAPSULE, true); else openGacha(this, p.value - 1); break;
@@ -1098,7 +1150,7 @@ export class Sim {
       this.hp = this.maxHp;
       cureAilments(this);
     } else {
-      this.mesos += 25;
+      this.gainMesos(25);
     }
     this.openOffer();
     return true;
@@ -1120,6 +1172,7 @@ export class Sim {
     if (this.offer) return false;
 
     this.t += dt;
+    if (this.reviveT > 0) this.reviveT = Math.max(0, this.reviveT - dt);
     if (this.t >= RUN_LENGTH) {
       this.t = RUN_LENGTH;
       this.finish(true);
@@ -1233,6 +1286,7 @@ export class Sim {
       skillMastery: { ...this.skillMastery },
       rerolls: this.rerolls,
       banishes: this.banishes,
+      reviveUsed: this.reviveUsed,
       over: this.over,
       won: this.won,
     };
