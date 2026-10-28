@@ -596,17 +596,17 @@ html, body { -webkit-touch-callout: none; -webkit-tap-highlight-color: transpare
 .res-btns { flex-wrap: wrap; gap: 6px; }
 .res-btns .btn { flex: 1 1 0; min-width: 0; white-space: nowrap; font-size: 13px; }
 html:not(.ms-btn) .res-btns .btn { padding: 6px 8px; }
-@media (max-width: 520px) { .res-btns .btn { flex: 1 1 calc(50% - 6px); } }
+.res-btns .btn { flex: 1 1 calc(50% - 6px); }
 .res-sp { margin: 4px 0 0; text-align: center; color: #a05a00; font-weight: bold; }
 .touch .hy-tile { min-height: 46px; }
 @media (max-height: 500px) { .hyper .mwin-hyper { height: 100%; } .hy-say { min-height: 0; margin-top: 3px; } .hy-skill img { display: none; } }
 
 /* ---------- real-art look for the shop, Hyper Skills and Monster Book (ms-win / ms-btn); the plain CSS above stays without the assets ---------- */
 /* no toasts (new card, scroll results) on top of an open window */
-body:has(.screen:not(.hidden):is(.levelup, .results, .shop, .hyper, .book, :has(> .win.small:not(.resw)))) .notes { display: none; }
+body:has(.screen:not(.hidden):is(.levelup, .results, .shop, .hyper, .book, .pause)) .notes { display: none; }
 .ms-win .mwin-shop, .ms-win .mwin-hyper { padding-top: 0; overflow: visible; border: solid transparent; border-width: calc(var(--win-top) * 1px) calc(var(--win-side) * 1px) calc(var(--win-bottom) * 1px); border-image: var(--win-img) var(--win-top) var(--win-side) var(--win-bottom) fill / calc(var(--win-top) * 1px) calc(var(--win-side) * 1px) calc(var(--win-bottom) * 1px) stretch round; border-radius: 0; background: none; box-shadow: none; image-rendering: pixelated; filter: drop-shadow(0 6px 12px rgba(0,0,0,.55)); }
 .ms-win .shop .mwin-title, .ms-win .hyper .mwin-title { left: calc(var(--win-side) * -1px); right: calc(var(--win-side) * -1px); top: calc(var(--win-top) * -1px); height: calc(var(--win-top) * 1px); background: none; border: 0; color: #fff; font-size: 18px; letter-spacing: .04em; text-shadow: var(--ol); pointer-events: none; }
-.ms-win .shop .mwin-x, .ms-win .hyper .mwin-x { top: calc(var(--win-top) * -0.5px - 8px); right: calc(var(--win-side) * -1px + 8px); pointer-events: auto; z-index: 1; }
+.ms-win .shop .mwin-x, .ms-win .hyper .mwin-x { top: calc(var(--win-top) * 0.5px - 8px); right: 36px; pointer-events: auto; z-index: 1; }
 .ms-win .shop-body { padding: 4px 0 0; }
 .ms-win .shop-npc, .ms-win .hy-scroll { background: #f3ecd6; border-color: #8a7a5a; }
 .ms-win .shop-row, .ms-win .hy-cell { background: #f3ecd6; border: 1px solid #8a7a5a; }

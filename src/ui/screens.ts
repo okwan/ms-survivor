@@ -191,6 +191,7 @@ export class Screens {
 
   private buildPause(): HTMLDivElement {
     const { root, body } = this.win('Paused', 'small');
+    root.classList.add('pause');
     body.append(this.btn('Resume', 'primary', () => this.h.resume()), this.btn('Save & Quit', '', () => this.h.saveQuit()), this.btn('Quit to menu', '', () => this.h.quit()));
     return root;
   }
