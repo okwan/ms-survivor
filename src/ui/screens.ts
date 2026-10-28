@@ -5,7 +5,10 @@ import type { Card } from '../game/types.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
 import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
+import type { LoginSection } from '../maple/login-scene.ts';
 import { LoginScreen, classic } from './login.ts';
+import type { LoginLike } from './login.ts';
+import { MapLogin, mapLoginOk } from './login-map.ts';
 import type { SaveData } from './save.ts';
 import { theme } from './theme.ts';
 
@@ -69,15 +72,17 @@ export class Screens {
   private sfxVolEl!: HTMLInputElement;
   private muteEl!: HTMLButtonElement;
   private muted = false;
-  /** the classic MapleStory login screen (null: the plain title window is used) */
-  readonly login: LoginScreen | null = null;
+  /** the MapleStory login map or the classic signboard screen (null: the plain title window is used) */
+  readonly login: LoginLike | null = null;
   private titleExtra!: HTMLDivElement;
 
-  constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null) {
+  constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null, loginScene: LoginSection | null = null) {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
+    const lh = { create: () => h.start(), select: () => h.quick(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
+    if (mapLoginOk(loginScene)) this.login = new MapLogin(parent, lh, avatar, loginScene);
+    else if (classic()) this.login = new LoginScreen(parent, lh, avatar);
     this.login?.addButton('Monster Book', () => h.book());
     this.login?.addButton('Henesys Shop', () => h.shop());
     this.pause = this.buildPause();
@@ -201,7 +206,8 @@ export class Screens {
     this.volEl.value = String(save.settings.volume);
     this.sfxVolEl.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
-    this.hideAll();
+    // a visible login map stays up and pans back (its show() handles that)
+    this.hideAll({ keepLogin: !!this.login?.visible });
     if (this.login) this.login.show(save);
     else this.title.classList.remove('hidden');
   }
@@ -216,9 +222,10 @@ export class Screens {
     this.pause.classList.toggle('hidden', !on);
   }
 
-  hideAll() {
+  /** keepLogin: leave the login map up behind the character creator */
+  hideAll(o: { keepLogin?: boolean } = {}) {
     for (const s of [this.title, this.pause, this.levelup, this.results]) s.classList.add('hidden');
-    this.login?.hide();
+    if (!(o.keepLogin && this.login?.overlay)) this.login?.hide();
     this.offerRef = null;
     this.offerSig = '';
   }

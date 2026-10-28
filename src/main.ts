@@ -178,7 +178,7 @@ async function boot() {
   const screens = new Screens(
     uiRoot,
     {
-      start: () => { screens.hideAll(); create.show(save.character ?? { ...hero }); },
+      start: () => { screens.hideAll({ keepLogin: true }); create.show(save.character ?? { ...hero }); },
       quick: () => {
         const ch = save.character;
         if (!ch) return;
@@ -203,6 +203,7 @@ async function boot() {
     },
     renderer.tex.icons,
     avatar,
+    (mapleManifest as MapleManifest | null)?.login ?? null,
   );
   const bookPanel = new BookPanel(uiRoot, (mapleManifest as MapleManifest | null)?.mobs ?? {});
   const shopPanel = new ShopPanel(uiRoot, renderer.tex.icons, (mapleManifest as MapleManifest | null)?.npc ?? null, {

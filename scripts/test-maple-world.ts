@@ -150,6 +150,15 @@ try {
   ok(sf['weapon.warrior.attack'] && sf['weapon.magician.attack'] && !sf['weapon.bowman.attack'] && !sf['weapon.thief.attack'], 'one weapon sound per class that has one; 400 KB limit applies');
   ok(/format tag 0x55/.test(out) && /format tag 0x1/.test(out) && /sfx totals: 17 sounds/.test(out) && /over the 400 KB limit/.test(out) && /no Damage\/Die sound/.test(out), 'log shows format tags, totals and skips');
 
+  // the login map (UI.wz MapLogin.img + Back/login.img + Obj/login.img)
+  const lg = m!.login!;
+  ok(lg && lg.backs.length >= 2 && lg.objs.length >= 2, 'login section has backs and objects');
+  eq(lg.backs[1].frames.length, 2, 'animated login back keeps its frames');
+  ok(lg.objs.every((ob) => ob.frames.every((f) => existsSync(maple(f.src)) && f.src.startsWith('login/'))) && lg.backs.every((b) => b.frames.every((f) => existsSync(maple(f.src)))), 'login PNGs written under maple/login/');
+  eq(lg.steps.title, { x: 0, y: 0 }, 'title step at the map origin');
+  eq(lg.steps.select, { x: 0, y: -1200 }, 'select step one screen row up');
+  ok(lg.ui['Title/BtLogin/normal/0'] && lg.ui['Common/frame'] && lg.ui['WorldSelect/BtWorld/0/normal/0'], 'Login.img canvases keyed by path');
+
   // old sections are untouched
   ok(Object.keys(m!.mobs).length >= 3 && m!.bgm.run, 'mobs and bgm still extracted');
 

@@ -1,0 +1,32 @@
+/* The v83 login map screen (src/ui/login-map.ts): an 800x600 stage (canvas scene + DOM overlay) scaled to fit the window. */
+.screen.mlogin { padding: 0; background: #000; overflow: hidden; }
+.mlogin .hidden { display: none !important; }
+.ml-stage { position: absolute; left: 50%; top: 50%; width: 800px; height: 600px; transform: translate(-50%, -50%) scale(var(--ls, 1)); transform-origin: 50% 50%; overflow: hidden; }
+.ml-canvas { position: absolute; left: 0; top: 0; width: 800px; height: 600px; image-rendering: pixelated; }
+.ml-ui { position: absolute; left: 0; top: 0; width: 800px; height: 600px; font: 12px Arial, "Segoe UI", sans-serif; }
+.ml-panel { position: absolute; inset: 0; }
+
+/* sprite pieces: static images and the four-state buttons (CSS vars --n / --h / --p / --d hold the state images) */
+.ml-img { position: absolute; background-repeat: no-repeat; background-size: 100% 100%; image-rendering: pixelated; pointer-events: none; }
+.ml-btn { position: absolute; display: block; margin: 0; padding: 0; border: 0; border-radius: 0; font-size: 0; background: var(--n) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ml-btn:hover:not([disabled]) { background-image: var(--h); }
+.ml-btn:active:not([disabled]), .ml-btn.on, .ml-btn.on:hover:not([disabled]) { background-image: var(--p); }
+.ml-btn[disabled] { background-image: var(--d); cursor: default; }
+.ml-btn.nod[disabled] { filter: grayscale(1) brightness(.75); }
+.ml-btn.deco { pointer-events: none; }
+.ml-btn:focus-visible { outline: 2px solid #ffe066; outline-offset: 1px; }
+
+/* title signboard fields and texts */
+.ml-field { position: absolute; box-sizing: border-box; margin: 0; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: #222; font: 12px Arial, sans-serif; outline: none; cursor: default; }
+.ml-field::placeholder { color: #8a8a8a; opacity: 1; }
+.ml-txt { position: absolute; font: bold 12px Arial, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; white-space: nowrap; pointer-events: none; }
+.ml-hint { position: absolute; left: 0; right: 0; text-align: center; font: 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
+
+/* our own extras (not in the real client): the dock with Options, Monster Book, Henesys Shop */
+.ml-dock { position: absolute; display: flex; flex-direction: column-reverse; gap: 6px; align-items: stretch; }
+.ml-dock .btn { font-size: 13px; padding: 5px 8px; width: 100%; }
+.ml-opts { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 6px; background: rgba(0, 0, 0, .55); border: 1px solid #e8c58a; border-radius: 4px; color: #fff; text-shadow: 0 1px 2px #000; }
+.ml-opts .volume { font-size: 12px; gap: 4px; }
+.ml-opts input[type=range] { width: 90px; }
+.ml-opts .pet-opt { font-size: 11px; cursor: pointer; }
+.ml-opts .btn { width: auto; padding: 3px 12px; font-size: 12px; }

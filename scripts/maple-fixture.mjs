@@ -640,7 +640,12 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
         2: canvas(120, 40, cloud(120, 40), { origin: vec(60, 20) }),
         3: canvas(90, 30, cloud(90, 30), { origin: vec(45, 15) }),
       },
-      ani: {},
+      ani: { 0: { 0: canvas(60, 20, cloud(60, 20), { origin: vec(30, 10), delay: 200 }), 1: canvas(60, 20, cloud(60, 20), { origin: vec(30, 10), delay: 200 }) } },
+    };
+    // the login map's objects (UI.wz MapLogin.img places these)
+    mapImgs['Obj/login.img'] = {
+      Title: { signboard: { 0: canvas(180, 200, panel(180, 200, [150, 100, 55], [100, 66, 36]), { origin: vec(0, 0) }) } },
+      CharSelect: { signboard: { 0: canvas(130, 200, panel(130, 200, [150, 100, 55], [100, 66, 36]), { origin: vec(0, 0) }) } },
     };
   }
   writeFileSync(join(dir, 'Map.wz'), buildWz(mapImgs));
@@ -731,7 +736,16 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
       BtDelete: bigBtn([220, 130, 130], [150, 50, 50]),
       charInfo: canvas(140, 70, panel(140, 70, [40, 50, 90], [20, 28, 56]), { origin: vec(0, 0) }),
     },
+    WorldSelect: { BtWorld: { 0: { normal: { 0: canvas(26, 95, panel(26, 95, [255, 190, 70], [220, 120, 20]), { origin: vec(0, 0) }) } } } },
     Common: { frame: canvas(8, 8, solid([0, 0, 0])), selectWorld: canvas(60, 30, panel(60, 30, [200, 200, 220], [140, 140, 170])) },
+  };
+  // the v83 login map: a sky + a scrolling strip, the title signboard at the origin and the character select signboard one step further up
+  const lb = (o) => ({ bS: 'login', no: 0, ani: 0, x: 0, y: 0, rx: 0, ry: 0, cx: 0, cy: 0, type: 0, a: 255, front: 0, f: 0, ...o });
+  const lo = (l0, x, y) => ({ oS: 'login', l0, l1: 'signboard', l2: '0', x, y, z: 0, f: 0 });
+  const mapLogin = {
+    info: { VRLeft: -400, VRTop: -2000, VRRight: 400, VRBottom: 300 },
+    back: { 0: lb({ rx: -100, ry: -100 }), 1: lb({ ani: 1, type: 4, rx: 10 }) },
+    0: { info: {}, obj: { 0: lo('Title', 0, 0), 1: lo('CharSelect', 20, -1250) } },
   };
   const slotFrame = canvas(32, 32, panel(32, 32, [30, 38, 70], [60, 72, 120], [10, 10, 20]), { origin: vec(0, 0) });
   const tab = (on) => canvas(30, 18, panel(30, 18, on ? [255, 230, 150] : [150, 150, 170], on ? [230, 170, 60] : [100, 100, 130]), { origin: vec(0, 0) });
@@ -751,7 +765,7 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     BtShort: state(32, 20, [120, 190, 140], [50, 120, 70]),
     BtChat: state(32, 20, [150, 150, 190], [80, 80, 130]),
   });
-  writeFileSync(join(dir, 'UI.wz'), buildWz({ 'StatusBar.img': statusBar, 'Basic.img': basic, 'Login.img': login, 'UIWindow.img': uiwindow }));
+  writeFileSync(join(dir, 'UI.wz'), buildWz({ 'StatusBar.img': statusBar, 'Basic.img': basic, 'Login.img': login, 'UIWindow.img': uiwindow, 'MapLogin.img': mapLogin }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

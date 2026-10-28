@@ -53,7 +53,7 @@ async function main() {
       console.log(`SHOT-END ${s.tag}-${name}`);
     };
     const click = async (sel) => {
-      const el = page.locator(sel).first();
+      const el = page.locator(`${sel} >> visible=true`).first();
       if (!(await el.count())) { console.log(`shoot ${s.tag}: no ${sel}`); return false; }
       await el.click({ force: true });
       return true;
@@ -75,8 +75,13 @@ async function main() {
       }, SAVE);
       await page.reload();
       await page.waitForFunction(() => window.game, null, { timeout: 30000 });
-      for (const sel of ['[data-shot=login]', '[data-shot=world]', '[data-shot=channel]']) await click(sel);
+      await shot('title-saved');
+      for (const sel of ['[data-shot=login]', '[data-shot=world]', '[data-shot=channel]']) {
+        await click(sel);
+        await page.waitForTimeout(1500);
+      }
       await shot('select-saved');
+      if ((await click('[data-shot=cnew]')) || (await click('[data-shot=new]'))) await shot('create');
       console.log(`shoot ${s.tag}: ui ${JSON.stringify(await page.evaluate(() => window.game?.ui?.()))}`);
     } catch (e) {
       console.log(`shoot ${s.tag}: ${e.message}`);

@@ -40,7 +40,25 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''):
 
 export type LoginState = 'title' | 'select';
 
-export class LoginScreen {
+/** What Screens needs from a login screen: the classic LoginScreen or the map-based MapLogin (src/ui/login-map.ts). */
+export interface LoginLike {
+  readonly root: HTMLDivElement;
+  readonly state: string;
+  readonly visible: boolean;
+  /** frames the select stage drew (tests) */
+  drawn: number;
+  /** stays on screen behind the character creator (Screens.hideAll({ keepLogin })) */
+  readonly overlay?: boolean;
+  show(save: SaveData): void;
+  refresh(save: SaveData): void;
+  hide(): void;
+  showTitle(): void;
+  showSelect(): void;
+  setMuted(m: boolean): void;
+  addButton(label: string, fn: () => void): unknown;
+}
+
+export class LoginScreen implements LoginLike {
   readonly root: HTMLDivElement;
   state: LoginState = 'title';
   private stage: HTMLDivElement;
