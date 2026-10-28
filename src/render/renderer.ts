@@ -12,6 +12,7 @@ import type { GearIcons } from './gear-icons.ts';
 import type { Anim, MapleArt, MobArt } from '../maple/art.ts';
 import { DamageNumbers } from './damage.ts';
 import { DecorLayer } from './decor.ts';
+import { RegionScenery } from './regions.ts';
 import { RES, buildTextures } from './textures.ts';
 import type { MobTex, Textures } from './textures.ts';
 
@@ -84,6 +85,8 @@ export class Renderer {
   private art: MapleArt | null;
   /** MapleStory world/damage art; null members fall back to the placeholder look */
   private decor: DecorLayer | null = null;
+  /** per-region ground and decor (replaces the single ground and `decor` when the manifest has regions) */
+  private scenery: RegionScenery | null = null;
   private dmgNums: DamageNumbers | null = null;
   private levelFx: FollowFx | null = null;
   private danger: { fill: Sprite; ring: Sprite }[] = [];
@@ -106,6 +109,13 @@ export class Renderer {
     app.stage.addChild(this.world);
     this.entities.sortableChildren = true;
     if (mapArt?.objects.length) this.decor = new DecorLayer(mapArt);
+    if (art?.regions.length) {
+      this.decor = null;
+      this.ground.visible = false;
+      this.scenery = new RegionScenery(art.regions, mapArt?.ground ?? tx.ground, mapArt?.ground ? mapArt.groundColor : 0x4f9a3c, (c) => { app.renderer.background.color = c; });
+      app.stage.addChildAt(this.scenery.groundLayer, 0);
+      this.world.addChild(this.scenery.decorLayer);
+    }
     if (this.decor) this.world.addChild(this.decor.layer);
     this.world.addChild(this.groundFx, this.entities, this.fxLayer, this.topLayer);
 
@@ -421,12 +431,13 @@ export class Renderer {
     this.ground.tileScale.set(z);
 
     // decorations on a hashed grid
+    if (this.scenery) this.scenery.update(sim.region, dt, sim.px * PX, sim.py * PX, z, this.time, this.w, this.h);
     if (this.decor) this.decor.update(sim.px * PX, sim.py * PX, z, this.time, this.w, this.h);
     const halfW = this.w / 2 / z / PX + 3, halfH = this.h / 2 / z / PX + 3;
     const cx0 = Math.floor((sim.px - halfW) / DECO_CELL), cx1 = Math.floor((sim.px + halfW) / DECO_CELL);
     const cy0 = Math.floor((sim.py - halfH) / DECO_CELL), cy1 = Math.floor((sim.py + halfH) / DECO_CELL);
     let di = 0;
-    for (let cy = cy0; cy <= cy1 && di < MAX_DECOS && !this.decor; cy++) {
+    for (let cy = cy0; cy <= cy1 && di < MAX_DECOS && !this.decor && !this.scenery; cy++) {
       for (let cx = cx0; cx <= cx1 && di < MAX_DECOS; cx++) {
         const h = hash2(cx, cy);
         if (h > 0.42) continue;

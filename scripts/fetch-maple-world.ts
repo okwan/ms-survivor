@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import type { FrameRec } from '../src/maple/assets.ts';
 import type { AtlasRef, EffectsSection, MapObjItem, MapSection, UiPiece, UiSection } from '../src/maple/world-types.ts';
 import { asciiPreview, encodePng } from './png.mjs';
+import { gammaFor, liftColor, liftRgba, lumaOf } from './lift.ts';
 import { canvasRgba } from './wz.mjs';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -27,7 +28,7 @@ export interface WorldDeps {
   canvasList: (node: Any) => Any[];
   packAtlas: (frames: Any[]) => { w: number; h: number; rgba: Buffer; recs: FrameRec[] } | null;
 }
-interface SetLike {
+export interface SetLike {
   image(path: string): { root: Any; key: Any } | null;
   names(): string[];
 }
@@ -46,7 +47,7 @@ const MAX_OBJ_W = 380;
 const MAX_OBJ_H = 420;
 const DAMAGE_SETS = ['NoRed0', 'NoRed1', 'NoCri0', 'NoCri1', 'NoViolet0', 'NoViolet1', 'NoBlue0', 'NoBlue1'];
 
-interface Px {
+export interface Px {
   w: number;
   h: number;
   rgba: Buffer;
@@ -59,6 +60,11 @@ interface Px {
 
 const isNum = (k: string) => /^\d+$/.test(k);
 
+/** The helpers (PNG writing, canvas decoding, ground building) for other extractors such as fetch-maple-regions.ts. */
+export function worldTools(d: WorldDeps): World {
+  return new World(d, { manifest: {}, bytes: 0 });
+}
+
 export function buildWorld(d: WorldDeps): WorldResult {
   const out: WorldResult = { manifest: {}, bytes: 0 };
   const w = new World(d, out);
@@ -66,7 +72,7 @@ export function buildWorld(d: WorldDeps): WorldResult {
   return out;
 }
 
-class World {
+export class World {
   d: WorldDeps;
   out: WorldResult;
   constructor(d: WorldDeps, out: WorldResult) {
@@ -102,7 +108,7 @@ class World {
 
   // ---- helpers -----------------------------------------------------------------------------------------------------
 
-  private write(rel: string, wd: number, ht: number, rgba: Buffer): string {
+  write(rel: string, wd: number, ht: number, rgba: Buffer): string {
     const path = join(this.d.dist, 'maple', rel);
     mkdirSync(dirname(path), { recursive: true });
     const png = encodePng(wd, ht, rgba);
@@ -111,7 +117,7 @@ class World {
     return rel;
   }
 
-  private px(node: Any, key: Any): Px | null {
+  px(node: Any, key: Any): Px | null {
     if (!node || node.type !== 'canvas') return null;
     try {
       const [w, h, rgba] = canvasRgba(node, key);
@@ -142,7 +148,7 @@ class World {
     return { action, index, w: px.w, h: px.h, ox: px.ox, oy: px.oy, delay: px.hasDelay ? px.delay : 100, rgba: px.rgba, id: px.id };
   }
 
-  private preview(title: string, p: { w: number; h: number; rgba: Buffer } | null) {
+  preview(title: string, p: { w: number; h: number; rgba: Buffer } | null) {
     if (!p) return this.d.log(`preview ${title}: not available`);
     console.log(`--- ${title} ${p.w}x${p.h} ---\n${asciiPreview(p.w, p.h, p.rgba, PREVIEW_COLS)}`);
   }
@@ -203,7 +209,12 @@ class World {
     return section.ground || section.objects ? section : undefined;
   }
 
-  private buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>): MapSection['ground'] {
+  /** `file` is the PNG path under maple/ (regions write one ground per region) */
+  /** `lift`: grounds darker than that target luminance (but not nearly black, < 10) are gamma-lifted to it; the unlifted luma is left in lastLuma */
+  lastLuma = 0;
+  /** mean opaque share (%) of the bsc tiles of the last buildGround */
+  lastOpaque = 100;
+  buildGround(wz: SetLike, tileSet: string, bscUse: Map<number, number>, file = 'map/ground.png', lift = 0): MapSection['ground'] {
     const { log, warn } = this.d;
     const img = wz.image(`Tile/${tileSet}.img`);
     if (!img) {
@@ -237,12 +248,13 @@ class World {
         if (t.rgba[i * 4 + 3] < 200) continue;
         r += t.rgba[i * 4]; g += t.rgba[i * 4 + 1]; b += t.rgba[i * 4 + 2]; n++;
       }
-    const avg: [number, number, number] = n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : [79, 154, 60];
+    let avg: [number, number, number] = n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : [79, 154, 60];
     const cov = tiles.map((t) => {
       let o = 0;
       for (let i = 0; i < t.w * t.h; i++) if (t.rgba[i * 4 + 3] >= 200) o++;
       return Math.round((100 * o) / (t.w * t.h));
     });
+    this.lastOpaque = cov.reduce((a, x) => a + x, 0) / cov.length;
     log(`ground: ${tiles.length} bsc tiles ${tiles.map((t) => `${t.w}x${t.h}`).join(',')}, opaque ${cov.join('/')}%, average colour rgb(${avg.join(',')})`);
 
     // 4 x 4 grid of weighted-random variants: tiles are drawn on a w x h grid in the game, so this repeats seamlessly
@@ -275,7 +287,16 @@ class World {
             for (let c = 0; c < 3; c++) rgba[o + c] = (t.rgba[s + c] * a + rgba[o + c] * (255 - a)) / 255;
           }
       }
-    const image = this.write('map/ground.png', W, H, rgba);
+    const luma = lumaOf(avg[0], avg[1], avg[2]);
+    this.lastLuma = luma;
+    if (lift && luma >= 10 && luma < lift) {
+      const g = gammaFor(avg, lift);
+      liftRgba(rgba, g);
+      const after = liftColor(avg, g);
+      log(`ground ${file}: dark (luma ${luma.toFixed(0)}, rgb(${avg.join(',')})), gamma lift ${g.toFixed(2)} -> rgb(${after.join(',')}) luma ${lumaOf(...after).toFixed(0)}`);
+      avg = after;
+    }
+    const image = this.write(file, W, H, rgba);
     this.preview(`ground tile (${tileSet}/bsc/0)`, tiles[0]);
     log(`ground texture ${image} ${W}x${H}`);
     return { image, w: W, h: H, avg };

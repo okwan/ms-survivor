@@ -37,6 +37,26 @@ const frame = (w, h, col, delay, wiggle = 0, dx = 0) => canvas(w, h, blob(w, h, 
 const seq = (n, make) => Object.fromEntries(Array.from({ length: n }, (_, i) => [i, make(i)]));
 
 export const ID3_MP3 = Buffer.concat([Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00', 'latin1'), Buffer.from(Array.from({ length: 300 }, (_, i) => (i * 7) & 0xff))]);
+/** WAVEFORMATEX for the sound header: tag 1 = PCM, 0x55 = MP3 (30-byte MPEGLAYER3WAVEFORMAT). */
+export function wfx(tag, channels, rate, bits) {
+  const b = Buffer.alloc(tag === 0x55 ? 30 : 18);
+  b.writeUInt16LE(tag, 0);
+  b.writeUInt16LE(channels, 2);
+  b.writeUInt32LE(rate, 4);
+  b.writeUInt32LE((rate * channels * bits) / 8, 8);
+  b.writeUInt16LE((channels * bits) / 8, 12);
+  b.writeUInt16LE(bits, 14);
+  b.writeUInt16LE(b.length - 18, 16);
+  return b;
+}
+export const mp3Sfx = (n = 2000, ms = 300) => sound(Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x00]), Buffer.from(Array.from({ length: n }, (_, i) => (i * 11) & 0xff))]), ms, wfx(0x55, 2, 44100, 0));
+/** 16-bit mono sine, as raw PCM in a node whose header says tag 1 */
+export const pcmSfx = (samples = 2000, ms = 90) => {
+  const b = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i++) b.writeInt16LE(Math.round(Math.sin(i / 6) * 9000), i * 2);
+  return sound(b, ms, wfx(1, 1, 22050, 16));
+};
+
 export const SYNC_MP3 = Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x00]), Buffer.from(Array.from({ length: 200 }, (_, i) => (i * 13) & 0xff))]);
 
 function mobTree(col, w, h, { link, fly = false, attack = false, info = {}, still = false } = {}) {
@@ -311,16 +331,47 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
     'BgmUI.img': noTitle ? { Login: sound(SYNC_MP3, 1000), WorldSelect: sound(SYNC_MP3, 1000) } : { Title: sound(SYNC_MP3, 60000) },
   };
 
+  // sound effects: layout as expected from Sound.wz (Mob.img/<7-digit id>/{Damage,Die,Attack1}, Skill.img/<skill id>/{Use,Hit}, ...)
+  const boss = WANTED_MOBS.find((m) => m.tier === 'B1');
+  sounds['Mob.img'] = {
+    '0100100': { Damage: mp3Sfx(), Die: pcmSfx() },
+    '0100101': { Damage: mp3Sfx(1500) },
+    [String(boss.id).padStart(7, '0')]: { Damage: mp3Sfx(), Die: mp3Sfx(3000, 800), Attack1: pcmSfx(3000) },
+    '0120100': { Move: mp3Sfx() }, // no Damage/Die: logged
+  };
+  sounds['Skill.img'] = { '2001005': { Use: mp3Sfx(), Hit: pcmSfx(1200) }, '2101004': { Use: mp3Sfx() } };
+  sounds['Game.img'] = { LevelUp: pcmSfx(6000, 270), PickUpItem: mp3Sfx(), DropItem: mp3Sfx(), Portal: pcmSfx(3000) };
+  sounds['UI.img'] = { BtMouseClick: mp3Sfx(), BtMouseOver: mp3Sfx(900), DlgNotice: mp3Sfx() };
+  sounds['Weapon.img'] = {
+    swordL: { Attack: mp3Sfx() },
+    wand: { Attack: pcmSfx(2500) },
+    bow: { Attack: sound(Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x00]), Buffer.alloc(500000, 7)]), 9000, wfx(0x55, 2, 44100, 0)) }, // over 400 KB: skipped
+  };
+  const strings = {
+    'Mob.img': names,
+    'Map.img': {
+      victoria: {
+        104040000: { streetName: 'Henesys', mapName: 'Hunting Ground I' },
+        101010000: { streetName: 'Victoria Road', mapName: 'The Field North of Ellinia' },
+        102000100: { streetName: 'Perion', mapName: 'Rocky Hill' },
+        105040300: { streetName: 'Victoria Road', mapName: 'The Forest of Sleepywood' },
+        107000000: { streetName: 'Victoria Road', mapName: 'The Swamp of Despair I' },
+        107000100: { streetName: 'Victoria Road', mapName: 'The Swamp of Despair II' },
+        107000200: { streetName: 'Victoria Road', mapName: 'The Swamp of Despair III' },
+      },
+    },
+  };
+
   writeFileSync(join(dir, 'Mob.wz'), buildWz(mobs));
   writeFileSync(join(dir, 'Skill.wz'), buildWz(skillImgs));
-  writeFileSync(join(dir, 'String.wz'), buildWz({ 'Mob.img': names }));
+  writeFileSync(join(dir, 'String.wz'), buildWz(strings));
   writeFileSync(join(dir, 'Sound.wz'), buildWz(sounds));
   if (character) {
     const { Base, Character } = await characterImages();
     const gear = gearImages();
     writeFileSync(join(dir, 'Base.wz'), buildWz(Base));
     writeFileSync(join(dir, 'Character.wz'), buildWz({ ...Character, ...gear.Character }));
-    writeFileSync(join(dir, 'String.wz'), buildWz({ 'Mob.img': names, 'Eqp.img': { Eqp: gear.Eqp } }));
+    writeFileSync(join(dir, 'String.wz'), buildWz({ ...strings, 'Eqp.img': { Eqp: gear.Eqp } }));
   }
 }
 
@@ -439,8 +490,30 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     1: { info: { tS: 'grassySoil' }, tile: {}, obj: {} },
     foothold: {},
   };
-  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([30, 30, 30])) } }, ...objs };
+  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([90, 110, 100])) } }, 'Tile/forestGreen.img': { bsc: { 0: canvas(8, 8, solid([60, 150, 60])) } }, 'Tile/ancientForest.img': { bsc: { 0: canvas(8, 8, solid([25, 48, 22])) } }, 'Tile/blackTile.img': { bsc: { 0: canvas(8, 8, () => [0, 0, 0, 0]) } }, 'Tile/darkWood.img': { bsc: { 0: canvas(8, 8, solid([35, 26, 7])) } }, 'Tile/swamp.img': { bsc: { 0: canvas(8, 8, solid([40, 41, 38])) } }, 'Tile/dryRock.img': { bsc: { 0: canvas(8, 8, solid([170, 130, 90])) } }, 'Tile/darkCave.img': { bsc: { 0: canvas(8, 8, solid([0, 0, 0])) } }, ...objs };
   if (!noTown) mapImgs['Map/Map1/100000000.img'] = town;
+  // run regions: 0 and 1 are candidates, 2 is found by its String.wz street name (no candidate exists), 3 to 6 have no map at all
+  objs['Obj/acc2.img'] = { nature: { rock: { a: { 0: objFrame(80, 50, bushPx(80, 50)) } } } };
+  mapImgs['Obj/acc2.img'] = objs['Obj/acc2.img'];
+  // supplementary decor a tile-less map borrows: acc*/<borrowed tile set>/nature
+  mapImgs['Obj/acc3.img'] = { ancientForest: { nature: { a: { 0: objFrame(60, 90, treePx(60, 90, 0)) }, b: { 0: objFrame(30, 30, bushPx(30, 30)) } } } };
+  const regionMap = (tS, refs, bgm, n = 40, noTiles = false) => {
+    const list = {};
+    let k = 0;
+    for (const r of refs) for (let i = 0; i < r[4]; i++) list[k] = mkObj(r, k++);
+    const t = {};
+    for (let i = 0; i < n; i++) t[i] = { u: 'bsc', no: i % 2, x: i * 90, y: 0, zM: 0 };
+    return { info: { bgm, mapMark: 'None' }, 0: { info: { tS }, tile: t, obj: list }, 1: { info: { tS: 'grassySoil' }, tile: noTiles ? {} : { 0: { u: 'enH0', no: 0, x: 0, y: 0 } }, obj: {} }, foothold: {} };
+  };
+  const natureRefs = [['acc1', 'nature', 'tree', '0', 20], ['acc1', 'nature', 'bush', '0', 15], ['acc1', 'flower', 'a', '0', 12], ['acc1', 'flower', 'b', '0', 6], ['etc', 'fence', 'a', '0', 30], ['house', 'home', 'big', '0', 9], ['etc', 'connect', 'ladder', '0', 7]];
+  mapImgs['Map/Map1/104040000.img'] = regionMap('grassySoil', natureRefs, 'Bgm00/FloralLife');
+  mapImgs['Map/Map1/101010000.img'] = regionMap('darkMountain', [['acc1', 'nature', 'tree', '0', 12], ['acc2', 'nature', 'rock', 'a', 9], ['signboard', 'sign', 'a', '0', 5]], 'Bgm00/Henesys', 0, true); // Ellinia: no tiles at all, borrows ancientForest
+  mapImgs['Map/Map1/102000100.img'] = regionMap('dryRock', natureRefs.slice(0, 4), 'Bgm00/FloralLife');
+  // region 3: Sleepywood by map name; region 4: first two candidates are rejected on purpose (tile set in use, pure black)
+  mapImgs['Map/Map1/105040300.img'] = regionMap('darkWood', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // dim: accepted and brightened
+  mapImgs['Map/Map1/107000000.img'] = regionMap('grassySoil', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // tile set already used
+  mapImgs['Map/Map1/107000100.img'] = regionMap('darkCave', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // black
+  mapImgs['Map/Map1/107000200.img'] = regionMap('swamp', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // dim: accepted and brightened
   mapImgs['Back/grassySoil.img'] = { back: { 0: canvas(16, 16, solid([200, 230, 255])) } };
   writeFileSync(join(dir, 'Map.wz'), buildWz(mapImgs));
 

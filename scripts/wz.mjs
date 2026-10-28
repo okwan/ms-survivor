@@ -449,8 +449,11 @@ function parseExtended(r, imgStart, end, name, parent) {
       const dataLen = r.cint();
       const ms = r.cint();
       // the header (a media type GUID block and WAVEFORMATEX) sits between; the audio is the tail
-      const data = end && dataLen > 0 && dataLen <= end - r.pos ? r.buf.subarray(end - dataLen, end) : Buffer.alloc(0);
-      return new Prop(name, 'sound', { ms, data }, parent);
+      const ok = end && dataLen > 0 && dataLen <= end - r.pos;
+      const data = ok ? r.buf.subarray(end - dataLen, end) : Buffer.alloc(0);
+      // everything between ms and the audio: 51 bytes of GUIDs, a length byte, then the WAVEFORMATEX (see scripts/wz-audio.ts)
+      const header = ok ? r.buf.subarray(r.pos, end - dataLen) : Buffer.alloc(0);
+      return new Prop(name, 'sound', { ms, data, header }, parent);
     }
     case 'UOL': {
       r.pos += 1;

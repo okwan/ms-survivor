@@ -5,6 +5,8 @@
 import { ImageSource, Rectangle, Texture } from 'pixi.js';
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import type { FrameRec, MapleManifest } from './assets.ts';
+import { buildRegionArt } from './region-art.ts';
+import type { RegionArt } from './region-art.ts';
 import type { UiPiece } from './world-types.ts';
 
 /** A frame sequence. cum[i] is the time (s) at which frame i ends; origin anchors are per frame (ratios of the frame size). */
@@ -92,6 +94,12 @@ export class MapleArt {
   /** LevelUp effect animation (origin at the player's feet) */
   levelUp: Anim | null = null;
   ui: UiArt | null = null;
+  /** the seven run regions (ground, decor, banner names, music); empty when the manifest has none */
+  regions: RegionArt[] = [];
+  /** region tracks by region index (null: use the run track) */
+  bgmRegions: (string | null)[] = [];
+  /** sound effect URLs by key (see scripts/fetch-maple-sfx.ts) */
+  sfx: Record<string, string> = {};
 }
 
 function loadImage(url: string): Promise<HTMLImageElement | null> {
@@ -103,7 +111,7 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
   });
 }
 
-function makeAnim(source: ImageSource, frames: FrameRec[], action: string): Anim | null {
+export function makeAnim(source: ImageSource, frames: FrameRec[], action: string): Anim | null {
   const list = frames.filter((f) => f.action === action).sort((a, b) => a.index - b.index);
   if (!list.length) return null;
   const a: Anim = { tex: [], ax: [], ay: [], cum: [], total: 0 };
@@ -188,6 +196,9 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
     Promise.all([...SKILLS.map((s) => icon(s.key, s.id)), ...PASSIVES.map((p) => icon(p.key, p.id))]),
   ]);
   await buildWorldArt(m, base, art, atlas);
+  art.regions = await buildRegionArt(m, base, atlas);
+  art.bgmRegions = art.regions.map((r) => r.bgm);
+  for (const [k, v] of Object.entries(m.sfx ?? {})) art.sfx[k] = base + v;
   art.tiers = tiers;
   art.bosses = bosses;
   art.bgm = { run: m.bgm.run ? base + m.bgm.run : null, title: m.bgm.title ? base + m.bgm.title : null };

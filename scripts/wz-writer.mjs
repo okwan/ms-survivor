@@ -14,7 +14,8 @@ export const short = (v) => ({ $: 'short', v });
 /** A canvas of w x h pixels (BGRA4444). `pixel(x, y)` returns [r, g, b, a]; `props` are its child properties (origin, delay...). */
 export const canvas = (w, h, pixel, props = {}) => ({ $: 'canvas', w, h, pixel, props });
 /** A Sound_DX8 node whose audio payload is `data` (a Buffer). */
-export const sound = (data, ms = 1000) => ({ $: 'sound', data, ms });
+/** `wfx`: an optional WAVEFORMATEX buffer for the media header (otherwise a 51-byte stand-in without one). */
+export const sound = (data, ms = 1000, wfx = null) => ({ $: 'sound', data, ms, wfx });
 
 class Writer {
   constructor(key) {
@@ -170,7 +171,11 @@ export function buildImage(tree, key) {
         w.u8(0);
         w.cint(v.data.length);
         w.cint(v.ms);
-        w.push(Buffer.alloc(51, 0x11)); // stand-in for the media type GUID block + WAVEFORMATEX
+        w.push(Buffer.alloc(51, 0x11)); // stand-in for the media type GUID block
+        if (v.wfx) {
+          w.u8(v.wfx.length);
+          w.push(v.wfx);
+        }
         w.push(v.data);
       });
     } else if (v.$ === 'canvas') {

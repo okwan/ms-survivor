@@ -1,0 +1,7 @@
+/* Maple-style map name banner: street name over map name, top centre */
+.map-banner { position: fixed; left: 50%; top: 14%; transform: translate(-50%, -8px); z-index: 20; min-width: 240px; max-width: 86vw; padding: 10px 44px 12px; text-align: center; pointer-events: none; opacity: 0; transition: opacity .6s ease, transform .6s ease; background: linear-gradient(90deg, rgba(10,16,34,0), rgba(10,16,34,.72) 18%, rgba(10,16,34,.72) 82%, rgba(10,16,34,0)); border-top: 2px solid rgba(255,214,120,.0); }
+.map-banner.show { opacity: 1; transform: translate(-50%, 0); }
+.map-banner .street { font-size: 15px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #ffd98a; text-shadow: var(--ol, -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000); }
+.map-banner .name { margin-top: 2px; font-size: 30px; font-weight: 900; color: #fff; text-shadow: var(--ol, -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000), 0 3px 0 rgba(0,0,0,.6); }
+.map-banner .rule { height: 2px; margin: 6px auto 0; width: 70%; background: linear-gradient(90deg, transparent, #ffd98a, transparent); }
+.ms-ui .map-banner { font-family: var(--font); }
