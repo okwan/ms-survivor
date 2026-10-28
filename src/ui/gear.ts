@@ -8,6 +8,7 @@ import type { Sim } from '../game/sim.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import type { Look, LookGear } from '../maple/avatar-core.ts';
 import type { GearIcons } from '../render/gear-icons.ts';
+import { isTouch } from './touch.ts';
 import { GearWindows } from './windows.ts';
 
 export interface GearUiHooks {
@@ -97,7 +98,7 @@ export class GearUi {
         this.toast.className = `gear-toast ${tt.kind}`;
         this.toast.innerHTML = `<img alt="" src="${this.icons.url(tt.item)}"><span><b></b><em></em></span>`;
         this.toast.querySelector('b')!.textContent = tt.kind === 'equipped' ? `Equipped ${tt.item.name}` : tt.item.name;
-        this.toast.querySelector('em')!.textContent = tt.kind === 'equipped' ? line : `${line || 'no bonus'} - press E to equip`;
+        this.toast.querySelector('em')!.textContent = tt.kind === 'equipped' ? line : `${line || 'no bonus'} - ${isTouch() ? 'tap' : 'press E'} to equip`;
       }
     }
     this.toast.style.display = show ? '' : 'none';

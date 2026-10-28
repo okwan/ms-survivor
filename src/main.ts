@@ -28,6 +28,7 @@ import { ScrollPool } from './game/scrolls.ts';
 import { bookBonus, bookCounts, mergeBook } from './game/book.ts';
 import { applyUiTheme } from './ui/theme.ts';
 import { Input } from './ui/input.ts';
+import { isTouch } from './ui/touch.ts';
 import { loadSave, writeSave } from './ui/save.ts';
 import { Screens } from './ui/screens.ts';
 
@@ -59,6 +60,7 @@ async function loadArt(): Promise<MapleArt | null> {
 }
 
 async function boot() {
+  if (isTouch()) document.documentElement.classList.add('touch');
   const uiRoot = document.getElementById('ui')!;
   const host = document.getElementById('app')!;
 
@@ -67,7 +69,7 @@ async function boot() {
     resizeTo: window,
     background: 0x4f9a3c,
     antialias: false,
-    resolution: Math.min(2, window.devicePixelRatio || 1),
+    resolution: Math.min(isTouch() ? 1.5 : 2, window.devicePixelRatio || 1),
     autoDensity: true,
   });
   host.appendChild(app.canvas);
@@ -269,6 +271,7 @@ async function boot() {
       if (sim.offer) acc = 0;
       if (sim.over) endRun();
     }
+    input.setHint(mode === 'playing');
     if (sim.events.length) {
       if (sfx) playSimEvents(sfx, sim.events, sim.cls.key);
       for (let i = 0; i < sim.events.length; i++) {
