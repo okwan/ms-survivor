@@ -30,7 +30,7 @@ passives, skill max level 8, passive max level 5, and the same level scaling as 
 | Warrior | 160 | 6.8 | 5% | Sword 01302000 | one-handed swing |
 | Magician | 120 | 7.0 | 5% | Wand 01372005 | one-handed swing |
 | Bowman | 120 | 7.2 | 10% | Bow 01452002 | shoot |
-| Thief | 120 | 7.5 | 8% | Dagger 01332005 | stab |
+| Thief | 150 | 7.5 | 8% | Dagger 01332005 | stab |
 
 Passives are the real ones of each job and are listed with the jobs below. Stats: might = damage, haste = cooldown speed, armor = flat damage reduction per hit.
 
@@ -44,7 +44,7 @@ Passives are the real ones of each job and are listed with the jobs below. Stats
 - Effects: `stun(s)` stops movement and contact hits; `root(s)` stops movement only; `drain(f)` heals
   the hero by f of damage dealt (capped at 2 HP per hit).
 
-Skills and passives per job. New skills sit between the existing ones of their kind; 2nd-job ones are about 1.3x a 1st-job skill of the same kind and 3rd-job ones about 1.7x. The Warrior's Power Strike now splashes (radius 2) because the Warrior has only two active skills before level 70 on some branches.
+Skills and passives per job. New skills sit between the existing ones of their kind; 2nd-job ones are about 1.3x a 1st-job skill of the same kind and 3rd-job ones about 1.7x. The Warrior's Power Strike splashes (radius 2) and each Warrior 2nd job has a Final Attack active. Thief damage numbers and base HP (150) are tuned up so both Thief branches survive in the bot probe.
 
 ## Warrior
 
@@ -58,6 +58,10 @@ Skills and passives per job. New skills sit between the existing ones of their k
 Passives: Improved HP Recovery 1000000 (+1 HP per second), Improved MaxHP Increase 1000001 (+20% max HP), Endure 1000002 (+1 armor), Iron Body 1001003 (+1 armor).
 
 ### Fighter (110, 2nd job, choose at level 30)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| final_attack_fighter | Final Attack: Sword/Axe | 1100002 | melee | 22 | 1.2 | 4.5 | 3 | 1 |  |
 
 Passives: Rage 1101006 (+15% damage), Power Guard 1101007 (+1 armor), Sword Booster 1101004 (+8% cooldown speed).
 
@@ -75,6 +79,7 @@ Passives: Combo Attack 1111002 (+8% damage).
 
 | key | name | id | kind | dmg | cd | range | radius | count | other |
 |---|---|---|---|---|---|---|---|---|---|
+| final_attack_page | Final Attack: Sword/Blunt | 1200002 | melee | 22 | 1.2 | 4.5 | 3 | 1 |  |
 | threaten | Threaten | 1201006 | nova | 6 | 4.5 | 0 | 7 | 1 | weaken 4 s |
 
 Passives: Power Guard 1201007 (+1 armor), Sword Booster 1201004 (+8% cooldown speed).
@@ -89,6 +94,10 @@ Passives: Power Guard 1201007 (+1 armor), Sword Booster 1201004 (+8% cooldown sp
 Passives: Fire Charge 1211003 (+8% damage).
 
 ### Spearman (130, 2nd job, choose at level 30)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| final_attack_spearman | Final Attack: Spear | 1300002 | melee | 22 | 1.2 | 4.5 | 3 | 1 |  |
 
 Passives: Hyper Body 1301007 (+20% max HP), Iron Will 1301006 (+1 armor), Spear Booster 1301004 (+8% cooldown speed).
 
@@ -224,9 +233,9 @@ Passives: Mortal Blow 3210001 (+4% crit chance).
 
 | key | name | id | kind | dmg | cd | range | radius | count | other |
 |---|---|---|---|---|---|---|---|---|---|
-| lucky_seven | Lucky Seven | 4001344 | bolt | 9 | 0.9 | 22 | 0 | 2 | start skill |
-| double_stab | Double Stab | 4001334 | melee | 10 | 0.8 | 4 | 0 | 1 | 2 hits per target |
-| disorder | Disorder | 4001002 | melee | 8 | 1.6 | 4 | 0 | 1 | weaken 3 s |
+| lucky_seven | Lucky Seven | 4001344 | bolt | 20.7 | 0.9 | 22 | 0 | 2 | start skill |
+| double_stab | Double Stab | 4001334 | melee | 23 | 0.8 | 4 | 0 | 1 | 2 hits per target |
+| disorder | Disorder | 4001002 | melee | 18.4 | 1.6 | 4 | 0 | 1 | weaken 3 s |
 
 Passives: Nimble Body 4000000 (+10% move speed), Keen Eyes 4000001 (+40% pickup range), Dark Sight 4001003 (+1 armor).
 
@@ -234,7 +243,7 @@ Passives: Nimble Body 4000000 (+10% move speed), Keen Eyes 4000001 (+40% pickup 
 
 | key | name | id | kind | dmg | cd | range | radius | count | other |
 |---|---|---|---|---|---|---|---|---|---|
-| drain | Drain | 4101005 | melee | 14 | 2 | 4.5 | 0 | 2 | drain 0.2 |
+| drain | Drain | 4101005 | melee | 32.2 | 2 | 4.5 | 0 | 2 | drain 0.2 |
 
 Passives: Haste 4101004 (+10% move speed), Critical Throw 4100001 (+4% crit chance), Claw Booster 4101003 (+8% cooldown speed).
 
@@ -242,9 +251,9 @@ Passives: Haste 4101004 (+10% move speed), Critical Throw 4100001 (+4% crit chan
 
 | key | name | id | kind | dmg | cd | range | radius | count | other |
 |---|---|---|---|---|---|---|---|---|---|
-| avenger | Avenger | 4111005 | pierce | 20 | 2 | 26 | 0 | 1 | passes 4 + level |
-| shadow_web | Shadow Web | 4111003 | strike | 6 | 6 | 12 | 5 | 1 | root 3 s |
-| shadow_meso | Shadow Meso | 4111004 | bolt | 14 | 2 | 22 | 3 | 1 | splash |
+| avenger | Avenger | 4111005 | pierce | 46 | 2 | 26 | 0 | 1 | passes 4 + level |
+| shadow_web | Shadow Web | 4111003 | strike | 13.8 | 6 | 12 | 5 | 1 | root 3 s |
+| shadow_meso | Shadow Meso | 4111004 | bolt | 32.2 | 2 | 22 | 3 | 1 | splash |
 
 Passives: Shadow Partner 4111002 (+8% damage), Meso Up 4111001 (+8% experience).
 
@@ -252,8 +261,8 @@ Passives: Shadow Partner 4111002 (+8% damage), Meso Up 4111001 (+8% experience).
 
 | key | name | id | kind | dmg | cd | range | radius | count | other |
 |---|---|---|---|---|---|---|---|---|---|
-| savage_blow | Savage Blow | 4201005 | melee | 6 | 1.2 | 4.5 | 0 | 1 | 6 hits per target |
-| steal | Steal | 4201004 | melee | 14 | 1.2 | 4.5 | 0 | 1 | 30% mesos per hit |
+| savage_blow | Savage Blow | 4201005 | melee | 13.8 | 1.2 | 4.5 | 0 | 1 | 6 hits per target |
+| steal | Steal | 4201004 | melee | 32.2 | 1.2 | 4.5 | 0 | 1 | 30% mesos per hit |
 
 Passives: Haste 4201003 (+10% move speed), Dagger Booster 4201002 (+10% cooldown speed).
 
@@ -261,9 +270,9 @@ Passives: Haste 4201003 (+10% move speed), Dagger Booster 4201002 (+10% cooldown
 
 | key | name | id | kind | dmg | cd | range | radius | count | other |
 |---|---|---|---|---|---|---|---|---|---|
-| meso_explosion | Meso Explosion | 4211006 | nova | 20 | 5 | 0 | 8 | 1 |  |
-| band_of_thieves | Band of Thieves | 4211004 | cone | 16 | 3 | 0 | 8 | 1 |  |
-| assaulter | Assaulter | 4211002 | melee | 45 | 5 | 7 | 0 | 1 |  |
+| meso_explosion | Meso Explosion | 4211006 | nova | 46 | 5 | 0 | 8 | 1 |  |
+| band_of_thieves | Band of Thieves | 4211004 | cone | 36.8 | 3 | 0 | 8 | 1 |  |
+| assaulter | Assaulter | 4211002 | melee | 103.5 | 5 | 7 | 0 | 1 |  |
 
 Passives: Meso Guard 4211005 (+1 armor).
 

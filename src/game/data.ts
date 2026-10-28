@@ -200,6 +200,10 @@ const WARRIOR_SKILLS: SkillDef[] = [
   // Warrior (1st job)
   S('power_strike', 'Power Strike', 1001004, 'melee', 'fire', 18, 0.9, 4.5, 2, 1, 'A heavy blow that hurts the enemies around the target.'),
   S('slash_blast', 'Slash Blast', 1001005, 'cone', 'fire', 14, 1.6, 0, 6, 1, 'Slashes everything in front of you.'),
+  // Fighter, Page, Spearman: Final Attack, a follow-up swing around the hero
+  S('final_attack_fighter', 'Final Attack: Sword/Axe', 1100002, 'melee', 'fire', 22, 1.2, 4.5, 3, 1, 'A follow-up swing that hits the enemies around the target.'),
+  S('final_attack_page', 'Final Attack: Sword/Blunt', 1200002, 'melee', 'ice', 22, 1.2, 4.5, 3, 1, 'A follow-up swing that hits the enemies around the target.'),
+  S('final_attack_spearman', 'Final Attack: Spear', 1300002, 'melee', 'lightning', 22, 1.2, 4.5, 3, 1, 'A follow-up thrust that hits the enemies around the target.'),
   // Page
   S('threaten', 'Threaten', 1201006, 'nova', 'arcane', 6, 4.5, 0, 7, 1, 'A glare that weakens the hits of everything around you.', { weaken: 4 }),
   // White Knight
@@ -262,22 +266,22 @@ const BOWMAN_SKILLS: SkillDef[] = [
 ];
 const THIEF_SKILLS: SkillDef[] = [
   // Thief (1st job)
-  S('lucky_seven', 'Lucky Seven', 4001344, 'bolt', 'arcane', 9, 0.9, 22, 0, 2, 'Throws stars at the nearest enemies.'),
-  S('double_stab', 'Double Stab', 4001334, 'melee', 'arcane', 10, 0.8, 4, 0, 1, 'Two quick stabs.', { hits: 2 }),
-  S('disorder', 'Disorder', 4001002, 'melee', 'poison', 8, 1.6, 4, 0, 1, 'A stab that weakens the enemy.', { weaken: 3 }),
+  S('lucky_seven', 'Lucky Seven', 4001344, 'bolt', 'arcane', 20.7, 0.9, 22, 0, 2, 'Throws stars at the nearest enemies.'),
+  S('double_stab', 'Double Stab', 4001334, 'melee', 'arcane', 23, 0.8, 4, 0, 1, 'Two quick stabs.', { hits: 2 }),
+  S('disorder', 'Disorder', 4001002, 'melee', 'poison', 18.4, 1.6, 4, 0, 1, 'A stab that weakens the enemy.', { weaken: 3 }),
   // Assassin
-  S('drain', 'Drain', 4101005, 'melee', 'poison', 14, 2.0, 4.5, 0, 2, 'Steals life from nearby enemies.', { drain: 0.2 }),
+  S('drain', 'Drain', 4101005, 'melee', 'poison', 32.2, 2.0, 4.5, 0, 2, 'Steals life from nearby enemies.', { drain: 0.2 }),
   // Hermit
-  S('avenger', 'Avenger', 4111005, 'pierce', 'arcane', 20, 2.0, 26, 0, 1, 'A star that pierces through enemies.', { pierceBase: 4 }),
-  S('shadow_web', 'Shadow Web', 4111003, 'strike', 'poison', 6, 6.0, 12, 5, 1, 'Roots enemies in a web.', { root: 3 }),
-  S('shadow_meso', 'Shadow Meso', 4111004, 'bolt', 'fire', 14, 2.0, 22, 3, 1, 'A meso that explodes on impact.'),
+  S('avenger', 'Avenger', 4111005, 'pierce', 'arcane', 46, 2.0, 26, 0, 1, 'A star that pierces through enemies.', { pierceBase: 4 }),
+  S('shadow_web', 'Shadow Web', 4111003, 'strike', 'poison', 13.8, 6.0, 12, 5, 1, 'Roots enemies in a web.', { root: 3 }),
+  S('shadow_meso', 'Shadow Meso', 4111004, 'bolt', 'fire', 32.2, 2.0, 22, 3, 1, 'A meso that explodes on impact.'),
   // Bandit
-  S('savage_blow', 'Savage Blow', 4201005, 'melee', 'fire', 6, 1.2, 4.5, 0, 1, 'Six savage strikes.', { hits: 6 }),
-  S('steal', 'Steal', 4201004, 'melee', 'arcane', 14, 1.2, 4.5, 0, 1, 'A stab that sometimes makes the enemy drop mesos.', { steal: 0.3 }),
+  S('savage_blow', 'Savage Blow', 4201005, 'melee', 'fire', 13.8, 1.2, 4.5, 0, 1, 'Six savage strikes.', { hits: 6 }),
+  S('steal', 'Steal', 4201004, 'melee', 'arcane', 32.2, 1.2, 4.5, 0, 1, 'A stab that sometimes makes the enemy drop mesos.', { steal: 0.3 }),
   // Chief Bandit
-  S('meso_explosion', 'Meso Explosion', 4211006, 'nova', 'fire', 20, 5.0, 0, 8, 1, 'Mesos explode around you.'),
-  S('band_of_thieves', 'Band of Thieves', 4211004, 'cone', 'poison', 16, 3.0, 0, 8, 1, 'Your band rushes the enemies ahead.'),
-  S('assaulter', 'Assaulter', 4211002, 'melee', 'arcane', 45, 5.0, 7, 0, 1, 'Dash in and strike the nearest enemy.'),
+  S('meso_explosion', 'Meso Explosion', 4211006, 'nova', 'fire', 46, 5.0, 0, 8, 1, 'Mesos explode around you.'),
+  S('band_of_thieves', 'Band of Thieves', 4211004, 'cone', 'poison', 36.8, 3.0, 0, 8, 1, 'Your band rushes the enemies ahead.'),
+  S('assaulter', 'Assaulter', 4211002, 'melee', 'arcane', 103.5, 5.0, 7, 0, 1, 'Dash in and strike the nearest enemy.'),
 ];
 export const SKILLS: SkillDef[] = [...MAGICIAN_SKILLS, ...WARRIOR_SKILLS, ...BOWMAN_SKILLS, ...THIEF_SKILLS];
 export const SKILL_BY_KEY: Record<string, SkillDef> = Object.fromEntries(SKILLS.map((s) => [s.key, s]));
@@ -458,7 +462,7 @@ export const CLASSES: ClassDef[] = [
   { key: 'warrior', name: 'Warrior', hp: 160, speed: 6.8, crit: 0.05, weapon: 1302000, weaponName: 'Sword', stance: 'swing', skills: skillsOf(WARRIOR_SKILLS), firstJob: 100, branches: [110, 120, 130], blurb: 'Tough front-liner. Cuts, stuns and roars.', botReach: 2.6 },
   { key: 'magician', name: 'Magician', hp: 120, speed: 7.0, crit: 0.05, weapon: 1372005, weaponName: 'Wand', stance: 'swing', skills: skillsOf(MAGICIAN_SKILLS), firstJob: 200, branches: [210, 220, 230], blurb: 'Fragile but deadly spells from afar.', botReach: 6.5 },
   { key: 'bowman', name: 'Bowman', hp: 120, speed: 7.2, crit: 0.1, weapon: 1452002, weaponName: 'Bow', stance: 'shoot', skills: skillsOf(BOWMAN_SKILLS), firstJob: 300, branches: [310, 320], blurb: 'Fast and precise. Arrows, hawks and blizzards.', botReach: 6.5 },
-  { key: 'thief', name: 'Thief', hp: 120, speed: 7.5, crit: 0.08, weapon: 1332005, weaponName: 'Dagger', stance: 'stab', skills: skillsOf(THIEF_SKILLS), firstJob: 400, branches: [410, 420], blurb: 'Quickest hero. Stars, stabs and stolen life.', botReach: 3.4 },
+  { key: 'thief', name: 'Thief', hp: 150, speed: 7.5, crit: 0.08, weapon: 1332005, weaponName: 'Dagger', stance: 'stab', skills: skillsOf(THIEF_SKILLS), firstJob: 400, branches: [410, 420], blurb: 'Quickest hero. Stars, stabs and stolen life.', botReach: 3.4 },
 ];
 export const CLASS_BY_KEY: Record<string, ClassDef> = Object.fromEntries(CLASSES.map((c) => [c.key, c]));
 export const DEFAULT_CLASS: ClassKey = 'magician';
