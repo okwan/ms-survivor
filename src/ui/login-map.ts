@@ -36,7 +36,7 @@ export const LAYOUT = {
     home: [169, 138] as Pt,
     quit: [268, 138] as Pt,
     /** controls hint: top of the line, centred */
-    hintY: 580,
+    hintY: 444,
   },
   world: {
     step: [8, 8] as Pt,
@@ -45,9 +45,9 @@ export const LAYOUT = {
     scroll: [187, 95] as Pt,
     scrollMs: 90,
     /** world tabs: offset from the scroll, spacing; world ids 0..count-1 */
-    tabs: { dx: 31, dy: 40, step: 30, count: 15 },
+    tabs: { dx: 44, dy: 150, step: 29, count: 15 },
     /** channel panel: where its origin point goes */
-    panel: [443, 361] as Pt,
+    panel: [448, 356] as Pt,
     /** relative to the panel's top-left */
     name: [14, 10] as Pt,
     channels: { x: 14, y: 58, dx: 85, dy: 34, cols: 5, count: 20 },
@@ -56,10 +56,9 @@ export const LAYOUT = {
     go: [330, 206] as Pt,
   },
   select: {
+    /** the chosen world's badge, then the step label */
     selectWorld: [8, 8] as Pt,
-    /** relative to selectWorld */
-    worldName: [14, 6] as Pt,
-    step: [162, 8] as Pt,
+    step: [136, 8] as Pt,
     back: [8, 540] as Pt,
     /** the character's feet */
     feet: [330, 368] as Pt,
@@ -72,15 +71,19 @@ export const LAYOUT = {
     btNew: [13, 60] as Pt,
     btDelete: [13, 106] as Pt,
     /** charInfo's origin point, and the texts relative to its top-left */
-    info: [475, 457] as Pt,
-    name: [60, 8] as Pt,
-    job: [60, 30] as Pt,
-    level: [60, 50] as Pt,
-    best: [60, 70] as Pt,
-    mesos: [60, 90] as Pt,
+    info: [560, 357] as Pt,
+    /** value columns of the baked labels (JOB / LV. / STR / DEX left, FAME / INT / LUK right) and the line under WORLD RANKING */
+    job: [37, 5] as Pt,
+    level: [37, 23] as Pt,
+    str: [37, 41] as Pt,
+    dex: [37, 59] as Pt,
+    fame: [127, 23] as Pt,
+    int: [127, 41] as Pt,
+    luk: [127, 59] as Pt,
+    best: [6, 101] as Pt,
   },
-  /** extras column: x, and the gap from the bottom of the stage; the column grows upwards */
-  dock: { x: 650, bottom: 40, w: 140 },
+  /** extras row along the bottom of the book page (the scene shows through x 96..712, y 25..492 inside Common/frame) */
+  dock: { x: 100, bottom: 112, w: 608 },
 };
 
 const BASE = 'maple/';
@@ -351,8 +354,9 @@ export class MapLogin implements LoginLike {
     return out;
   }
 
+  /** absolute, because a url() inside a CSS custom property resolves against the stylesheet (assets/), not the page */
   private url(s: LoginSprite) {
-    return `url("${BASE}${s.src}")`;
+    return `url("${new URL(BASE + s.src, document.baseURI).href}")`;
   }
 
   /** A <button> sized to the sprite, state images by CSS vars; missing states fall back to normal. Null when the sprite is missing. */
@@ -475,7 +479,10 @@ export class MapLogin implements LoginLike {
     this.tabsOn = false;
     this.scrollT0 = performance.now();
     this.spriteImg(P, 'Common/step/1', ...L.step);
-    this.spriteBtn(P, 'Common/BtStart', ...L.back, () => this.goTo('title'), { label: 'Back' });
+    this.spriteBtn(P, 'Common/BtStart', ...L.back, () => {
+      if (this.chansEl.childElementCount) { this.chansEl.textContent = ''; this.placeSel = null; this.showTabs(); }
+      else this.goTo('title');
+    }, { label: 'Back' });
     this.tabsEl = el('div', 'hidden');
     this.chansEl = el('div');
     P.append(this.chansEl, this.tabsEl);
@@ -484,7 +491,6 @@ export class MapLogin implements LoginLike {
       const b = this.spriteBtn(this.tabsEl, `WorldSelect/BtWorld/${i}`, tx + i * L.tabs.step, ty, () => this.pickWorld(i), { label: `World ${i + 1}`, shot: this.tabs.length ? undefined : 'world' });
       if (b) { b.dataset.world = String(i); b.classList.toggle('on', i === this.world); this.tabs.push(b); }
     }
-    if (this.world !== null) this.buildChannels();
     if (!this.seq('WorldSelect/scroll/0').length) this.showTabs();
   }
 
@@ -498,6 +504,8 @@ export class MapLogin implements LoginLike {
     this.channel = 0;
     this.remember();
     for (const b of this.tabs) b.classList.toggle('on', b.dataset.world === String(i));
+    // the channel panel covers the scroll; Back closes it and shows the worlds again
+    this.tabsEl.classList.add('hidden');
     this.buildChannels();
   }
 
@@ -551,8 +559,7 @@ export class MapLogin implements LoginLike {
     const P = this.panels.select, L = LAYOUT.select;
     P.textContent = '';
     const ch = this.save?.character ?? null;
-    const sw = this.spriteImg(P, 'Common/selectWorld', ...L.selectWorld);
-    if (sw && this.world !== null) this.spriteImg(P, `WorldSelect/world/${this.world}`, parseFloat(sw.style.left) + this.u('Common/selectWorld')!.ox + L.worldName[0], parseFloat(sw.style.top) + this.u('Common/selectWorld')!.oy + L.worldName[1]);
+    if (this.world !== null) this.spriteImg(P, `WorldSelect/world/${this.world}`, ...L.selectWorld);
     this.spriteImg(P, 'Common/step/2', ...L.step);
     this.spriteBtn(P, 'Common/BtStart', ...L.back, () => this.goTo('world'), { label: 'Back' });
     const [cx, cy] = this.selectBoard;
@@ -563,15 +570,19 @@ export class MapLogin implements LoginLike {
     if (!info) return;
     this.spriteImg(P, 'CharSelect/charInfo', ...L.info);
     const ix = L.info[0] - info.ox, iy = L.info[1] - info.oy;
-    const line = (p: Pt, s: string) => this.text(P, ix + p[0], iy + p[1], s);
+    const line = (p: Pt, s: string) => this.text(P, ix + p[0], iy + p[1], s).classList.add('ml-info');
     if (ch) {
-      line(L.name, ch.name);
-      line(L.job, CLASS_BY_KEY[ch.cls]?.name ?? ch.cls);
-      line(L.level, `Lv. ${ch.level ?? 1}`);
+      const def = CLASS_BY_KEY[ch.cls];
+      const lv = ch.level ?? 1;
+      line(L.job, def?.name ?? ch.cls);
+      line(L.level, String(lv));
+      // stats as a v83 auto-assign would leave them: every AP in the class's main stat, 4 in the rest
+      const main = { warrior: 'str', magician: 'int', bowman: 'dex', thief: 'luk' }[ch.cls as string] ?? 'str';
+      for (const k of ['str', 'dex', 'int', 'luk'] as const) line(L[k], String(k === main ? 4 + 5 * (lv - 1) : 4));
+      line(L.fame, '0');
     }
     const s = this.save;
-    line(L.best, `Best ${s && s.bestTime > 0 ? fmtTime(s.bestTime) : '-'}`);
-    line(L.mesos, `Mesos ${s?.mesos ?? 0}`);
+    line(L.best, `Best ${s && s.bestTime > 0 ? fmtTime(s.bestTime) : '-'}  ·  ${(s?.mesos ?? 0).toLocaleString('en-US')} mesos`);
   }
 
   // ---------------------------------------------------------------- canvas

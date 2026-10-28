@@ -13,7 +13,7 @@
 .ml-btn:active:not([disabled]), .ml-btn.on, .ml-btn.on:hover:not([disabled]) { background-image: var(--p); }
 .ml-btn[disabled] { background-image: var(--d); cursor: default; }
 .ml-btn.nod[disabled] { filter: grayscale(1) brightness(.75); }
-.ml-btn.deco { pointer-events: none; }
+#ui .ml-btn.deco { pointer-events: none; }
 .ml-btn:focus-visible { outline: 2px solid #ffe066; outline-offset: 1px; }
 
 /* title signboard fields and texts */
@@ -23,12 +23,13 @@
 .ml-hint { position: absolute; left: 0; right: 0; text-align: center; font: 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
 
 /* our own extras (not in the real client): the dock with Options, Monster Book, Henesys Shop */
-.ml-dock { position: absolute; display: flex; flex-direction: column-reverse; gap: 6px; align-items: stretch; }
-.ml-dock .btn { font-size: 13px; padding: 5px 8px; width: 100%; }
-.ml-opts { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 6px; background: rgba(0, 0, 0, .55); border: 1px solid #e8c58a; border-radius: 4px; color: #fff; text-shadow: 0 1px 2px #000; }
+.ml-dock { position: absolute; display: flex; flex-wrap: wrap-reverse; justify-content: center; gap: 4px; }
+.ml-dock .btn { font-size: 11px; padding: 2px 10px; min-width: 0; width: auto; line-height: 16px; }
+.ml-opts { position: absolute; right: 0; bottom: calc(100% + 4px); display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 6px; background: rgba(0, 0, 0, .55); border: 1px solid #e8c58a; border-radius: 4px; color: #fff; text-shadow: 0 1px 2px #000; }
 .ml-opts .volume { font-size: 12px; gap: 4px; }
 .ml-opts input[type=range] { width: 90px; }
 .ml-opts .pet-opt { font-size: 11px; cursor: pointer; }
 .ml-opts .btn { width: auto; padding: 3px 12px; font-size: 12px; }
 .mlogin .ml-diff { position: absolute; pointer-events: auto; }
 .mlogin .ml-continue { white-space: nowrap; }
+.ml-info { font: 11px Arial, sans-serif; color: #3b2a1a; text-shadow: none; }

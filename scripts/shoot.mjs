@@ -45,7 +45,7 @@ async function main() {
   for (const s of sizes) {
     const ctx = await browser.newContext({ viewport: s.viewport, hasTouch: s.touch, isMobile: s.touch, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
-    page.on('pageerror', (e) => console.log(`shoot ${s.tag}: page error ${e.message}`));
+    page.on('pageerror', (e) => console.log(`shoot ${s.tag}: page error ${e.stack}`));
     const shot = async (name) => {
       await page.waitForTimeout(1600);
       const b64 = (await page.screenshot({ type: 'jpeg', quality: 72 })).toString('base64');
