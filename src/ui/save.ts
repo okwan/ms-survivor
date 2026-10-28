@@ -9,6 +9,8 @@ export interface SavedCharacter {
   cls: string;
   look: Look;
   name: string;
+  /** level reached in its last run (shown on the character select stage) */
+  level?: number;
 }
 export interface SaveData {
   mesos: number;
@@ -27,7 +29,8 @@ function readCharacter(c: unknown): SavedCharacter | null {
   const def = typeof o.cls === 'string' ? CLASS_BY_KEY[o.cls] : undefined;
   if (!def) return null;
   const name = typeof o.name === 'string' ? o.name.replace(/[<>&"]/g, '').slice(0, 12).trim() : '';
-  return { cls: def.key, look: sanitizeLook(o.look, def.weapon), name: name || 'Maple' };
+  const level = typeof o.level === 'number' && o.level >= 1 ? Math.min(999, Math.floor(o.level)) : undefined;
+  return { cls: def.key, look: sanitizeLook(o.look, def.weapon), name: name || 'Maple', ...(level ? { level } : {}) };
 }
 
 export function loadSave(): SaveData {

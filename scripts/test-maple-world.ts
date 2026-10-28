@@ -96,6 +96,18 @@ try {
   ok(existsSync(maple(p['sb.hp'].src)) && existsSync(maple(p['title.logo'].src)), 'ui PNGs exist');
   ok(/UI pieces missing \(0\)/.test(out) && /status bar background/.test(out), 'log lists found/missing UI pieces and previews the bar');
 
+  // classic title screen, status bar extras, equip / inventory / stat windows
+  for (const n of ['login.signboard', 'login.btLogin.normal', 'login.btLogin.hover', 'login.btNew.pressed', 'login.btHome.normal', 'login.btQuit.normal', 'cs.btSelect.normal', 'cs.btNew.normal', 'cs.btDelete.normal', 'cs.info', 'login.frame', 'cs.world',
+    'login.back.back0', 'login.back.back1', 'login.back.back2', 'login.back.back3',
+    'sb.lvn.0', 'sb.lvn.9', 'sb.shop.normal', 'sb.short.hover', 'sb.chatBtn.normal', 'uiw.equip', 'uiw.equip2', 'uiw.equip3', 'uiw.item', 'uiw.stat', 'item.tab.on.0', 'item.tab.off.2', 'equip.close.normal', 'item.close.pressed', 'stat.close.normal', 'tip.n']) ok(p[n], `ui piece ${n}`);
+  eq([p['login.back.back0'].w, p['login.back.back0'].h], [400, 300], 'the largest backdrop layer is the sky');
+  eq(p['login.back.back0'].meta, { rank: 0 }, 'layers are ranked by area');
+  ok(!p['sb.claim.normal'] && !p['login.logo'], 'absent optional nodes are simply missing');
+  ok(/Back\/login\.img: back ani/.test(out) && /login backdrop layer 1: back0 400x300/.test(out) && /Login\.img CharSelect:/.test(out) && /UIWindow\.img Equip:/.test(out) && /--- login button/.test(out), 'log shows the Login/Back/UIWindow keys and previews');
+  ok(/UI extra \(login\/equip\/inventory\) pieces: \d+/.test(out), 'log reports the extra pieces and byte total');
+  const extraBytes = Object.entries(p).filter(([n]) => /^(login|cs|uiw|item|equip|stat|tip)/.test(n)).reduce((a, [, v]) => a + readFileSync(maple(v.src)).length, 0);
+  ok(extraBytes < 1_500_000, `extra UI atlas stays under 1.5 MB (${extraBytes})`);
+
   // run regions
   const rg = m!.regions!.list;
   eq(rg.length, 7, 'one slot per region');

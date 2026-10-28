@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { botInput } from '../src/game/bot.ts';
 import { BOSS_EVERY, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_MAX_TIER, PLAYER_BASE } from '../src/game/data.ts';
-import { GEAR_SLOTS, GearPool, TIER_COLORS, itemBonus, itemScore, runTier, tierColor, tierOfLevel } from '../src/game/gear.ts';
+import { BAG_SIZE, GEAR_SLOTS, GearPool, TIER_COLORS, itemBonus, itemScore, runTier, tierColor, tierOfLevel } from '../src/game/gear.ts';
 import type { GearManifest } from '../src/game/gear.ts';
 import { Rng } from '../src/game/rng.ts';
 import { Sim } from '../src/game/sim.ts';
@@ -39,6 +39,25 @@ for (const cls of ['warrior', 'magician', 'bowman', 'thief'] as const) {
     ok(it.slot !== 'weapon' || it.job === ({ warrior: 1, magician: 2, bowman: 4, thief: 8 })[cls], 'weapons are class weapons');
   }
   eq(seen.size, cls === 'warrior' ? 8 : 7, `${cls} sees every slot it can wear`);
+}
+
+// ---- bag: unequipped items are kept and can be worn from the inventory ----
+{
+  const s = new Sim(5, 'warrior');
+  s.giveGear('phweapon1t6');
+  eq(s.bag.length, 0, 'an equipped pickup is not in the bag');
+  eq(s.giveGear('phweapon1t2'), 'offered', 'a worse weapon is offered');
+  eq(s.bag.map((i) => i.id), ['phweapon1t2'], 'an unworn pickup goes to the bag');
+  const v = s.bagVersion;
+  ok(s.equipFromBag('phweapon1t2'), 'equipFromBag wears it');
+  eq(s.equipped.weapon!.id, 'phweapon1t2', 'the bag item is worn');
+  eq(s.bag.map((i) => i.id), ['phweapon1t6'], 'the replaced weapon swapped into the bag');
+  ok(s.bagVersion > v && !s.equipFromBag('nope'), 'bag version counts up; unknown ids do nothing');
+  ok(s.unequip('weapon') && !s.equipped.weapon && s.bag.length === 2, 'unequip moves the item into the bag');
+  ok(!s.unequip('cape'), 'unequip of an empty slot does nothing');
+  const t = new Sim(6, 'warrior');
+  for (let i = 0; i < BAG_SIZE + 6; i++) { t.giveGear('phweapon1t6'); t.giveGear(i % 2 ? 'phcap0t1' : 'phcap0t0'); }
+  ok(t.bag.length <= BAG_SIZE, `the bag never holds more than ${BAG_SIZE}`);
 }
 
 // ---- stat mapping ----

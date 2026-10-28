@@ -1,7 +1,9 @@
 import { BOSS_TOTAL } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
 import type { Card } from '../game/types.ts';
+import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
+import { LoginScreen, classic } from './login.ts';
 import type { SaveData } from './save.ts';
 import { theme } from './theme.ts';
 
@@ -62,11 +64,16 @@ export class Screens {
   private sfxVolEl!: HTMLInputElement;
   private muteEl!: HTMLButtonElement;
   private muted = false;
+  /** the classic MapleStory login screen (null: the plain title window is used) */
+  readonly login: LoginScreen | null = null;
+  private titleExtra!: HTMLDivElement;
 
-  constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>) {
+  constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null) {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
+    if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
+    this.login?.addButton('Monster Book', () => h.book());
     this.pause = this.buildPause();
     this.levelup = this.buildLevelUp();
     this.results = el('div', 'screen results hidden');
@@ -100,6 +107,8 @@ export class Screens {
     stats.children[0].appendChild(this.bestEl);
     stats.children[1].appendChild(this.mesoEl);
     body.appendChild(stats);
+    this.titleExtra = el('div', 'title-extra');
+    body.appendChild(this.titleExtra);
     this.quickBtn = this.btn('Quick start', 'quick-start', () => this.h.quick());
     this.quickBtn.classList.add('hidden');
     body.appendChild(this.quickBtn);
@@ -156,7 +165,20 @@ export class Screens {
     return root;
   }
 
+  /** An extra button on the title screen (both the classic signboard and the plain title), e.g. the Monster Book. */
+  addTitleButton(label: string, fn: () => void) {
+    this.titleExtra.appendChild(this.btn(label, '', fn));
+    this.login?.addButton(label, fn);
+  }
+
+  /** which title screen is up: 'login' / 'select' (classic), 'title' (plain), or '' when none */
+  titleState(): string {
+    if (this.login?.visible) return this.login.state === 'select' ? 'select' : 'login';
+    return this.title.classList.contains('hidden') ? '' : 'title';
+  }
+
   setMuted(m: boolean) {
+    this.login?.setMuted(m);
     this.muted = m;
     this.muteEl.textContent = m ? 'Unmute' : 'Mute';
   }
@@ -172,7 +194,8 @@ export class Screens {
     this.sfxVolEl.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
     this.hideAll();
-    this.title.classList.remove('hidden');
+    if (this.login) this.login.show(save);
+    else this.title.classList.remove('hidden');
   }
 
   showPause(on: boolean) {
@@ -181,6 +204,7 @@ export class Screens {
 
   hideAll() {
     for (const s of [this.title, this.pause, this.levelup, this.results]) s.classList.add('hidden');
+    this.login?.hide();
     this.offerRef = null;
     this.offerSig = '';
   }
