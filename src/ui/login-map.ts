@@ -114,8 +114,9 @@ export const LAYOUT = {
     scale: 1,
     /** the class bubble (top-left) and its text padding / width */
     bubble: [338, 160] as Pt,
-    bubblePad: 10,
-    bubbleW: 167,
+    /** text padding: the bubble art has a small character baked into its left side, so the text starts right of it */
+    bubblePad: [9, 8, 8, 66] as [number, number, number, number],
+    bubbleW: 113,
   },
   /** extras row along the bottom of the book page (the scene shows through x 96..712, y 25..492 inside Common/frame) */
   dock: { x: 100, bottom: 112, w: 608 },
@@ -669,7 +670,7 @@ export class MapLogin implements LoginLike {
       e.text.textContent = r.text(this.look);
       if (e.swatch && r.swatch) e.swatch.style.background = r.swatch(this.look);
     }
-    const w = this.cRowEls.get('weapon');
+    const w = this.cRowEls.get('class');
     if (w) w.text.textContent = this.classText();
     this.cClock0 = performance.now();
   }
@@ -799,7 +800,7 @@ export class MapLogin implements LoginLike {
     const bub = this.u('NewChar/charAlert');
     if (bub) {
       const b = el('div', 'ml-bubble');
-      b.style.cssText = `left:${L.bubble[0]}px;top:${L.bubble[1]}px;width:${bub.w}px;height:${bub.h}px;background-image:${this.url(bub)};background-size:${bub.w}px ${bub.h}px;padding:${L.bubblePad}px;--bw:${L.bubbleW}px`;
+      b.style.cssText = `left:${L.bubble[0]}px;top:${L.bubble[1]}px;width:${bub.w}px;height:${bub.h}px;background-image:${this.url(bub)};background-size:${bub.w}px ${bub.h}px;padding:${L.bubblePad.join('px ')}px;--bw:${L.bubbleW}px`;
       P.appendChild(b);
       this.cBubble = b;
     } else this.cBubble = null;
