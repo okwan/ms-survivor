@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-wz.mjs && node --experimental-strip-types scripts/test-sim.ts && node --experimental-strip-types scripts/test-avatar.ts && node --experimental-strip-types scripts/test-maple.ts",
+    "test": "node scripts/test-wz.mjs && node --experimental-strip-types scripts/test-sim.ts && node --experimental-strip-types scripts/test-avatar.ts && node --experimental-strip-types scripts/test-maple.ts && node --experimental-strip-types scripts/test-maple-world.ts",
     "probe": "node scripts/probe-maple.mjs probe-out"
   },
   "dependencies": {

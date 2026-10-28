@@ -6,6 +6,7 @@
  */
 import { BOSSES, LADDER, PASSIVES, SKILLS } from '../game/data.ts';
 import type { AvatarManifest } from './avatar-core.ts';
+import type { AtlasRef, EffectsSection, MapSection, UiSection } from './world-types.ts';
 
 export const pad7 = (n: number) => String(n).padStart(7, '0');
 export const pad3 = (n: number) => String(n).padStart(3, '0');
@@ -61,7 +62,7 @@ export const BGM_NODES = {
 };
 
 /** The WZ archives needed (file stems). Later clients split them (Mob001.wz...), which the extractor also accepts. */
-export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Base', 'Character'] as const;
+export const WZ_FILES = ['Mob', 'Skill', 'String', 'Sound', 'Map', 'Effect', 'UI', 'Base', 'Character'] as const;
 
 // ---- legacy lists, kept for later milestones (UI, map art) -------------------------------------------------------
 /** 'Mob/0100100.img' for every wanted mob. */
@@ -117,6 +118,11 @@ export interface MapleManifest {
   bgm: { run: string | null; title: string | null };
   /** player character parts (see avatar-core.ts); absent when Character.wz could not be read */
   avatar?: AvatarManifest;
+  /** world/UI art from scripts/fetch-maple-world.ts, each absent when its .wz could not be read */
+  map?: MapSection;
+  damage?: AtlasRef;
+  ui?: UiSection;
+  effects?: EffectsSection;
 }
 
 /** Fetches maple/manifest.json. Returns null on any failure so the game falls back to placeholder art. */
@@ -133,6 +139,10 @@ export async function loadManifest(base = 'maple/'): Promise<MapleManifest | nul
       skills: data.skills && typeof data.skills === 'object' ? data.skills : {},
       bgm: { run: data.bgm?.run ?? null, title: data.bgm?.title ?? null },
       avatar: data.avatar && typeof data.avatar === 'object' && Array.isArray(data.avatar.zmap) && data.avatar.items ? data.avatar : undefined,
+      map: data.map,
+      damage: data.damage,
+      ui: data.ui,
+      effects: data.effects,
     };
   } catch {
     return null;

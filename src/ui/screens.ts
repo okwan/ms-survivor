@@ -2,6 +2,7 @@ import type { Sim } from '../game/sim.ts';
 import type { Card } from '../game/types.ts';
 import { fmtTime } from './hud.ts';
 import type { SaveData } from './save.ts';
+import { theme } from './theme.ts';
 
 export interface ScreenHandlers {
   /** opens character creation */
@@ -43,6 +44,7 @@ export class Screens {
   private results: HTMLDivElement;
   private cardsEl!: HTMLDivElement;
   private rerollBtn!: HTMLButtonElement;
+  private luHead!: HTMLElement;
   private offerRef: Card[] | null = null;
   private offerSig = '';
   private h: ScreenHandlers;
@@ -116,7 +118,8 @@ export class Screens {
   private buildLevelUp(): HTMLDivElement {
     const root = el('div', 'screen levelup hidden');
     const w = el('div', 'win wide');
-    w.appendChild(el('div', 'win-head', 'LEVEL UP!'));
+    this.luHead = el('div', 'win-head', 'LEVEL UP!');
+    w.appendChild(this.luHead);
     const body = el('div', 'win-body');
     this.cardsEl = el('div', 'cards');
     body.appendChild(this.cardsEl);
@@ -174,6 +177,7 @@ export class Screens {
     this.offerRef = offer;
     this.offerSig = sig;
     this.levelup.classList.remove('hidden');
+    this.luHead.innerHTML = theme.has('lv.0') ? `LEVEL UP! ${theme.lv(sim.level)}` : 'LEVEL UP!';
     this.cardsEl.textContent = '';
     offer.forEach((c, i) => {
       const card = el('div', 'card ' + c.kind);

@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { BGM_NODES, MOB_ACTIONS, SKILL_ANIMS, WANTED_MOBS, WANTED_SKILLS, WZ_FILES, pad7 } from '../src/maple/assets.ts';
 import type { FrameRec, MapleManifest, MobEntry, SkillEntry } from '../src/maple/assets.ts';
 import { extractAvatar } from './fetch-maple-character.ts';
+import { buildWorld } from './fetch-maple-world.ts';
 import { asciiPreview, encodePng } from './png.mjs';
 import { canvasRgba, openWz } from './wz.mjs';
 
@@ -506,6 +507,9 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     const av = extractAvatar(sets.Character, sets.Base, join(distDir, 'maple'), { log, warn });
     report.bytes += av.bytes;
 
+    const world = buildWorld({ dist: distDir, sets: { Map: sets.Map, Effect: sets.Effect, UI: sets.UI }, log, warn, canvasList, packAtlas });
+    report.bytes += world.bytes;
+
     const primary = sets.Mob ?? sets.Skill ?? sets.Sound ?? sets.String;
     const manifest: MapleManifest = {
       version: 1,
@@ -514,6 +518,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
       skills,
       bgm: report.bgm,
       ...(av.manifest ? { avatar: av.manifest } : {}),
+      ...world.manifest,
     };
     log(`totals: mobs ${report.mobsOk}/${WANTED_MOBS.length} (${report.mobFrames} frames), skills+passives ${report.skillsOk}/${WANTED_SKILLS.length} (${report.skillFrames} animation frames), bgm run=${report.bgm.run ?? 'none'} title=${report.bgm.title ?? 'none'}, ${(report.bytes / 1e6).toFixed(2)} MB written in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     if (report.mobsMissing.length) log(`missing mobs (${report.mobsMissing.length}): ${report.mobsMissing.join('; ')}`);
@@ -521,7 +526,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     if (report.mobsMismatch.length) log(`mob NAME MISMATCHES (${report.mobsMismatch.length}): ${report.mobsMismatch.join('; ')}`);
     if (report.skillsMissing.length) log(`missing skills (${report.skillsMissing.length}): ${report.skillsMissing.join('; ')}`);
 
-    if (!report.mobsOk && !report.skillsOk && !report.bgm.run && !report.bgm.title && !av.manifest) {
+    if (!report.mobsOk && !report.skillsOk && !report.bgm.run && !report.bgm.title && !av.manifest && !Object.keys(world.manifest).length) {
       warn('nothing could be extracted; no manifest written, the game keeps placeholder art');
       return { manifest: null, report };
     }
@@ -659,33 +664,44 @@ async function acquire(cacheDir: string): Promise<{ wzDir: string; mirror: strin
   const marker = join(wzDir, '.source.json');
   mkdirSync(cacheDir, { recursive: true });
   const have = present(wzDir);
-  if (have.includes('Mob') && (have.length === WZ_FILES.length || existsSync(marker))) {
+  // reuse the cache only when it holds every listed file: a cache from before a name was added to the list re-extracts
+  const readMirror = () => {
     let mirror = 'cache';
     try {
       mirror = JSON.parse(readFileSync(marker, 'utf8')).mirror ?? mirror;
     } catch {
       /* marker is optional */
     }
+    return mirror;
+  };
+  if (have.length === WZ_FILES.length) {
+    const mirror = readMirror();
     log(`reusing cached WZ files in ${wzDir}: ${have.join(', ')} (from ${mirror})`);
     return { wzDir, mirror };
   }
+  if (have.length) log(`cached WZ files ${have.join(', ')} lack ${WZ_FILES.filter((n) => !have.includes(n)).join(', ')}: fetching the client again`);
   for (const url of mirrorList()) {
     const file = join(cacheDir, basename(new URL(url).pathname) || 'client.bin');
     try {
       log(`trying mirror ${url}`);
       await download(url, file);
       extractWz(file, wzDir, cacheDir);
-      if (present(wzDir).includes('Mob')) {
-        writeFileSync(join(wzDir, '.source.json'), JSON.stringify({ mirror: url, at: new Date().toISOString() }));
-        return { wzDir, mirror: url };
-      }
-      warn(`no Mob.wz could be extracted from ${url}`);
+      const got = present(wzDir);
+      if (got.includes('Mob')) writeFileSync(join(wzDir, '.source.json'), JSON.stringify({ mirror: url, at: new Date().toISOString() }));
+      // a mirror that leaves files missing (e.g. one that ships loose .img instead of .wz) falls through to the next one
+      if (got.length === WZ_FILES.length) return { wzDir, mirror: url };
+      warn(`${url} left ${WZ_FILES.filter((n) => !got.includes(n)).join(', ')} missing; trying the next mirror`);
     } catch (e) {
       warn(`mirror ${url} failed: ${(e as Error).message}`);
     } finally {
       // keep only the small .wz files in the cache, never the multi-GB installer
       rmSync(file, { force: true });
     }
+  }
+  const got = present(wzDir);
+  if (got.includes('Mob')) {
+    warn(`could not fetch ${WZ_FILES.filter((n) => !got.includes(n)).join(', ')}; using what was extracted (${got.join(', ')})`);
+    return { wzDir, mirror: readMirror() };
   }
   return null;
 }
