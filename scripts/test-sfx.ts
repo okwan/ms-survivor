@@ -54,6 +54,9 @@ eq(played[5][1]?.volume, 1, 'boss sounds are loud');
 played.length = 0;
 playSimEvents(fake, [ev({ type: 'cast', skill: 'power_strike', kind: 'melee', x: 0, y: 0, tx: 0, ty: 0, r: 1, pts: null })], 'warrior');
 eq(keys(), ['weapon.warrior.attack'], 'a melee skill without a use sound falls back to the class weapon sound');
+played.length = 0;
+playSimEvents(fake, [ev({ type: 'revive', x: 0, y: 0, r: 9 })], 'warrior');
+eq(keys(), ['game.levelup'], 'the Safety Charm revive plays the level-up jingle');
 
 // the sim fires 'region' at each boss time, carries tier on hits, and exposes the region
 const sim = new Sim(7);

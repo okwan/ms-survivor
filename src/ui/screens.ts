@@ -23,6 +23,8 @@ export interface ScreenHandlers {
   volume(v: number): void;
   /** opens the Monster Book */
   book(): void;
+  /** opens the Henesys shop */
+  shop(): void;
   pet(on: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
@@ -76,6 +78,7 @@ export class Screens {
     this.title = this.buildTitle();
     if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
     this.login?.addButton('Monster Book', () => h.book());
+    this.login?.addButton('Henesys Shop', () => h.shop());
     this.pause = this.buildPause();
     this.levelup = this.buildLevelUp();
     this.results = el('div', 'screen results hidden');
@@ -116,6 +119,7 @@ export class Screens {
     body.appendChild(this.quickBtn);
     body.appendChild(this.btn('START', 'primary big', () => this.h.start()));
     body.appendChild(this.btn('Monster Book', 'book-btn', () => this.h.book()));
+    body.appendChild(this.btn('Henesys Shop', 'book-btn', () => this.h.shop()));
     const petOpt = el('label', 'pet-opt', '<input type="checkbox"> Pet (follows you and picks up mesos and potions)');
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
@@ -200,6 +204,12 @@ export class Screens {
     else this.title.classList.remove('hidden');
   }
 
+  /** The banked mesos changed (the shop): the menu shows the new total. */
+  refresh(save: SaveData) {
+    this.mesoEl.textContent = String(save.mesos);
+    this.login?.refresh(save);
+  }
+
   showPause(on: boolean) {
     this.pause.classList.toggle('hidden', !on);
   }
@@ -269,7 +279,7 @@ export class Screens {
       <tr><td>Mesos earned</td><td>${r.mesos}</td></tr>`));
     const row = el('div', 'btnrow');
     row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    b.appendChild(row);
+    b.append(row, this.btn('Henesys Shop', 'res-shop', () => this.h.shop()));
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');

@@ -411,3 +411,46 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6b2c; fon
 @keyframes gacha-glow { from { box-shadow: 0 4px 10px rgba(0,0,0,.5), 0 0 6px #ffd23a; } to { box-shadow: 0 4px 10px rgba(0,0,0,.5), 0 0 26px #ffd23a; } }
 @media (prefers-reduced-motion: reduce) { .gacha, .gacha *, .grow { animation: none !important; } }
 .card .hint { margin: 2px 0 0; min-height: 0; font-size: 11px; font-weight: bold; color: #7a4ad8; }
+
+/* ---------- Henesys shop (shop.ts): Rina's NPC shop in the Equip / Inventory window look ---------- */
+.shop .mwin-shop { position: relative; display: flex; flex-direction: column; width: min(620px, 100%); height: min(470px, 100%); padding-top: 24px; }
+.shop .mwin-title { cursor: default; }
+.shop-body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px 8px 0; }
+.shop-npc { flex: none; width: 128px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; background: rgba(255,255,255,.28); border: 1px solid #8a8466; border-radius: 3px; text-align: center; }
+.shop-npc b { font-size: 13px; color: #2b3552; }
+.shop-npc i { font-style: normal; font-size: 10px; color: #6a6650; }
+.shop-portrait { position: relative; width: 96px; height: 96px; overflow: hidden; background: radial-gradient(ellipse at 50% 92%, rgba(0,0,0,.2), transparent 60%); }
+.shop-sprite { position: absolute; left: 50%; bottom: 0; transform-origin: 50% 100%; image-rendering: pixelated; }
+.shop-portrait.silhouette::before { content: ''; position: absolute; left: 30px; top: 12px; width: 36px; height: 70px; border-radius: 18px 18px 6px 6px; background: #55506a; opacity: .55; }
+.shop-portrait.silhouette::after { content: ''; position: absolute; left: 36px; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: #55506a; opacity: .55; }
+.shop-say { margin: 6px 0 0; padding: 5px 6px; width: 100%; box-sizing: border-box; background: #fffdf0; border: 1px solid #8a8466; border-radius: 6px; font-size: 10px; line-height: 1.35; font-weight: normal; color: #3a3a30; }
+.shop-list { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 2px; }
+.shop-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; background: #f3eed9; border: 1px solid #aaa385; border-radius: 3px; }
+.shop-row:hover { border-color: #ffcc33; box-shadow: 0 0 0 1px #ffcc33; }
+.shop-icon { flex: none; width: 32px; height: 32px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 1px solid #1b2238; background: linear-gradient(#5a6788, #2a3350); border-radius: 2px; box-shadow: inset 1px 1px 0 rgba(255,255,255,.25), inset -1px -1px 0 rgba(0,0,0,.3); }
+.shop-icon img { width: 30px; height: 30px; image-rendering: pixelated; object-fit: contain; }
+.shop-icon span { color: #aab4d0; font-size: 16px; }
+.shop-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.shop-info b { font-size: 12px; color: #2b3552; }
+.shop-rank { display: flex; align-items: center; gap: 6px; }
+.shop-pips { display: inline-flex; gap: 2px; }
+.shop-pips i { width: 8px; height: 8px; box-sizing: border-box; border: 1px solid #1b2238; border-radius: 2px; background: #8a8fa6; }
+.shop-pips i.on { background: linear-gradient(#ffd96a, #e09a10); }
+.shop-rk { font-size: 10px; color: #6a6650; }
+.shop-next { font-style: normal; font-size: 10px; color: #3a6a20; font-weight: normal; }
+.shop-buycol { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.shop-price { font-size: 11px; color: #a05a00; }
+.shop-row.poor .shop-price { color: #b02020; }
+.shop-row.maxed { background: #e4e0cc; }
+.shop-row.maxed .shop-price { color: #6a6650; }
+.shop-btn { cursor: pointer; min-width: 52px; height: 19px; padding: 0 8px; box-sizing: border-box; border: 1px solid #1b2238; border-radius: 3px; background: linear-gradient(#6a8ad0, #2b3f7c); color: #fff; font: bold 11px Arial, sans-serif; box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+.shop-btn:hover:not(:disabled) { filter: brightness(1.15); }
+.shop-btn:disabled { cursor: default; filter: grayscale(.9); opacity: .55; }
+.shop-btn.confirm { background: linear-gradient(#e0705a, #a02818); }
+.shop-btn.hidden { display: none; }
+.shop-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 8px 8px; padding: 4px 8px; background: #2b3552; color: #fff; border-radius: 3px; font-size: 12px; }
+.shop-foot b { color: #ffd23a; margin-left: 4px; }
+.shop-refund-row { display: flex; gap: 4px; }
+.shop-coin { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 50%; border: 1px solid #7a4a00; background: radial-gradient(circle at 35% 35%, #fff3a0, #e0a000); }
+.res-shop { margin-top: 2px; }
+@media (max-width: 520px) { .shop-body { flex-direction: column; } .shop-npc { width: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; } .shop-say { width: auto; flex: 1; margin: 0; } }

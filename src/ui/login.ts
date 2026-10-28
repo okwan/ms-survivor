@@ -208,10 +208,15 @@ export class LoginScreen {
     this.sfxVol.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
     this.petEl.checked = save.settings.pet;
-    this.statsEl.innerHTML = `<div>Best time <b>${save.bestTime > 0 ? fmtTime(save.bestTime) : '-'}</b></div><div>Banked mesos <b>${save.mesos}</b></div>`;
+    this.refresh(save);
     this.shown = true;
     this.root.classList.remove('hidden');
     this.showTitle();
+  }
+
+  /** Redraws the best time and banked mesos line. */
+  refresh(save: SaveData) {
+    this.statsEl.innerHTML = `<div>Best time <b>${save.bestTime > 0 ? fmtTime(save.bestTime) : '-'}</b></div><div>Banked mesos <b>${save.mesos}</b></div>`;
   }
 
   hide() {

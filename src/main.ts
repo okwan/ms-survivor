@@ -21,6 +21,7 @@ import type { CreateResult } from './ui/create.ts';
 import { MapBanner } from './ui/banner.ts';
 import { Hud } from './ui/hud.ts';
 import { BookPanel } from './ui/book.ts';
+import { ShopPanel } from './ui/shop.ts';
 import { NoteUi } from './ui/items.ts';
 import { GachaUi } from './ui/gachapon.ts';
 import { ScrollPool } from './game/scrolls.ts';
@@ -126,7 +127,7 @@ async function boot() {
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds });
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta });
     sim.god = god;
     gearUi.reset();
     gachaUi.reset();
@@ -192,6 +193,7 @@ async function boot() {
       reroll: () => sim.reroll(),
       banish: (i) => sim.banish(i),
       book: () => bookPanel.show(save.book),
+      shop: () => shopPanel.show(),
       pet: (on) => { save.settings.pet = on; writeSave(save); },
       volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
       sfxVolume: (v) => { save.settings.sfxVolume = v; writeSave(save); sfx?.setVolume(v); sfx?.play('ui.click'); },
@@ -201,6 +203,12 @@ async function boot() {
     avatar,
   );
   const bookPanel = new BookPanel(uiRoot, (mapleManifest as MapleManifest | null)?.mobs ?? {});
+  const shopPanel = new ShopPanel(uiRoot, renderer.tex.icons, (mapleManifest as MapleManifest | null)?.npc ?? null, {
+    save: () => save,
+    write: () => writeSave(save),
+    changed: () => screens.refresh(save),
+    sound: (k) => { if (k !== 'deny') sfx?.play('game.pickup', { volume: 0.6 }); },
+  });
   const noteUi = new NoteUi(uiRoot);
   const gachaUi = new GachaUi(uiRoot, renderer.tex.icons);
   gachaUi.onReveal = (_i, r) => sfx?.play(r.kind === 'evolve' ? 'game.levelup' : 'game.pickup', { volume: 0.5 });
@@ -332,6 +340,8 @@ async function boot() {
       pet: () => (sim.pet ? { x: sim.pet.x, y: sim.pet.y, collected: sim.pet.collected } : null),
       /** the Monster Book: kills per mob id (this run included) */
       book: () => ({ ...(mode === 'title' ? save.book : sim.book) }),
+      /** the Henesys shop: ranks bought and banked mesos, and open / close the window */
+      shop: (on = true) => { if (on) shopPanel.show(); else shopPanel.hide(); return { meta: { ...save.meta }, mesos: save.mesos, open: shopPanel.visible }; },
       bookBonus: () => ({ ...bookCounts(sim.book), bonus: bookBonus(sim.book) }),
       snapshot: () => ({ ...sim.snapshot(), mode, runLength: RUN_LENGTH }),
     };

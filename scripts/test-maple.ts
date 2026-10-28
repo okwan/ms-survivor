@@ -229,6 +229,32 @@ try {
   ok(/gear: \d+ items extracted \(cap \d+, coat \d+/.test(run.out) && /gear: id \| slot \| name \| reqLevel \| reqJob/.test(run.out) && /gear: 01302103 \| weapon \| Test Sword 3 \| 30 \| 1/.test(run.out), 'gear totals and table are logged');
   ok(/gear preview Warrior stand1\/0: \d+ layers; wearing cap=\d+ .*shield=/.test(run.out) && /gear preview Thief/.test(run.out) && /--- Magician in a tier-3 set/.test(run.out), 'tier-3 set previews are logged for every class');
 
+  // ---- Rina's portrait (Npc.wz): id checked against String.wz, found by name when moved, never fatal ---------------------------
+  eq(m.npc, undefined, 'without Npc.wz there is no npc section');
+  ok(/Npc\.wz is not available/.test(run.out), 'missing Npc.wz is logged');
+  const npcRun = async (variant: string) => {
+    const dir = join(root, 'wz-npc-' + variant);
+    await writeFixture(dir, { character: false, npc: variant });
+    return extract('dist-npc-' + variant, dir);
+  };
+  const rina = await npcRun('rina');
+  eq(rina.status, 0, 'extractor exits 0 with Npc.wz');
+  const rn = manifestOf(rina.dist).npc!;
+  eq([rn.id, rn.name, rn.frames.length, rn.frames.every((f) => f.action === 'stand')], ['1012100', 'Rina', 3, true], 'Rina: the stand frames of 1012100');
+  checkAtlas(rina.dist, rn.atlas, rn.size, rn.frames);
+  ok(rn.frames[0].ox === 20 && rn.frames[0].oy === 64 && rn.frames[0].delay === 200, 'portrait frames keep origin and delay');
+  ok(/npc: 1012100 is "Rina" in String\.wz/.test(rina.out) && /--- npc 1012100 stand\/0/.test(rina.out), 'the verified id and an ASCII preview are logged');
+  const moved = await npcRun('moved');
+  const mn = manifestOf(moved.dist).npc!;
+  eq([mn.id, mn.name, mn.frames.length], ['1012101', 'Rina', 2], 'when 1012100 is someone else, Rina is found by name');
+  ok(/MISMATCH 1012100 is "Mr\. Smith"/.test(moved.out) && /"Rina" found as 1012101/.test(moved.out), 'the mismatch and the search are logged');
+  const absent = await npcRun('absent');
+  eq([absent.status, manifestOf(absent.dist).npc], [0, undefined], 'no NPC named Rina: no section, no failure');
+  ok(/no NPC named "Rina"/.test(absent.out), 'the miss is logged with the names seen');
+  const nostr = await npcRun('nostring');
+  eq(manifestOf(nostr.dist).npc?.id, '1012100', 'without String.wz Npc.img the candidate id is used unchecked');
+  ok(/using 1012100 unchecked/.test(nostr.out), 'and says so');
+
   // ---- no Character.wz: no avatar block, everything else unchanged -------------------------------------------------
   const fxNo = join(root, 'wz-nochar');
   await writeFixture(fxNo, { character: false });

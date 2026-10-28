@@ -26,6 +26,8 @@ export interface ItemIconKeys {
   fieldElixir?: string;
   fieldClock?: string;
   fieldKeg?: string;
+  /** Safety Charm (Cash 5130000), the Henesys shop's revive; a single frame */
+  metaRevive?: string;
 }
 
 export interface PetSection extends AtlasRef {
@@ -35,6 +37,14 @@ export interface PetSection extends AtlasRef {
   name: string;
   /** frame actions present: 'stand0', 'move', 'jump' (a subset) */
   actions: string[];
+}
+
+/** Rina's portrait (scripts/fetch-maple-npc.ts, Npc.wz): the `stand` frames of the Henesys shop keeper */
+export interface NpcSection extends AtlasRef {
+  /** NPC id, e.g. '1012100' */
+  id: string;
+  /** String.wz Npc.img name, e.g. 'Rina' */
+  name: string;
 }
 
 export interface ItemsSection {
