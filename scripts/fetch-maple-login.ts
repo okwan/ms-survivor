@@ -145,7 +145,11 @@ class Login {
     const steps = findSteps(groups, log);
     const scene: LoginSection = { source, backs, objs, bounds, steps, ui: this.loginUi(ui) };
     log(`login scene: ${backs.length} backs, ${objs.length} objects/tiles, ${this.written.size} images, ${(this.out.bytes / 1e6).toFixed(2)} MB; steps ${JSON.stringify(steps)}`);
-    this.dumpPreview(scene);
+    try {
+      this.dumpPreview(scene);
+    } catch (e) {
+      warn(`login scene preview: ${(e as Error).message}`);
+    }
     return scene;
   }
 
@@ -209,10 +213,10 @@ class Login {
     }
     return res;
   }
+
   /** Renders the camera view at each step at half size, as one base64 PNG in the log. */
-  /** Renders the camera view at each step and a map-locked overview of all objects at 1/4 scale, as base64 PNGs in the log. */
   private dumpPreview(scene: LoginSection) {
-    if (!Number.isFinite(y0)) { x0 = -400; x1 = 400; y0 = -300; y1 = 300; }
+    const views: [string, number, number][] = Object.entries(scene.steps).map(([k, p]) => [k, p!.x, p!.y]);
     const S = 2;
     const W = 800 / S, H = 600 / S;
     const all = Buffer.alloc(W * H * views.length * 4);
