@@ -176,11 +176,20 @@ export function buildRegions(d: RegionDeps): RegionsResult {
     }
     return tileSets;
   }
-  /** best green, opaque tile set that no region uses yet; the top 5 are logged */
+  /** the tile set a tile-less map borrows: the region's preference list first, then the greenest opaque unused set; the choice is logged */
   function greenestSet(index: number): string | null {
     const all = allTileSets();
     const ok = all.filter((t) => t.opaque >= TILE_SET_OPAQUE && !usedSets.has(t.name)).sort((a, b) => b.green - a.green);
     d.log(`region ${index}: ${all.length} tile sets, ${ok.length} opaque (>= ${TILE_SET_OPAQUE}%) and unused; top 5 by greenness: ${ok.slice(0, 5).map((t) => `${t.name}=${t.green.toFixed(0)} rgb(${t.rgb.map(Math.round).join(',')})`).join(' ') || 'none'}`);
+    const pref = REGION_WANTS[index].borrow ?? [];
+    for (const name of pref) {
+      const t = ok.find((x) => x.name === name);
+      if (t) {
+        d.log(`region ${index}: borrowing preferred tile set ${name} (rgb(${t.rgb.map(Math.round).join(',')}), ${t.opaque.toFixed(0)}% opaque); preference list ${pref.join(' > ')}`);
+        return name;
+      }
+    }
+    if (ok[0]) d.log(`region ${index}: none of ${pref.join(', ') || '(no preference)'} usable (missing, see-through or used); falling back to the greenest set ${ok[0].name}`);
     return ok[0]?.name ?? null;
   }
   // decor for a tile-less map: objects of Obj.wz acc* images under a node named like the borrowed tile set (or wood/forest/tree/leaf), l1 = nature, added to the map own object list

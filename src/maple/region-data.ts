@@ -10,11 +10,13 @@ export interface RegionWant {
   label: string;
   /** accept only a map whose String.wz streetName or mapName matches `street` (when String.wz names are available) */
   strict?: boolean;
+  /** tile-less maps of this area borrow the first of these Map.wz tile sets that exists, is opaque and unused (greenness is the last resort) */
+  borrow?: string[];
 }
 
 export const REGION_WANTS: RegionWant[] = [
   { label: 'Henesys fields', candidates: [104040000, 104040001, 100010000, 100020000], street: /henesys/i },
-  { label: 'Ellinia forest', candidates: [101010000, 101010001, 101010100, 101010101, 101020000, 101020100, 101030000, 101040000, 101000000], street: /ellinia|tree that grew/i, strict: true },
+  { label: 'Ellinia forest', candidates: [101010000, 101010001, 101010100, 101010101, 101020000, 101020100, 101030000, 101040000, 101000000], street: /ellinia|tree that grew/i, strict: true, borrow: ['ancientForest', 'darkGrassySoil', 'grassySoil'] },
   { label: 'Perion rocks', candidates: [102010000, 102020000, 102030000, 102040000], street: /perion/i },
   { label: 'Sleepywood / Ant Tunnel', candidates: [105040300, 105040310, 105040000, 105040100, 105040200, 105070001, 105050000, 105050100], street: /sleepywood/i },
   { label: 'Kerning swamp', candidates: [107000000, 107000100, 107000200, 107000300, 103000000, 103000101, 103010000, 103020000], street: /kerning|swamp/i },

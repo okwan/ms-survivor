@@ -490,13 +490,13 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
     1: { info: { tS: 'grassySoil' }, tile: {}, obj: {} },
     foothold: {},
   };
-  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([90, 110, 100])) } }, 'Tile/forestGreen.img': { bsc: { 0: canvas(8, 8, solid([60, 150, 60])) } }, 'Tile/blackTile.img': { bsc: { 0: canvas(8, 8, () => [0, 0, 0, 0]) } }, 'Tile/darkWood.img': { bsc: { 0: canvas(8, 8, solid([35, 26, 7])) } }, 'Tile/swamp.img': { bsc: { 0: canvas(8, 8, solid([40, 41, 38])) } }, 'Tile/dryRock.img': { bsc: { 0: canvas(8, 8, solid([170, 130, 90])) } }, 'Tile/darkCave.img': { bsc: { 0: canvas(8, 8, solid([0, 0, 0])) } }, ...objs };
+  const mapImgs = { 'Tile/grassySoil.img': tile, 'Tile/darkMountain.img': { bsc: { 0: canvas(8, 8, solid([90, 110, 100])) } }, 'Tile/forestGreen.img': { bsc: { 0: canvas(8, 8, solid([60, 150, 60])) } }, 'Tile/ancientForest.img': { bsc: { 0: canvas(8, 8, solid([25, 48, 22])) } }, 'Tile/blackTile.img': { bsc: { 0: canvas(8, 8, () => [0, 0, 0, 0]) } }, 'Tile/darkWood.img': { bsc: { 0: canvas(8, 8, solid([35, 26, 7])) } }, 'Tile/swamp.img': { bsc: { 0: canvas(8, 8, solid([40, 41, 38])) } }, 'Tile/dryRock.img': { bsc: { 0: canvas(8, 8, solid([170, 130, 90])) } }, 'Tile/darkCave.img': { bsc: { 0: canvas(8, 8, solid([0, 0, 0])) } }, ...objs };
   if (!noTown) mapImgs['Map/Map1/100000000.img'] = town;
   // run regions: 0 and 1 are candidates, 2 is found by its String.wz street name (no candidate exists), 3 to 6 have no map at all
   objs['Obj/acc2.img'] = { nature: { rock: { a: { 0: objFrame(80, 50, bushPx(80, 50)) } } } };
   mapImgs['Obj/acc2.img'] = objs['Obj/acc2.img'];
   // supplementary decor a tile-less map borrows: acc*/<borrowed tile set>/nature
-  mapImgs['Obj/acc3.img'] = { forestGreen: { nature: { a: { 0: objFrame(60, 90, treePx(60, 90, 0)) }, b: { 0: objFrame(30, 30, bushPx(30, 30)) } } } };
+  mapImgs['Obj/acc3.img'] = { ancientForest: { nature: { a: { 0: objFrame(60, 90, treePx(60, 90, 0)) }, b: { 0: objFrame(30, 30, bushPx(30, 30)) } } } };
   const regionMap = (tS, refs, bgm, n = 40, noTiles = false) => {
     const list = {};
     let k = 0;
@@ -507,7 +507,7 @@ export function writeWorldFixture(dir, { noTown = false, noRedDigits = false, no
   };
   const natureRefs = [['acc1', 'nature', 'tree', '0', 20], ['acc1', 'nature', 'bush', '0', 15], ['acc1', 'flower', 'a', '0', 12], ['acc1', 'flower', 'b', '0', 6], ['etc', 'fence', 'a', '0', 30], ['house', 'home', 'big', '0', 9], ['etc', 'connect', 'ladder', '0', 7]];
   mapImgs['Map/Map1/104040000.img'] = regionMap('grassySoil', natureRefs, 'Bgm00/FloralLife');
-  mapImgs['Map/Map1/101010000.img'] = regionMap('darkMountain', [['acc1', 'nature', 'tree', '0', 12], ['acc2', 'nature', 'rock', 'a', 9], ['signboard', 'sign', 'a', '0', 5]], 'Bgm00/Henesys', 0, true); // Ellinia: no tiles at all, borrows forestGreen
+  mapImgs['Map/Map1/101010000.img'] = regionMap('darkMountain', [['acc1', 'nature', 'tree', '0', 12], ['acc2', 'nature', 'rock', 'a', 9], ['signboard', 'sign', 'a', '0', 5]], 'Bgm00/Henesys', 0, true); // Ellinia: no tiles at all, borrows ancientForest
   mapImgs['Map/Map1/102000100.img'] = regionMap('dryRock', natureRefs.slice(0, 4), 'Bgm00/FloralLife');
   // region 3: Sleepywood by map name; region 4: first two candidates are rejected on purpose (tile set in use, pure black)
   mapImgs['Map/Map1/105040300.img'] = regionMap('darkWood', natureRefs.slice(0, 4), 'Bgm00/Henesys'); // dim: accepted and brightened
