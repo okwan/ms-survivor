@@ -56,10 +56,10 @@ eq(compose([{ slot: 'body', item: body }, { slot: 'head', item: head }, { slot: 
 eq(stanceActions('shoot', null).stand, 'stand2', 'bow stands with stand2');
 eq(stanceActions('swing', { ...sword, actions: { stand1: [], walk1: [], swingO2: [] } }).attack, ['swingO2'], 'attack list limited to what the weapon has');
 const look = defaultLook(1302000);
-eq(lookItems(look), { body: '00002000', head: '00012000', face: '00020000', hair: '00030000', coat: '01040002', pants: '01060002', shoes: '01072001', weapon: '01302000' }, 'default look item ids');
+eq(lookItems(look), { body: '00002000', head: '00012000', face: '00020000', hair: '00030000', coat: '01040002', pants: '01060002', shoes: '01072001', weapon: '01302000', cap: '', glove: '', cape: '', shield: '' }, 'default look item ids');
 eq(lookItems({ ...look, gender: 1, skin: 3, hair: 31040, hairColor: 5 }).hair, '00031045', 'hair colour is the last digit');
 eq(sanitizeLook({ gender: 1, face: 20000, skin: 99 }, 1302000).face, 21000, 'invalid saved faces are replaced');
 const w = wantedItems();
-eq([w.body.length, w.head.length, w.face.length, w.hair.length, w.coat.length, w.pants.length, w.shoes.length, w.weapon.length], [5, 5, 6, 48, 4, 4, 2, 4], 'wanted item counts');
+eq([w.body.length, w.head.length, w.face.length, w.hair.length, w.coat.length, w.pants.length, w.shoes.length, w.weapon.length, w.cap.length, w.glove.length, w.cape.length, w.shield.length], [5, 5, 6, 48, 4, 4, 2, 4, 0, 0, 0, 0], 'wanted item counts (gear comes from the gear extractor)');
 eq(w.weapon, ['01302000', '01372005', '01452002', '01332005'], 'weapons of the four classes');
 console.log(`test-avatar: ok (${checks} checks)`);
