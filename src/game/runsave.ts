@@ -12,7 +12,7 @@
  * An open card offer is simply drawn again from `pendingLevels` / `pendingJob`.
  */
 import {
-  BOSSES, BOSS_EVERY, CLASS_BY_KEY, MASTERIES, MASTERY_BY_KEY, MAX_PASSIVES, MAX_SKILLS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, RUN_LENGTH, SKILL_BY_KEY, SKILL_MAX_LEVEL,
+  BOSSES, BOSS_EVERY, DIFFICULTIES, CLASS_BY_KEY, MASTERIES, MASTERY_BY_KEY, MAX_PASSIVES, MAX_SKILLS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, RUN_LENGTH, SKILL_BY_KEY, SKILL_MAX_LEVEL,
   START_BANISHES, START_REROLLS, masteryMax, unlockedJobs, xpToNext,
 } from './data.ts';
 import type { MasteryKey } from './data.ts';
@@ -35,6 +35,8 @@ export interface RunSave {
   v: 1;
   seed: number;
   cls: string;
+  /** difficulty tier the run is played on (DIFFICULTIES index; missing = Normal) */
+  difficulty?: number;
   /** run clock in seconds */
   t: number;
   level: number;
@@ -89,7 +91,7 @@ export function captureRun(sim: Sim): RunSave {
   let cleared = sim.bossesSpawned;
   for (const e of sim.enemies) if (e.alive && e.boss >= 0 && e.lead && e.boss < cleared) cleared = e.boss;
   return {
-    v: 1, seed: sim.seed, cls: sim.cls.key, t: sim.t, level: sim.level, xp: sim.xp, hp: sim.hp, kills: sim.kills, mesos: sim.mesos,
+    v: 1, seed: sim.seed, cls: sim.cls.key, difficulty: sim.difficulty, t: sim.t, level: sim.level, xp: sim.xp, hp: sim.hp, kills: sim.kills, mesos: sim.mesos,
     mesoCarry: sim.mesoCarry, reviveUsed: sim.reviveUsed, bossesSpawned: cleared, bossKills: sim.bossKills, damageTaken: sim.damageTaken, gearDrops: sim.gearDrops, scrollDrops: sim.scrollDrops,
     skills: sim.skills.map((s) => ({ key: s.key, level: s.level })),
     passives: sim.passives.map((p) => ({ key: p.key, level: p.level })),
@@ -168,7 +170,7 @@ export function sanitizeRunSave(raw: unknown): RunSave | null {
   const started = [0, 1, 2].map((i) => int(Array.isArray(sw.started) ? sw.started[i] : 0, 0, 9999, 0));
   const branch = typeof o.branch === 'number' && cls.branches.includes(o.branch) ? o.branch : 0;
   return {
-    v: 1, seed: int(o.seed, 0, 4294967295, 1), cls: cls.key, t: o.t, level: int(o.level, 1, 999, 1), xp: num(o.xp, 0, MAX_COUNT, 0),
+    v: 1, seed: int(o.seed, 0, 4294967295, 1), cls: cls.key, difficulty: int(o.difficulty, 0, DIFFICULTIES.length - 1, 0), t: o.t, level: int(o.level, 1, 999, 1), xp: num(o.xp, 0, MAX_COUNT, 0),
     hp: num(o.hp, 1, MAX_COUNT, 1), kills: int(o.kills, 0, MAX_COUNT, 0), mesos: int(o.mesos, 0, MAX_COUNT, 0),
     bossesSpawned: int(o.bossesSpawned, 0, Math.min(BOSSES.length, Math.floor(o.t / BOSS_EVERY)), 0),
     bossKills: int(o.bossKills, 0, BOSSES.length, 0), damageTaken: num(o.damageTaken, 0, MAX_COUNT, 0),

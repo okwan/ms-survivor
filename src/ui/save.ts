@@ -1,4 +1,4 @@
-import { CLASS_BY_KEY } from '../game/data.ts';
+import { CLASS_BY_KEY, DIFFICULTIES, clampDifficulty } from '../game/data.ts';
 import { sanitizeBook } from '../game/book.ts';
 import { sanitizeRunSave } from '../game/runsave.ts';
 import type { RunSave } from '../game/runsave.ts';
@@ -21,7 +21,9 @@ export interface SavedCharacter {
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean; /** damage meter shown (unset: on for desktop, off on touch) */ meter?: boolean };
+  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean; /** damage meter shown (unset: on for desktop, off on touch) */ meter?: boolean; /** selected difficulty tier (<= cleared + 1) */ difficulty: number };
+  /** highest difficulty tier won (-1: none yet); tier n + 1 is unlocked */
+  cleared: number;
   character: SavedCharacter | null;
   /** Monster Book: kills per mob id, kept across runs (src/game/book.ts) */
   book: BookData;
@@ -31,7 +33,7 @@ export interface SaveData {
   hyper: HyperData;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {}, meta: emptyMeta(), hyper: emptyHyper() };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true, difficulty: 0 }, cleared: -1, character: null, book: {}, meta: emptyMeta(), hyper: emptyHyper() };
 
 function readCharacter(c: unknown): SavedCharacter | null {
   if (!c || typeof c !== 'object') return null;
@@ -48,7 +50,9 @@ export function loadSave(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta(), hyper: emptyHyper() };
     const o = JSON.parse(raw) as Partial<SaveData>;
+    const cleared = typeof o.cleared === 'number' && Number.isFinite(o.cleared) ? Math.max(-1, Math.min(DIFFICULTIES.length - 1, Math.floor(o.cleared))) : -1;
     return {
+      cleared,
       mesos: typeof o.mesos === 'number' ? o.mesos : 0,
       bestTime: typeof o.bestTime === 'number' ? o.bestTime : 0,
       settings: {
@@ -57,6 +61,7 @@ export function loadSave(): SaveData {
         muted: o.settings?.muted === true,
         autoEquip: o.settings?.autoEquip !== false,
         pet: o.settings?.pet !== false,
+        difficulty: Math.min(clampDifficulty(o.settings?.difficulty), cleared + 1),
         ...(typeof o.settings?.meter === 'boolean' ? { meter: o.settings.meter } : {}),
       },
       character: readCharacter(o.character),

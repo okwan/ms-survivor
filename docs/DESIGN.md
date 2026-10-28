@@ -217,6 +217,22 @@ Everything costs 548280 mesos (`metaTotalCost()`), about 18 bot runs of income w
   A run banks about 30k mesos for the bot (20-37k), so the whole shop (548280) is about 18 runs of bot income (prices were raised 15x from the first draft, which emptied the shop in about one run). Kill times of the ranged classes are noise (a different
   build and a different fight position, 7-12 s); the Warrior melee bot halves its time. Human runs are shorter and poorer, but the prices are probably low by a factor of 10 or more.
 
+## Difficulty
+
+Four tiers on top of the time scaling (`DIFFICULTIES` in data.ts, `Sim` option `difficulty`, default 0, clamped; exposed as `sim.difficulty` and in `snapshot()`). Normal is the baseline and changes nothing.
+
+| Tier | Name | Enemy HP | Enemy damage | Alive target | Mob speed | Mesos | Gear drop chance |
+|---|---|---|---|---|---|---|---|
+| 0 | Normal | x1 | x1 | x1 | x1 | x1 | x1 |
+| 1 | Hard | x1.6 | x1.4 | x1.1 | x1 | x1.6 | x1.3 |
+| 2 | Chaos | x2.6 | x1.9 | x1.2 | x1.05 | x2.5 | x1.6 |
+| 3 | Extreme | x4 | x2.6 | x1.3 | x1.1 | x4 | x2 |
+
+- HP and damage multiply the per-spawn values in `spawnEnemy` and `spawnBoss` (so elites, event mobs and boss companions follow). The alive target is scaled before the spawner's `MAX_ENEMIES - 20` guard. Mob speed is scaled before `ENEMY_SPEED_CAP`, so nothing outruns the hero.
+- Mesos multiply the value of every collected meso / meso bag pickup (kills, Steal, elites, Treasure Pigs); gear drop chances are multiplied and capped at 1.
+- Unlocks: `save.cleared` is the highest tier won (-1 none) and `save.settings.difficulty` the selected tier, always at most `cleared + 1`. A win at tier n sets `cleared = max(cleared, n)`; the results screen says "<Name> unlocked!" the first time.
+- UI: `src/ui/difficulty.ts` is a self-contained picker (locked tiers disabled with a lock and "Clear <prev> to unlock"); `Screens` mounts it in one place (above the Play row / START). The HUD shows the tier name under the clock when not Normal.
+- Probe: `PROBE_DIFF=<0..3> node --experimental-strip-types scripts/balance-difficulty.ts` (and balance-probe.ts) plays the kite bot on a tier. The bot never buys shop upgrades, so Chaos and Extreme are meant for geared players.
 ## Hyper Skills
 
 A permanent talent tree per class (`src/game/hyper.ts`, window `src/ui/hyper.ts`, button "Hyper Skills" next to the Henesys Shop on both title screens and the results screen), named like

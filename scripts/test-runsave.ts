@@ -75,6 +75,8 @@ console.log('-- sanitize');
 {
   const good = JSON.parse(JSON.stringify(captureRun(new Sim(1, 'thief'))));
   ok(sanitizeRunSave(good) !== null, 'fresh run save is valid');
+  ok(sanitizeRunSave(good)!.difficulty === 0 && sanitizeRunSave({ ...good, difficulty: undefined })!.difficulty === 0, 'difficulty defaults to Normal');
+  ok(sanitizeRunSave(captureRun(new Sim(1, 'thief', { difficulty: 2 })))!.difficulty === 2 && sanitizeRunSave({ ...good, difficulty: 99 })!.difficulty === 3, 'difficulty is saved with the run and clamped');
   for (const g of [null, undefined, 5, 'x', [], {}, { v: 2 }, { ...good, cls: 'nope' }, { ...good, t: -1 }, { ...good, t: RUN_LENGTH }, { ...good, t: 'a' }, { ...good, v: 0 }]) {
     ok(sanitizeRunSave(g) === null, `rejects ${JSON.stringify(g)?.slice(0, 40)}`);
   }

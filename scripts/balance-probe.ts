@@ -1,4 +1,5 @@
 // Run: node --experimental-strip-types scripts/balance-probe.ts [seeds=8] [classes=all]
+// Env: PROBE_DIFF=<0..3> plays on that difficulty tier.
 // Balance probe: the kiting bot (always takes card 0, picks the job branch 0) plays each class over several seeds. Prints win rate, the
 // hero's damage and the enemies' stats at minutes 1, 3, 5, 8, 12, 15, and the final level. Informational (no asserts).
 import { botInput } from '../src/game/bot.ts';
@@ -66,7 +67,7 @@ const MINUTES = [1, 3, 5, 8, 12, 15];
 interface Row { ttk: { boss: number; wave: number; s: number }[]; win: boolean; t: number; level: number; kills: number; snaps: Record<number, { might: number; hit: number; hp: number; maxHp: number; level: number; mobHp: number; mobDmg: number; bossKills: number; gear: number }> }
 
 function play(seed: number, cls: string): Row {
-  const sim = new Sim(seed, cls, { mobSpeeds, ...(gearPool ? { pool: gearPool } : {}) });
+  const sim = new Sim(seed, cls, { mobSpeeds, difficulty: Number(process.env.PROBE_DIFF ?? 0), ...(gearPool ? { pool: gearPool } : {}) });
   const snaps: Row['snaps'] = {};
   const ttk: Row['ttk'] = [];
   const spawnedAt: Record<number, number[]> = {};
