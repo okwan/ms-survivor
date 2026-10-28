@@ -368,6 +368,8 @@ async function boot() {
       autopick(on: boolean) { autopick = on; },
       bot(on: boolean) { botOn = on; },
       mode: () => mode,
+      /** pauses / resumes (no effect while a level-up offer is open) and returns the mode */
+      pause: (on = true) => { setPaused(on); return mode; },
       renderer,
       hero: () => hero,
       /** what is on screen: the screen name ('login', 'select', 'title', 'create', 'playing', 'paused', 'ended') and the open game windows */

@@ -360,11 +360,10 @@ export class Screens {
       <tr><td>Average DPS</td><td>${compact(r.damage.total / Math.max(1, r.damage.time))}</td></tr>`));
     if (r.hyperSp && r.hyperSp.sp > 0) b.appendChild(el('p', 'res-sp', `+${r.hyperSp.sp} Hyper SP for ${r.hyperSp.name}`));
     if (r.damage.rows.length) b.appendChild(this.breakdown(r.damage));
-    const row = el('div', 'btnrow');
-    row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()));
-    const more = el('div', 'btnrow res-more');
-    more.append(this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
-    b.append(row, more);
+    const row = el('div', 'btnrow res-btns');
+    row.append(this.btn('Retry', 'primary', () => this.h.retry()), this.btn('Menu', '', () => this.h.menu()),
+      this.btn('Henesys Shop', 'res-shop', () => this.h.shop()), this.btn('Hyper Skills', 'res-hyper', () => this.h.hyper()));
+    b.appendChild(row);
     w.appendChild(b);
     this.results.appendChild(w);
     this.results.classList.remove('hidden');

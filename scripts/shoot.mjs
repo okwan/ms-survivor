@@ -107,8 +107,9 @@ async function main() {
         await menu('playing', () => { window.game.hyper(0, 'warrior', false); window.game.start(7, 'warrior'); window.game.god(true); window.game.step(20); });
         await menu('levelup', () => window.game.step(120));
         await menu('equip', () => { window.game.pick(0); window.game.window('equip', true); window.game.window('inventory', true); });
-        await menu('pause', () => { window.game.window('equip', false); window.game.window('inventory', false); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
-        await menu('results', () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); window.game.god(false); window.game.autopick(true); window.game.step(900); });
+        // a level-up offer blocks pausing: resolve any left open (pick is a no-op without one), then pause through the api
+        await menu('pause', () => { window.game.window('equip', false); window.game.window('inventory', false); for (let i = 0; i < 5; i++) window.game.pick(0); if (window.game.pause(true) !== 'paused') throw new Error('did not pause'); });
+        await menu('results', () => { window.game.pause(false); window.game.god(false); window.game.autopick(true); window.game.step(900); });
       }
     } catch (e) {
       console.log(`shoot ${s.tag}: ${e.message}`);
