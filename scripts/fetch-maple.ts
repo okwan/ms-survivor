@@ -17,6 +17,7 @@ import type { FrameRec, MapleManifest, MobEntry, SkillEntry } from '../src/maple
 import { extractAvatar } from './fetch-maple-character.ts';
 import { buildRegions } from './fetch-maple-regions.ts';
 import { buildSfx } from './fetch-maple-sfx.ts';
+import { buildItems } from './fetch-maple-items.ts';
 import { buildWorld } from './fetch-maple-world.ts';
 import { asciiPreview, encodePng } from './png.mjs';
 import { canvasRgba, openWz } from './wz.mjs';
@@ -513,7 +514,8 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     report.bytes += world.bytes;
     const regions = buildRegions({ dist: distDir, sets: { Map: sets.Map, String: sets.String, Sound: sets.Sound }, log, warn, canvasList, packAtlas, sniffAudio });
     const sfx = buildSfx({ dist: distDir, sound: sets.Sound, log, warn, sniffAudio });
-    report.bytes += regions.bytes + sfx.bytes;
+    const items = buildItems({ dist: distDir, sets: { Item: sets.Item, String: sets.String, Effect: sets.Effect }, log, warn, canvasList, packAtlas });
+    report.bytes += regions.bytes + sfx.bytes + items.bytes;
 
     const primary = sets.Mob ?? sets.Skill ?? sets.Sound ?? sets.String;
     const manifest: MapleManifest = {
@@ -526,6 +528,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
       ...world.manifest,
       ...regions.manifest,
       ...sfx.manifest,
+      ...items.manifest,
     };
     log(`totals: mobs ${report.mobsOk}/${WANTED_MOBS.length} (${report.mobFrames} frames), skills+passives ${report.skillsOk}/${WANTED_SKILLS.length} (${report.skillFrames} animation frames), bgm run=${report.bgm.run ?? 'none'} title=${report.bgm.title ?? 'none'}, ${(report.bytes / 1e6).toFixed(2)} MB written in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     if (report.mobsMissing.length) log(`missing mobs (${report.mobsMissing.length}): ${report.mobsMissing.join('; ')}`);
@@ -533,7 +536,7 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
     if (report.mobsMismatch.length) log(`mob NAME MISMATCHES (${report.mobsMismatch.length}): ${report.mobsMismatch.join('; ')}`);
     if (report.skillsMissing.length) log(`missing skills (${report.skillsMissing.length}): ${report.skillsMissing.join('; ')}`);
 
-    if (!report.mobsOk && !report.skillsOk && !report.bgm.run && !report.bgm.title && !av.manifest && !Object.keys(world.manifest).length && !Object.keys(regions.manifest).length && !Object.keys(sfx.manifest).length) {
+    if (!report.mobsOk && !report.skillsOk && !report.bgm.run && !report.bgm.title && !av.manifest && !Object.keys(world.manifest).length && !Object.keys(regions.manifest).length && !Object.keys(sfx.manifest).length && !Object.keys(items.manifest).length) {
       warn('nothing could be extracted; no manifest written, the game keeps placeholder art');
       return { manifest: null, report };
     }
