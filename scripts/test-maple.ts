@@ -203,7 +203,7 @@ try {
   ok(/gear: kept items per slot \(rows\) and offered tier t0..t7/.test(run.out) && /gear:   glove +\d+/.test(run.out) && /empty buckets borrowed from a higher reqLevel/.test(run.out) && /MB of the 2\.0 MB budget/.test(run.out), 'the per-slot per-tier tables, the borrowing and the byte budget are logged');
   const perBucket = new Map<string, number>();
   for (const e of Object.values(gi)) if (e.slot === 'weapon' && e.job === 8) perBucket.set(String(Math.floor(e.level / 10)), (perBucket.get(String(Math.floor(e.level / 10))) ?? 0) + 1);
-  ok([...perBucket.values()].every((n) => n <= 2), 'at most three thief weapons per level tier');
+  ok([...perBucket.values()].every((n) => n <= 3), 'at most three thief weapons per level tier');
   for (const slot of ['cap', 'glove', 'cape', 'shield'] as const) ok(av.items[slot].length >= 7 && av.items[slot].every((id) => existsSync(join(run.dist, 'maple', 'avatar', `${slot}-${id}.json`)) && existsSync(join(run.dist, 'maple', 'avatar', `${slot}-${id}.png`))), `${slot} frame files are written and listed in the avatar items`);
   eq(new Set(av.items.weapon).size, av.items.weapon.length, 'no item is listed twice');
   const capFrames = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'cap-01002003.json'), 'utf8'));
