@@ -217,6 +217,25 @@ Everything costs 548280 mesos (`metaTotalCost()`), about 18 bot runs of income w
   A run banks about 30k mesos for the bot (20-37k), so the whole shop (548280) is about 18 runs of bot income (prices were raised 15x from the first draft, which emptied the shop in about one run). Kill times of the ranged classes are noise (a different
   build and a different fight position, 7-12 s); the Warrior melee bot halves its time. Human runs are shorter and poorer, but the prices are probably low by a factor of 10 or more.
 
+## Hyper Skills
+
+A permanent talent tree per class (`src/game/hyper.ts`, window `src/ui/hyper.ts`, button "Hyper Skills" next to the Henesys Shop on both title screens and the results screen), named like
+MapleStory's Hyper Skills and laid out like a WoW tree. Pure and generated from `data.ts`, so it never drifts from the skills.
+
+- **Columns:** the 1st job, then one per 2nd-job branch (its 2nd and 3rd job skills): 4 columns for Warrior and Magician, 3 for Bowman and Thief. Every active skill (`jobOfId`) is one cell
+  with two nodes side by side; the cell sits in a row: 1st job from row 0, 2nd job from row 1, 3rd job from row 3, one row per skill of the job.
+- **Nodes** (key `${skill}:${kind}`): `<Skill> - Reinforce` (+8% damage per rank, 3 ranks) on every skill, and one more by the skill's kind: `Extra Target` (+1 target / projectile, 1 rank) for bolt, pierce,
+  strike, ground, orbit, chain and multi-target skills; `Spread` (+10% area per rank, 2 ranks) for nova, cone and other area skills; otherwise `Cooltime Reduce` (-6% cooldown per rank, 2 ranks).
+  Tree sizes (nodes / total ranks): Warrior 30 / 72, Magician 30 / 64, Bowman 28 / 58, Thief 24 / 55.
+- **Gating:** row r needs 3 x r points spent in the whole tree (WoW style); the second node of a skill needs a rank of its Reinforce. A locked tile says why.
+- **Hyper SP:** earned per class from the levels gained in runs with it (`level - 1` banked at the end of a run, also on quit): 1 SP per `HYPER_LEVELS_PER_SP` = 20 lifetime levels, capped at
+  `HYPER_SP_CAP` = 30 (a ~level-70 run is about 3 SP, the cap is about 9 such runs and fills roughly half of a tree, so choices matter). Ranks cost 1 SP each. Reset is free and instant (refunds all).
+  The results screen says "+N Hyper SP for <Class>" when a run earned some.
+- **Save:** `hyper: { <class>: { levels, ranks } }`. `sanitizeHyper` drops unknown nodes, clamps ranks, and refunds a class whose ranks break the gating (replayed row by row) or exceed its SP.
+- **Sim:** option `hyper` (the class's ranks) becomes a per-skill table (`Sim.hyper`: damage, extra targets, area, cooldown multipliers), built once. `hit()` multiplies by it for `curSkill`
+  (next to Skill Mastery), `skills.ts` adds the targets, area and cooldown. An evolved 4th-job skill (Mastery Book) shares the table entry of the skill it replaced.
+- **Dev hook:** `game.hyper(giveLevels?, cls?, open?)` returns the class's levels, SP and ranks (and gives lifetime levels, 20 per SP, for testing). Tests: `scripts/test-hyper.ts`.
+
 ## Elites, events and field items
 
 Three systems in new files (`src/game/elites.ts`, `events.ts`, `fieldItems.ts`), each with its own seeded random stream so the run's other draws never shift;
