@@ -6,6 +6,7 @@ import type { Avatar } from '../maple/avatar.ts';
 import { fmtTime } from './hud.ts';
 import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
 import { LoginScreen, classic } from './login.ts';
+import { difficultyPicker } from './difficulty.ts';
 import type { SaveData } from './save.ts';
 import { theme } from './theme.ts';
 
@@ -26,6 +27,8 @@ export interface ScreenHandlers {
   book(): void;
   /** opens the Henesys shop */
   shop(): void;
+  /** the player picked a difficulty tier */
+  difficulty(i: number): void;
   pet(on: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
@@ -40,6 +43,9 @@ export interface Results {
   bosses: number;
   elites: number;
   best: boolean;
+  /** the tier played, and the name of the tier this win unlocked (if any) */
+  difficulty?: number;
+  unlocked?: string;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, html = ''): HTMLElementTagNameMap[K] {
@@ -72,12 +78,16 @@ export class Screens {
   /** the classic MapleStory login screen (null: the plain title window is used) */
   readonly login: LoginScreen | null = null;
   private titleExtra!: HTMLDivElement;
+  private diff = difficultyPicker((i) => this.h.difficulty(i));
 
   constructor(parent: HTMLElement, h: ScreenHandlers, icons: Record<string, string>, avatar: Avatar | null = null) {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
     if (classic()) this.login = new LoginScreen(parent, { create: () => h.start(), select: () => h.quick(), volume: (v) => h.volume(v), sfxVolume: (v) => h.sfxVolume(v), mute: (m) => h.mute(m), pet: (on) => h.pet(on) }, avatar);
+    // the difficulty picker: ONE element, mounted above the Play row of the classic signboard, else above START on the plain title
+    if (this.login) this.login.root.querySelector('.login-board')!.insertBefore(this.diff.el, this.login.root.querySelector('.login-btns'));
+    else this.title.querySelector('.win-body')!.insertBefore(this.diff.el, this.title.querySelector('.btn.big'));
     this.login?.addButton('Monster Book', () => h.book());
     this.login?.addButton('Henesys Shop', () => h.shop());
     this.pause = this.buildPause();
@@ -197,6 +207,7 @@ export class Screens {
     const ch = save.character;
     this.quickBtn.classList.toggle('hidden', !ch);
     if (ch) this.quickBtn.textContent = `Quick start: ${ch.name} the ${ch.cls[0].toUpperCase()}${ch.cls.slice(1)}`;
+    this.setDifficulty(save);
     this.petEl.checked = save.settings.pet;
     this.volEl.value = String(save.settings.volume);
     this.sfxVolEl.value = String(save.settings.sfxVolume);
@@ -204,6 +215,11 @@ export class Screens {
     this.hideAll();
     if (this.login) this.login.show(save);
     else this.title.classList.remove('hidden');
+  }
+
+  /** Redraws the difficulty picker from the save */
+  setDifficulty(save: SaveData) {
+    this.diff.set(save.settings.difficulty, save.cleared);
   }
 
   /** The banked mesos changed (the shop): the menu shows the new total. */
@@ -272,6 +288,7 @@ export class Screens {
     w.appendChild(el('div', 'win-head ' + (r.won ? 'victory' : 'defeat'), r.won ? 'VICTORY!' : 'You Died'));
     const b = el('div', 'win-body');
     b.appendChild(el('p', 'tagline', r.won ? 'You survived the full 15 minutes!' : 'The monsters got you this time.'));
+    if (r.unlocked) b.appendChild(el('p', 'tagline', `<b>${r.unlocked} unlocked!</b>`));
     b.appendChild(el('table', 'res', `
       <tr><td>Time survived</td><td>${fmtTime(r.time)}${r.best ? ' <em>NEW BEST</em>' : ''}</td></tr>
       <tr><td>Level</td><td>${r.level}</td></tr>

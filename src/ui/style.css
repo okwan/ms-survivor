@@ -32,6 +32,8 @@ html, body { -webkit-touch-callout: none; -webkit-tap-highlight-color: transpare
 .coin { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff2a8, #ffc21f 60%, #b87600); border: 1px solid #8a5a00; display: inline-block; }
 .hud-top { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); text-align: center; width: min(420px, 56vw); }
 .clock { font-size: 34px; font-weight: 900; letter-spacing: .04em; line-height: 1; -webkit-text-stroke: 1px #12285c; text-shadow: 0 2px 0 #12285c, 0 0 8px rgba(0,0,0,.5); }
+.diff { font-size: 12px; font-weight: 900; letter-spacing: .12em; color: #ff8a7a; text-shadow: 0 1px 0 #3a0a00; }
+.diff:empty { display: none; }
 .nextboss { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: bold; background: linear-gradient(#ffb23f, #e57400); border: 2px solid #fff; border-radius: 12px; padding: 1px 12px; letter-spacing: .06em; }
 .nextboss.soon { background: linear-gradient(#ff6a5a, #c01a1a); animation: pulse .5s infinite alternate; }
 @keyframes pulse { to { transform: scale(1.08); } }

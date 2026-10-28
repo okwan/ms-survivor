@@ -1,4 +1,4 @@
-import { CLASS_BY_KEY } from '../game/data.ts';
+import { CLASS_BY_KEY, DIFFICULTIES, clampDifficulty } from '../game/data.ts';
 import { sanitizeBook } from '../game/book.ts';
 import { emptyMeta, sanitizeMeta } from '../game/meta.ts';
 import type { MetaRanks } from '../game/meta.ts';
@@ -17,7 +17,9 @@ export interface SavedCharacter {
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean };
+  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean; /** selected difficulty tier (<= cleared + 1) */ difficulty: number };
+  /** highest difficulty tier won (-1: none yet); tier n + 1 is unlocked */
+  cleared: number;
   character: SavedCharacter | null;
   /** Monster Book: kills per mob id, kept across runs (src/game/book.ts) */
   book: BookData;
@@ -25,7 +27,7 @@ export interface SaveData {
   meta: MetaRanks;
 }
 const KEY = 'maple-survivor-save-v1';
-const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true }, character: null, book: {}, meta: emptyMeta() };
+const DEFAULT: SaveData = { mesos: 0, bestTime: 0, settings: { volume: 0.7, sfxVolume: 0.8, muted: false, autoEquip: true, pet: true, difficulty: 0 }, cleared: -1, character: null, book: {}, meta: emptyMeta() };
 
 function readCharacter(c: unknown): SavedCharacter | null {
   if (!c || typeof c !== 'object') return null;
@@ -42,7 +44,9 @@ export function loadSave(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT, settings: { ...DEFAULT.settings }, book: {}, meta: emptyMeta() };
     const o = JSON.parse(raw) as Partial<SaveData>;
+    const cleared = typeof o.cleared === 'number' && Number.isFinite(o.cleared) ? Math.max(-1, Math.min(DIFFICULTIES.length - 1, Math.floor(o.cleared))) : -1;
     return {
+      cleared,
       mesos: typeof o.mesos === 'number' ? o.mesos : 0,
       bestTime: typeof o.bestTime === 'number' ? o.bestTime : 0,
       settings: {
@@ -51,6 +55,7 @@ export function loadSave(): SaveData {
         muted: o.settings?.muted === true,
         autoEquip: o.settings?.autoEquip !== false,
         pet: o.settings?.pet !== false,
+        difficulty: Math.min(clampDifficulty(o.settings?.difficulty), cleared + 1),
       },
       character: readCharacter(o.character),
       book: sanitizeBook(o.book),

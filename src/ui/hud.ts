@@ -1,5 +1,5 @@
 import { EVOLUTION_PASSIVE_SLOTS } from '../game/evolutions.ts';
-import { BOSSES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
+import { BOSSES, DIFFICULTIES, BOSS_BARS, CLASS_BY_KEY, JOB_BY_CODE, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, PASSIVES, SKILL_BY_KEY, skillCooldown } from '../game/data.ts';
 import { AILMENTS } from '../game/ailments.ts';
 import { FIELD_ITEMS } from '../game/fieldItems.ts';
 import type { Sim } from '../game/sim.ts';
@@ -56,6 +56,7 @@ export class Hud {
       <div class="vignette" data-k="vignette"></div>
       <div class="hud-top">
         <div class="clock" data-k="clock">0:00</div>
+        <div class="diff" data-k="diff"></div>
         <div class="nextboss" data-k="next">NEXT BOSS 2:15</div>
         <div class="bosspanel" data-k="bosspanel">
           ${[0, 1, 2].map((i) => `<div class="bossrow" data-k="bossrow${i}">
@@ -210,6 +211,7 @@ export class Hud {
     this.text(this.el.kills, String(sim.kills));
     this.text(this.el.mesos, String(sim.mesos));
     this.text(this.el.clock, fmtTime(sim.t));
+    this.text(this.el.diff, sim.difficulty ? DIFFICULTIES[sim.difficulty].name.toUpperCase() : '');
     const nb = sim.nextBossIn();
     this.text(this.el.next, nb >= 0 ? `NEXT BOSS ${fmtTime(Math.ceil(nb))}` : `VICTORY IN ${fmtTime(Math.ceil(900 - sim.t))}`);
     this.el.next.classList.toggle('soon', nb >= 0 && nb < 10);

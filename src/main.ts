@@ -1,7 +1,7 @@
 import './ui/style.css';
 import { Application } from 'pixi.js';
 import { botInput, botPick } from './game/bot.ts';
-import { CLASS_BY_KEY, DEFAULT_CLASS, RUN_LENGTH, TICK } from './game/data.ts';
+import { CLASS_BY_KEY, DEFAULT_CLASS, DIFFICULTIES, RUN_LENGTH, TICK } from './game/data.ts';
 import { Sim } from './game/sim.ts';
 import { buildArt } from './maple/art.ts';
 import type { MapleArt } from './maple/art.ts';
@@ -129,7 +129,7 @@ async function boot() {
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta });
+    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta, difficulty: save.settings.difficulty });
     sim.god = god;
     gearUi.reset();
     gachaUi.reset();
@@ -147,6 +147,7 @@ async function boot() {
   function bank(quit: boolean) {
     save.book = mergeBook(save.book, sim.book);
     save.mesos += sim.mesos;
+    if (!quit && sim.won) save.cleared = Math.max(save.cleared, sim.difficulty);
     if (save.character && save.character.name === hero.name && sim.level > 1) save.character.level = sim.level;
     const best = !quit && sim.t > save.bestTime;
     if (sim.t > save.bestTime) save.bestTime = sim.t;
@@ -156,8 +157,10 @@ async function boot() {
 
   function endRun() {
     mode = 'ended';
+    const prev = save.cleared;
     const best = bank(false);
-    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best });
+    const unlocked = sim.won && sim.difficulty > prev && sim.difficulty + 1 < DIFFICULTIES.length ? DIFFICULTIES[sim.difficulty + 1].name : undefined;
+    screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best, difficulty: sim.difficulty, unlocked });
   }
 
   function toTitle() {
@@ -196,6 +199,7 @@ async function boot() {
       banish: (i) => sim.banish(i),
       book: () => bookPanel.show(save.book),
       shop: () => shopPanel.show(),
+      difficulty: (i) => { save.settings.difficulty = Math.max(0, Math.min(i, save.cleared + 1)); writeSave(save); screens.setDifficulty(save); },
       pet: (on) => { save.settings.pet = on; writeSave(save); },
       volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
       sfxVolume: (v) => { save.settings.sfxVolume = v; writeSave(save); sfx?.setVolume(v); sfx?.play('ui.click'); },

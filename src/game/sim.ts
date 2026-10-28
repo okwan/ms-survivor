@@ -3,9 +3,9 @@ import {
   CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY,
   JOB2_LEVEL, JOB3_LEVEL, JOB_BY_CODE, PASSIVES, jobOfId, unlockedJobs, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
   SUMMON_RING, TICK, aliveTarget, mitigated, mesoValue, poolLo, progress, xpToNext,
-  enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
+  DIFFICULTIES, clampDifficulty, enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
   BOSS_COMPANION_HP, BOSS_WAVES, BOSS_BARS, GEAR_BOSS_DROP_STEP, GEAR_BOSS_DROPS_MAX, GEAR_RARE_CHANCE, MASTERIES, MASTERY_BY_KEY, MASTERY_FILLER_CHANCE, SKILL_MASTERY_PER,
-  SKILL_MASTERY_PREFIX, VITALITY_HEAL, enemySpeed, masteryMax,
+  SKILL_MASTERY_PREFIX, VITALITY_HEAL, ENEMY_SPEED_CAP, enemySpeed, masteryMax,
 } from './data.ts';
 import { regionAt } from './regions.ts';
 import { SpatialGrid } from './grid.ts';
@@ -76,6 +76,8 @@ export class Sim {
   xpNeed = xpToNext(1);
   kills = 0;
   mesos = 0;
+  /** difficulty tier (index into DIFFICULTIES) */
+  readonly difficulty: number;
   bossKills = 0;
   bossesSpawned = 0;
 
@@ -176,8 +178,9 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; /** Henesys shop ranks (default none) */ meta?: Partial<MetaRanks>; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean; /** difficulty tier 0..3 (default 0 = Normal) */ difficulty?: number } = {}) {
     this.seed = seed;
+    this.difficulty = clampDifficulty(opts.difficulty);
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
     this.itemRng = new Rng((seed ^ 0x5bd1e995) >>> 0);
@@ -204,8 +207,9 @@ export class Sim {
     this.crit = this.cls.crit;
     this.hp = this.maxHp = this.cls.hp;
     const ms = opts.mobSpeeds;
-    this.tierSpeed = LADDER.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
-    this.bossSpeed = BOSSES.map((d) => enemySpeed(d.speed, ms?.[d.id], this.cls.speed));
+    const dsp = DIFFICULTIES[this.difficulty].speed, cap = ENEMY_SPEED_CAP * this.cls.speed;
+    this.tierSpeed = LADDER.map((d) => Math.min(enemySpeed(d.speed, ms?.[d.id], this.cls.speed) * dsp, cap));
+    this.bossSpeed = BOSSES.map((d) => Math.min(enemySpeed(d.speed, ms?.[d.id], this.cls.speed) * dsp, cap));
     if (opts.pet) this.pet = new Pet(0, 0);
     this.recalc();
   }
@@ -404,7 +408,7 @@ export class Sim {
     this.dropPickup(GEM, e.x, e.y, gv);
     if (this.rng.next() < 0.015) this.dropPickup(POTION, e.x, e.y, 0.25);
     if (this.rng.next() < 0.3) this.dropPickup(MESO, e.x, e.y, mesoValue(e.tier));
-    if (this.gearRng.next() < (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL)) this.dropGear(e.x, e.y, false);
+    if (this.gearRng.next() < Math.min(1, (e.big || e.tier >= GEAR_ELITE_TIER ? GEAR_DROP_ELITE : GEAR_DROP_NORMAL) * DIFFICULTIES[this.difficulty].gear)) this.dropGear(e.x, e.y, false);
     if (this.itemRng.next() < SCROLL_DROP_NORMAL) this.dropScroll(e.x, e.y + 0.4);
     maybeDropMastery(this, e.x, e.y);
     if (e.elite) eliteKilled(this, e);
@@ -648,9 +652,9 @@ export class Sim {
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = x; e.y = y;
-    e.maxHp = e.hp = d.hp * enemyHpMult(p);
+    e.maxHp = e.hp = d.hp * enemyHpMult(p) * DIFFICULTIES[this.difficulty].hp;
     e.speed = this.tierSpeed[tier];
-    e.dmg = d.dmg * enemyDmgMult(p);
+    e.dmg = d.dmg * enemyDmgMult(p) * DIFFICULTIES[this.difficulty].dmg;
     e.r = d.big ? 1.0 : 0.6;
     e.xp = d.xp;
     e.tier = tier; e.boss = -1; e.lead = false; e.big = d.big; e.add = add; e.alive = true;
@@ -668,9 +672,9 @@ export class Sim {
     const p = progress(this.t);
     const e = this.enemyPool.pop() ?? ({} as Enemy);
     e.x = this.px + Math.cos(a) * dist; e.y = this.py + Math.sin(a) * dist;
-    e.maxHp = e.hp = def.hp * enemyHpMult(p) * hpFrac;
+    e.maxHp = e.hp = def.hp * enemyHpMult(p) * DIFFICULTIES[this.difficulty].hp * hpFrac;
     e.speed = this.bossSpeed[n];
-    e.dmg = def.dmg * enemyDmgMult(p);
+    e.dmg = def.dmg * enemyDmgMult(p) * DIFFICULTIES[this.difficulty].dmg;
     e.r = 1.6 * def.scale;
     e.xp = def.xp;
     e.tier = LADDER.length - 1; e.boss = n; e.lead = hpFrac >= 1; e.big = true; e.add = false; e.alive = true;
@@ -724,7 +728,7 @@ export class Sim {
     if (this.spawnT > 0) return;
     this.spawnT += SPAWN_INTERVAL;
     if (this.spawnT < 0) this.spawnT = 0;
-    const target = aliveTarget(this.t);
+    const target = Math.floor(aliveTarget(this.t) * DIFFICULTIES[this.difficulty].alive);
     const alive = this.enemies.length - this.extras;
     if (alive >= target || alive >= MAX_ENEMIES - 20) return;
     const n = Math.min(4, target - alive);
@@ -952,7 +956,7 @@ export class Sim {
       case GEM: this.addXp((this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value) * (this.ail.curse ? CURSE_GEM : 1)); break;
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
       case ELIXIR: this.hp = this.maxHp; cureAilments(this); break;
-      case MESO: case BAG: this.gainMesos(p.value); break;
+      case MESO: case BAG: this.gainMesos(p.value * DIFFICULTIES[this.difficulty].mesos); break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
       case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
       case GACHA: if (p.value >= ELITE_CAPSULE) openGacha(this, p.value - ELITE_CAPSULE, true); else openGacha(this, p.value - 1); break;
@@ -1271,6 +1275,7 @@ export class Sim {
       ailments: { applied: this.ail.applied, left: [...this.ail.left] },
       field: { boxes: this.field.boxesBroken, used: this.field.itemsUsed, coupon: this.field.couponT, elixir: this.field.elixirT, clock: this.field.clockT },
       mesos: this.mesos,
+      difficulty: this.difficulty,
       alive: this.enemies.length,
       x: this.px,
       y: this.py,
