@@ -5,7 +5,7 @@
  * Inventory lists what the hero carries but does not wear (sim.bag); double-click or right-click wears it.
  * State lives in the sim; this reads it every frame and only touches the DOM when it changed. Pixel positions: layout.ts.
  */
-import { CLASS_BY_KEY, JOB_BY_CODE } from '../game/data.ts';
+import { CLASS_BY_KEY, JOB_BY_CODE, armorReduction } from '../game/data.ts';
 import { plusOf, slotsLeft } from '../game/scrolls.ts';
 import { BAG_SIZE, GEAR_SLOT_NAMES, JOB_BIT, describeBonus, itemBonus, totalBonus } from '../game/gear.ts';
 import type { GearItem, GearSlot, GearStats } from '../game/gear.ts';
@@ -487,7 +487,7 @@ export class GearWindows {
       ['HP', `${Math.ceil(sim.hp)} / ${Math.round(sim.maxHp)}`],
       ['EXP', `${Math.floor(sim.xp)} / ${sim.xpNeed}`],
       ['Damage', `${Math.round(sim.might * 100)}%`],
-      ['Armor', String(+sim.armor.toFixed(1))],
+      ['Armor', `${+sim.armor.toFixed(1)} (-${Math.round(armorReduction(sim.armor) * 100)}% dmg)`],
       ['Speed', `${+sim.speed.toFixed(1)} yd/s`],
       ['Crit', `${Math.round(sim.crit * 100)}%`],
       ['Magnet', `${+sim.magnet.toFixed(1)} yd`],

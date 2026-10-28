@@ -2,7 +2,7 @@ import {
   BERSERK_AFTER, BOSSES, BOSS_EVERY, LADDER, MAX_GEMS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, NOVA_DAMAGE_FRAC, NOVA_EVERY,
   CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY,
   JOB2_LEVEL, JOB3_LEVEL, JOB_BY_CODE, PASSIVES, jobOfId, unlockedJobs, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
-  SUMMON_RING, TICK, aliveTarget, mesoValue, poolLo, progress, xpToNext,
+  SUMMON_RING, TICK, aliveTarget, mitigated, mesoValue, poolLo, progress, xpToNext,
   enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
   BOSS_COMPANION_HP, BOSS_WAVES, BOSS_BARS, GEAR_BOSS_DROP_STEP, GEAR_BOSS_DROPS_MAX, GEAR_RARE_CHANCE, MASTERIES, MASTERY_BY_KEY, MASTERY_FILLER_CHANCE, SKILL_MASTERY_PER,
   SKILL_MASTERY_PREFIX, VITALITY_HEAL, enemySpeed, masteryMax,
@@ -16,7 +16,7 @@ import type { GearItem, GearSlot } from './gear.ts';
 import { BAG, ELIXIR, EV_BOX, EV_STAMPEDE, EV_TREASURE, FIELD, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from './types.ts';
 import { dropGacha, maybeDropMastery, openGacha, useMasteryBook, ELITE_CAPSULE } from './gachapon.ts';
 import { Elites, eliteContact, eliteTitle, eliteDamage, eliteKilled, eliteTick, maybePromote, updateElites } from './elites.ts';
-import { Swarms, eventStep, eventUpkeep, treasureKilled, updateSwarms } from './events.ts';
+import { Swarms, eventStep, eventUpkeep, treasureKilled, updateCamp, updateSwarms } from './events.ts';
 import { CLOCK_BOSS_SLOW, COUPON_GEM_MULT, ELIXIR_DAMAGE, FieldState, breakBox, updateField, useFieldItem } from './fieldItems.ts';
 import { Ailments, CURSE_GEM, WEAKNESS_SPEED, cureAilments, updateAilments } from './ailments.ts';
 import { MOVE_WALK, MobAi, behaveStep, bossAilment, mobBehave, resetMob, updateShots } from './mobai.ts';
@@ -738,6 +738,9 @@ export class Sim {
     }
   }
 
+  /** damage that lands after the hero's armor (mobs, shots, fire); percent-of-max-HP hits (nova) skip it */
+  mitigate(dmg: number) { return mitigated(dmg, this.armor); }
+
   hurtPlayer(amount: number, x: number, y: number) {
     if (this.reviveT > 0) return;
     this.damageTaken += amount;
@@ -913,7 +916,7 @@ export class Sim {
       const rr = e.r + pr;
       if (dx * dx + dy * dy < rr * rr && e.hitCd <= 0 && e.stunT <= 0 && !frozen) {
         e.hitCd = isBoss ? 1.0 : 1.3;
-        this.hurtPlayer(Math.max(1, (e.weakT > 0 ? e.dmg * WEAKEN_FACTOR : e.dmg) - this.armor), px, py);
+        this.hurtPlayer(this.mitigate(e.weakT > 0 ? e.dmg * WEAKEN_FACTOR : e.dmg), px, py);
         if (e.elite) eliteContact(e);
         if (this.over) return;
       }
@@ -1210,7 +1213,7 @@ export class Sim {
       this.bossesSpawned++;
     }
     this.spawner(dt);
-    if (this.eventsOn) { updateElites(this, dt); updateSwarms(this); updateField(this, dt); }
+    if (this.eventsOn) { updateElites(this, dt); updateSwarms(this); updateCamp(this, dt); updateField(this, dt); }
     this.updateEnemies(dt);
     if (this.over) return true;
     updateShots(this, dt);

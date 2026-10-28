@@ -33,7 +33,7 @@ export const SHOT_SPEED_MIN = 8;
 export const SHOT_SPEED_MAX = 10;
 export const SHOT_LIFE = 2;
 /** shot damage as a fraction of the mob's contact damage, shot radius in yd (the hero adds their own), chance a Curse Eye / Wraith shot carries its ailment */
-export const SHOT_DMG = 0.8;
+export const SHOT_DMG = 1.0;
 export const SHOT_RADIUS = 0.9;
 export const MOB_SHOT_AIL_CHANCE = 0.25;
 /** seconds the shooter holds its attack pose after a shot; shots alive at once at most */
@@ -204,7 +204,7 @@ export function updateShots(sim: Sim, dt: number) {
     if (dx * dx + dy * dy > rr) continue;
     m.hits++;
     const ail = s.ail;
-    sim.hurtPlayer(Math.max(1, s.dmg - sim.armor), px, py);
+    sim.hurtPlayer(sim.mitigate(s.dmg), px, py);
     if (ail !== 0) applyAilment(sim, ail);
     m.freeShot(i);
     if (sim.over) return;

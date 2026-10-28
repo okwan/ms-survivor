@@ -38,7 +38,7 @@ export const ELITE_GAP_MAX = 70;
 /** drawn size (and hit radius) multiplier, HP multiplier 6 + 6p, damage multiplier, xp multiplier */
 export const ELITE_SCALE = 1.5;
 export const eliteHpMult = (p: number) => 6 + 6 * p;
-export const ELITE_DMG = 1.3;
+export const ELITE_DMG = 1.6;
 export const ELITE_XP = 2;
 /** no Elite while this many bosses are alive */
 export const ELITE_BOSS_LIMIT = 2;
@@ -103,7 +103,7 @@ export class Elites {
     this.burnT += dt;
     if (this.burnT >= FIRE_DELAY) {
       this.burnT -= FIRE_TICK;
-      sim.hurtPlayer(Math.max(1, inside.dmg - sim.armor), sim.px, sim.py);
+      sim.hurtPlayer(sim.mitigate(inside.dmg), sim.px, sim.py);
     }
   }
 }

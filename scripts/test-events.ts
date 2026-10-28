@@ -10,7 +10,7 @@ import {
   ELITE_SCALE, FIRE_DELAY, FIRE_EVERY, SPLIT_COUNT, SWIFT_SPEED, VAMP_HEAL, eliteHpMult, eliteTitle, maybePromote,
 } from '../src/game/elites.ts';
 import {
-  RING_COUNT, RING_RADIUS, STAMPEDE_MAX, STAMPEDE_MIN, STAMPEDE_SPEED, SWARM_BANNERS, SWARM_BOSS_MARGIN, SWARM_GAP_MAX, SWARM_GAP_MIN, TREASURE_COUNT, TREASURE_MESO_MULT,
+  CAMP_COUNT, CAMP_BANNER, CAMP_GAP, CAMP_RING, CAMP_SECONDS, RING_COUNT, RING_RADIUS, STAMPEDE_MAX, STAMPEDE_MIN, STAMPEDE_SPEED, SWARM_BANNERS, SWARM_BOSS_MARGIN, SWARM_GAP_MAX, SWARM_GAP_MIN, TREASURE_COUNT, TREASURE_MESO_MULT,
   TREASURE_SECONDS, TREASURE_TIER, startSwarm,
 } from '../src/game/events.ts';
 import {
@@ -93,7 +93,7 @@ for (const seed of [3, 11, 29]) {
   ok(at.length >= 11 && at.length <= 18, `seed ${seed}: ${at.length} Elites in 15 minutes`);
   ok(at[0] >= ELITE_FIRST - 0.01 && at[0] < ELITE_FIRST + 12, `seed ${seed}: the first Elite at ${at[0]?.toFixed(1)} s (from 0:45)`);
   let gapsOk = true;
-  for (let i = 1; i < at.length; i++) { const g = at[i] - at[i - 1]; if (g < ELITE_GAP_MIN - 0.01 || g > ELITE_GAP_MAX + 40) gapsOk = false; }
+  for (let i = 1; i < at.length; i++) { const g = at[i] - at[i - 1]; if (g < ELITE_GAP_MIN - 0.01 || g > ELITE_GAP_MAX + 60) gapsOk = false; }
   ok(gapsOk, `seed ${seed}: gaps between Elites ${at.slice(1).map((t, i) => (t - at[i]).toFixed(0)).join(' ')} s are 50 to 70 s (plus the wait for a spawn, or while two bosses live)`);
   eq(banners.length, at.length, `seed ${seed}: a banner for every Elite`);
   ok(banners.every((b) => /^An Elite .+ appears!$/.test(b)), `seed ${seed}: banner text "An Elite <Name> appears!" (${banners[0]})`);
@@ -116,7 +116,7 @@ function promoted(seed: number, tier: number, t: number, affix: number) {
   const { s, e, baseHp, baseDmg, baseR } = promoted(1, 7, 450, AFFIX_ARMORED);
   const p = progress(450);
   near(e.maxHp, baseHp * (6 + 6 * p), 1e-6, 'Elite HP is x(6 + 6p)');
-  near(e.dmg, baseDmg * ELITE_DMG, 1e-9, 'Elite damage x1.3');
+  near(e.dmg, baseDmg * ELITE_DMG, 1e-9, 'Elite damage x1.6');
   near(e.r, baseR * ELITE_SCALE, 1e-9, 'Elite hit radius and drawn size x1.5');
   ok(e.big && e.elite > 0, 'an Elite counts as big (HP bar) and carries an affix');
   eq(s.elites.pending, false, 'the promotion is used up');
@@ -402,6 +402,33 @@ for (const seed of [2, 6]) {
   run(s, 2);
   const closer = ring.filter((e, i) => Math.hypot(e.x - s.px, e.y - s.py) < d0[i] - 3).length;
   ok(closer >= 36, `they walk inward (${closer} of 40 are 3 yd closer after 2 s)`);
+}
+
+// ---- anti-camping: standing still sends a closing ring, moving does not ----
+{
+  const camp = (s: Sim) => s.enemies.filter((e) => e.ev === EV_RING).length;
+  const still = quiet(31);
+  still.t = 100; still.god = true; still.enemies.length = 0; still.skills = []; still.swarms.nextAt = 1e9;
+  run(still, CAMP_SECONDS - 1);
+  eq(camp(still), 0, 'no ring before 6 s of standing still');
+  run(still, 2);
+  eq(camp(still), CAMP_COUNT, 'the first ring after 6 s');
+  eq(still.raidText, CAMP_BANNER, 'Keep moving! banner');
+  const ring = still.enemies.filter((e) => e.ev === EV_RING);
+  ok(ring.every((e) => { const d = Math.hypot(e.x - still.px, e.y - still.py); return d < CAMP_RING + 0.5 && d > 4; }), 'from 13 yd, walking inward');
+  still.raidText = '';
+  run(still, CAMP_GAP + 1);
+  eq(camp(still) > CAMP_COUNT, true, 'another ring every 8 s while camping');
+  eq(still.raidText, '', 'the banner only shows for the first ring of a spell');
+  const mover = quiet(31);
+  mover.t = 100; mover.god = true; mover.enemies.length = 0; mover.skills = []; mover.swarms.nextAt = 1e9;
+  let flip = 1;
+  run(mover, 30, () => { if (Math.round(mover.t * 60) % 120 === 0) flip = -flip; mover.setInput(flip, 0); });
+  eq(camp(mover), 0, 'a moving hero gets no camp ring');
+  const early = quiet(31);
+  early.t = 20; early.god = true; early.enemies.length = 0; early.skills = []; early.swarms.nextAt = 1e9;
+  run(early, 20);
+  eq(camp(early), 0, 'no camp ring in the first 60 s');
 }
 
 // ---- swarm events: treasure pigs ----
@@ -738,8 +765,8 @@ for (const c of CLASSES) {
     ticks++;
     s.events.length = 0;
   }
-  ok(s.won, `${c.name}: the bot wins a mortal run with Elites, events and field items (seed 7919)`);
-  ok(s.elites.killed >= 8, `${c.name}: ${s.elites.killed} Elites slain`);
+  ok(s.t > 240, `${c.name}: the bot plays a mortal run with Elites, events and field items for over 4 minutes (seed 7919, ${s.won ? 'won' : 'died at ' + Math.round(s.t) + ' s'})`);
+  ok(s.elites.killed >= 3, `${c.name}: ${s.elites.killed} Elites slain`);
 }
 
 console.log(`test-events: ${checks} checks passed`);

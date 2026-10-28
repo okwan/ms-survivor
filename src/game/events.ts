@@ -23,7 +23,7 @@ export const SWARM_GAP_MIN = 100;
 export const SWARM_GAP_MAX = 140;
 export const SWARM_BOSS_MARGIN = 15;
 /** no event starts with this many enemies already alive (the pool is bounded) */
-const SWARM_ROOM = 380;
+const SWARM_ROOM = 420;
 
 export const STAMPEDE_MIN = 30;
 export const STAMPEDE_MAX = 50;
@@ -35,6 +35,14 @@ export const STAMPEDE_MAX_AGE = 45;
 const STAMPEDE_WIDE = 12;
 export const RING_COUNT = 40;
 export const RING_RADIUS = 18;
+/** anti-camping: after CAMP_FROM s into the run, staying within CAMP_RADIUS yd of one spot for CAMP_SECONDS sends a CAMP_COUNT-mob ring in at CAMP_RING yd, again every CAMP_GAP s while the hero keeps camping */
+export const CAMP_FROM = 60;
+export const CAMP_RADIUS = 4;
+export const CAMP_SECONDS = 6;
+export const CAMP_GAP = 8;
+export const CAMP_COUNT = 15;
+export const CAMP_RING = 13;
+export const CAMP_BANNER = 'Keep moving!';
 export const TREASURE_COUNT = 12;
 export const TREASURE_TIER = 8;
 export const TREASURE_SECONDS = 20;
@@ -57,11 +65,40 @@ export class Swarms {
   started = [0, 0, 0];
   /** Treasure Pigs killed so far this run */
   pigsKilled = 0;
+  /** anti-camping: own random stream, the spot the hero is holding, seconds held, when the next camp ring is due, rings sent this spell */
+  campRng: Rng;
+  campX = 0;
+  campY = 0;
+  campT = 0;
+  campNext = 0;
+  campRings = 0;
 
   constructor(seed: number) {
     this.rng = new Rng((seed ^ 0x1b873593) >>> 0);
+    this.campRng = new Rng((seed ^ 0x6c8e9cf5) >>> 0);
     this.nextAt = this.rng.range(SWARM_GAP_MIN, SWARM_GAP_MAX);
   }
+}
+
+/** Anti-camping: tracks how long the hero has held one spot and sends a closing ring of the top tier (EV_RING mobs, like the swarm ring) while they keep camping. */
+export function updateCamp(sim: Sim, dt: number) {
+  const s = sim.swarms;
+  if (sim.t < CAMP_FROM) return;
+  if (Math.hypot(sim.px - s.campX, sim.py - s.campY) > CAMP_RADIUS) {
+    s.campX = sim.px; s.campY = sim.py; s.campT = 0; s.campNext = 0; s.campRings = 0;
+    return;
+  }
+  s.campT += dt;
+  if (s.campT < CAMP_SECONDS || s.campT < s.campNext || sim.enemies.length > SWARM_ROOM) return;
+  s.campNext = s.campT + CAMP_GAP;
+  const top = Math.min(poolLo(sim.t) + 2, 29), a0 = s.campRng.range(0, Math.PI * 2);
+  for (let i = 0; i < CAMP_COUNT; i++) {
+    const a = a0 + (i / CAMP_COUNT) * Math.PI * 2;
+    const e = sim.spawnEnemy(top, sim.px + Math.cos(a) * CAMP_RING, sim.py + Math.sin(a) * CAMP_RING, true);
+    e.ev = EV_RING;
+    e.hitCd = 1;
+  }
+  if (s.campRings++ === 0) sim.raid(CAMP_BANNER);
 }
 
 /** Starts the due event unless a boss spawned, or is about to spawn, within SWARM_BOSS_MARGIN s (it then waits). */

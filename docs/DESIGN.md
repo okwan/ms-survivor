@@ -23,11 +23,12 @@ World units are yards (Azeroth's unit). `PX_PER_YD = 20` at zoom 1. Player speed
 |---|---|
 | Run length | 900 s. A boss wave every 135 s at 2:15, 4:30, 6:45, 9:00, 11:15, 13:30 (see Boss waves). Win at 15:00. |
 | Enemy ladder | 30 tiers. `step = floor(p*30)`, `span = tiers-3`, `lo = min(span, max(0,step-1)*span/27)` (integer math), pool = tiers lo, lo+1, lo+2 |
-| Alive target | `min(220, floor(14 + 225p))` |
+| Alive target | `min(280, floor(24 + 360p))` |
 | Spawner | every 0.12 s, if alive < target spawn a pack of up to 4 (never above target); ring 34 to 42 yd from the player at a random angle |
 | Recycling | enemies farther than 60 yd from the player are moved back onto the spawn ring (ahead of the player's movement if moving) |
-| Scaling | enemy HP x(1 + 2.5p + 4.5p^2) at spawn, damage x(1 + 0.9p + 0.6p^2); hero damage x(1 + 0.2·sqrt(level - 1) + 0.02·max(0, level - 40)), +3 max HP per level to 90. See Balance curve |
-| Contact | an enemy touching the player hits for `max(1, dmg - armor)`, then waits 1.3 s (boss 1.0 s) |
+| Scaling | enemy HP x(1 + 2.5p + 8p^2) at spawn, damage x(1 + 3p + 8p^2) (x12 at 15 min); hero damage x(1 + 0.2·sqrt(level - 1) + 0.02·max(0, level - 40)), +3 max HP per level to 90. See Balance curve |
+| Contact | an enemy touching the player hits for `max(1, dmg x (1 - armor/(armor+40)))` (reduction capped at 60%: 20 armor = -33%, 34 = -46%), then waits 1.3 s (boss 1.0 s). Ranged shots (x1.0 of the shooter's damage) and Blazing fire use the same mitigation; Ground Slam (% of max HP) ignores armor |
+| Anti-camping | from 1:00 on, staying within 4 yd of one spot for 6 s sends a ring of 15 top-tier mobs in at 13 yd (event-ring marks), again every 8 s while the hero keeps camping; the first ring of a spell shows "Keep moving!" (own random stream) |
 | Player | HP 120, speed 7 yd/s, magnet 4.5 yd, hit radius 0.7 yd, crit 5% for x2 |
 | XP | gem value = mob xp x 2.0 x growth. To next level: L<20: `5 + 10(L-1)`; L<40: `195 + 13(L-20)`; else `455 + 16(L-40)` |
 | Gems | at most 350 on the ground; past that a new gem's value merges into the nearest existing gem |
@@ -83,12 +84,12 @@ of the ladder, so no later tier is softer (Azeroth's `ladder()`).
 
 | # | Name | mob id | HP | speed | dmg | xp | scale | mechanics |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Mano | 2220000 | 900 | 5.2 | 20 | 60 | 1.6 | nova, ailment (Weakness) |
-| 2 | Mushmom | 6130101 | 2400 | 5.4 | 32 | 120 | 1.6 | nova, summon, ailment (Poison) |
-| 3 | King Slime | 9300003 | 6000 | 4.0 | 45 | 200 | 1.7 | summon, berserk, ailment (Weakness) |
-| 4 | Zombie Mushmom | 6300005 | 11000 | 5.6 | 55 | 300 | 1.7 | nova, summon, berserk, ailment (Curse) |
-| 5 | Jr. Balrog | 8130100 | 20000 | 5.0 | 70 | 400 | 1.8 | nova, summon, berserk, ailment (Seal) |
-| 6 | Zakum | 8800000 | 42000 | 4.8 | 90 | 500 | 1.8 | nova, summon, berserk, ailment (Darkness + Seal) |
+| 1 | Mano | 2220000 | 1200 | 5.2 | 20 | 60 | 1.6 | nova, ailment (Weakness) |
+| 2 | Mushmom | 6130101 | 8000 | 5.4 | 32 | 120 | 1.6 | nova, summon, ailment (Poison) |
+| 3 | King Slime | 9300003 | 25000 | 4.0 | 45 | 200 | 1.7 | summon, berserk, ailment (Weakness) |
+| 4 | Zombie Mushmom | 6300005 | 45000 | 5.6 | 55 | 300 | 1.7 | nova, summon, berserk, ailment (Curse) |
+| 5 | Jr. Balrog | 8130100 | 75000 | 5.0 | 70 | 400 | 1.8 | nova, summon, berserk, ailment (Seal) |
+| 6 | Zakum | 8800000 | 150000 | 4.8 | 90 | 500 | 1.8 | nova, summon, berserk, ailment (Darkness + Seal) |
 
 Boss radius `1.6 * scale` yd. A boss spawns on the ring with a raid warning. A NEXT BOSS countdown is always visible.
 
@@ -179,7 +180,7 @@ Rank r+1 costs `base x growth^r`, rounded to the nearest 10 (`metaCost` in `src/
 | hp | Max HP | +8% max HP | 5 | 3000 | 1.6 | 47430 |
 | might | Might | +5% damage | 5 | 4500 | 1.6 | 71140 |
 | haste | Haste | +4% cooldown speed | 5 | 4500 | 1.6 | 71140 |
-| armor | Armor | +1 flat armor | 3 | 6000 | 1.8 | 36240 |
+| armor | Armor | +1 armor | 3 | 6000 | 1.8 | 36240 |
 | speed | Speed | +3% move speed | 3 | 3750 | 1.6 | 19350 |
 | magnet | Magnet | +12% pickup radius | 3 | 2250 | 1.5 | 10690 |
 | growth | Growth | +4% EXP | 5 | 5250 | 1.6 | 83000 |
@@ -192,7 +193,7 @@ Everything costs 548280 mesos (`metaTotalCost()`), about 18 bot runs of income w
 
 - **Save.** `SaveData.meta` holds the rank per key; a save without it (or with junk in it) loads as all zeros, ranks are clamped to 0..max.
 - **In the run.** `main.ts` passes `meta: save.meta` to the Sim. `recalc()` adds the ranks to the other sources: Might and Haste add to the passive and Mastery sums
-  (Might is then scaled by the level bonus like the rest), Max HP adds to the +% max HP sum, Armor is flat, Speed, Magnet and Growth add to their sums. Rerolls and
+  (Might is then scaled by the level bonus like the rest), Max HP adds to the +% max HP sum, Armor is a percentage with diminishing returns (see Contact), Speed, Magnet and Growth add to their sums. Rerolls and
   banishes start at `START_REROLLS + rank` / `START_BANISHES + rank`. Greed goes through `Sim.gainMesos()` (every meso source: coins, bags, Mastery meso bags, capsule
   and Mastery Book mesos); the fraction a pickup does not pay out carries over to the next one.
 - **Safety Charm.** When a hit would kill the hero (not in god mode) and the charm is owned and unused, `hurtPlayer` calls `revive()` instead of ending the run:
@@ -223,7 +224,7 @@ Three systems in new files (`src/game/elites.ts`, `events.ts`, `fieldItems.ts`),
 Event mobs and boxes carry `Enemy.ev` (stampede / ring / treasure / box): the spawner does not count them against the alive target and the recycler leaves them alone.
 
 - **Elites.** From 0:45, every 50 to 70 s one fresh normal spawn is promoted (it waits while 2 or more bosses are alive): 1.5x drawn size and hit radius, HP x(6 + 6p),
-  damage x1.3, xp x2, counts as big (its HP bar is always up), a tint per affix, the name "Elite <Mob>" with the affix under it, and the banner "An Elite <Mob> appears!".
+  damage x1.6, xp x2, counts as big (its HP bar is always up), a tint per affix, the name "Elite <Mob>" with the affix under it, and the banner "An Elite <Mob> appears!".
   One affix each: **Swift** (1.5x speed, still under the hero's), **Armored** (every hit does 40% less), **Splitting** (4 normal mobs of its tier on death, marked as adds),
   **Blazing** (a fire patch of 1.5 yd every second, lasting 4 s; standing in one for 0.6 s starts a burn of half the Elite's damage every 0.5 s), **Vampiric** (heals 3% max HP
   per hit on the hero). Kill loot: a Gachapon capsule with exactly one upgrade (`ELITE_CAPSULE + n` as the pickup value; the Mastery Book still comes first when a recipe is
@@ -336,15 +337,17 @@ multiplier (level, passives, gear, Masteries). Targets and results (12 seeds x 4
 
 | minute | hero damage per hit vs minute 1 | mob HP (mid-ladder tier) | mob contact damage |
 |---|---|---|---|
-| 1 | x1 (24-45) | 19 | 3 |
-| 3 | x2.3 | 60 | 12 |
-| 5 | x4-6 | 163 | 19 |
-| 8 | x9-12 | 343 | 30 |
-| 12 | x23-33 | 1411 | 63 |
-| 15 | x33-44 (850-1590) | 3360 | 110 |
+| 1 | x1 (22-34) | 19 | 4 |
+| 3 | x2.3-3 | 66 | 19 |
+| 5 | x4-6 | 191 | 40 |
+| 8 | x9-12 | 438 | 88 |
+| 12 | x20-25 | 1949 | 256 |
+| 15 | x32-40 (1500-1730) | 4830 | 528 |
 
-Enemy HP and damage use a quadratic ramp so the first minutes stay as before and the late game keeps up with the hero (hits to kill a mob: 0.6 at minute 1, 1.5 at 8, 3 at 15). Bosses take 10-30 s of
-fighting at the end for the ranged classes (the melee bot rarely stays next to a boss, so the Warrior takes longer). The bot wins about 96% of runs (it won 100% before).
+Enemy HP and damage use a quadratic ramp so the first minutes stay gentle and the late game keeps up with the hero. Armor is a percentage (armor / (armor + 40), at most 60%) because a flat
+subtraction made nearly every hit land for 1 once armor reached 20-34. Difficulty pass (`scripts/balance-difficulty.ts`): the kiting bot (always card 0) wins about 60% of runs and takes real damage
+every minute from minute 2; a hero that stands still dies by minute 4 (the ranged classes much sooner), and camping is also punished by the anti-camping ring. Bosses take about 15-40 s for the
+ranged classes (the melee bot rarely stays next to a boss, so the Warrior takes longer).
 
 ## Classic MapleStory UI (src/ui)
 
