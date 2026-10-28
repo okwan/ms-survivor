@@ -303,7 +303,7 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
   } else {
     add('200.img', 2001005, skillTree([120, 80, 240])); // Magic Claw: everything
     add('210.img', 2101004, skillTree([240, 100, 40], { iconOnly: true })); // Fire Arrow: icon only
-    add('000.img', 1001, skillTree([60, 200, 90], { iconOnly: true })); // Recovery: id < 10000, zero-padded node 0001001
+    add('100.img', 1000000, skillTree([60, 200, 90], { iconOnly: true })); // Improved HP Recovery: a 1st-job passive
   }
 
   const sounds = {

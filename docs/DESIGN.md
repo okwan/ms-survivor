@@ -93,45 +93,20 @@ Raid mechanics (each boss runs its own timers; a cast bar shows on the HUD while
 - **summon**: every 14 s spawn 8 enemies of the current top tier in a ring of 4 yd around the boss. Warning "<Boss> calls for help!".
 - **berserk**: 75 s after spawning the boss enrages: damage x2, speed x1.4, tinted red. Warning "<Boss> goes berserk!".
 
-## Hero: Magician
+## Hero: Magician (and the other classes)
 
 Starts with Magic Claw. Holds at most 6 skills (max level 8) and 6 passives (max level 5).
-Skill ids are v83 Skill.wz ids, kept for the icons and effects later.
+Skill ids are v83 Skill.wz ids, kept for the icons and effects. The skills and passives of every class, split by job
+(1st job from the start, a 2nd job chosen at level 30, its 3rd job at level 70), are in docs/CLASSES.md.
 
 Skill level scaling (Azeroth `Owned`): damage x(1 + 0.3(L-1)); cooldown x 0.93^(L-1), then x max(0.35, 1 - haste), floor 0.2 s;
 count +1 at levels 3, 5 and 7; radius x(1 + 0.08(L-1)) x area; duration x(1 + 0.1(L-1)).
 
-| key | name | id | kind | dmg | cd | range | radius | count | other |
-|---|---|---|---|---|---|---|---|---|---|
-| magic_claw | Magic Claw | 2001005 | bolt | 10 | 1.2 | 22 | 0 | 2 | missile 30 yd/s at the nearest `count` enemies |
-| energy_bolt | Energy Bolt | 2001004 | pierce | 14 | 2.0 | 24 | 0 | 1 | missile that passes through 3 + level enemies |
-| fire_arrow | Fire Arrow | 2101004 | bolt | 20 | 2.4 | 26 | 3.5 | 1 | explodes on hit, splash radius |
-| cold_beam | Cold Beam | 2201004 | strike | 22 | 2.6 | 20 | 2.5 | 1 | instant, splash, slows to 50% for 2.5 s |
-| thunder_bolt | Thunder Bolt | 2201005 | strike | 12 | 3.0 | 10 | 0 | 4 | instant hits on the nearest `count` within range |
-| poison_mist | Poison Mist | 2111003 | ground | 7 | 8.0 | 20 | 6 | 1 | area at the densest enemy, ticks every 0.5 s for 5 s |
-| explosion | Explosion | 2111002 | nova | 16 | 4.0 | 0 | 7 | 1 | everything around the hero |
-| chain_lightning | Chain Lightning | 2221006 | chain | 18 | 3.2 | 18 | 8 | 4 | jumps to the nearest unhit enemy within radius, -10% per jump |
-
-Passives:
-
-| key | name | id | stat | per level |
-|---|---|---|---|---|
-| int | Intelligence | 2000000 | might (damage x) | +10% |
-| hyper_body | Hyper Body | 1301007 | max HP | +20% |
-| haste | Haste | 4101004 | move speed | +10% |
-| meditation | Meditation | 2101001 | haste (cooldown) | +8% |
-| magic_guard | Magic Guard | 2001002 | armor (flat) | +1 |
-| element_amp | Element Amplification | 2110001 | area | +10% |
-| pet_pickup | Item Pickup | 8 | magnet | +40% |
-| holy_symbol | Holy Symbol | 2311003 | growth (xp) | +8% |
-| recovery | Recovery | 1001 | regen HP/s | +0.5 |
-| sharp_eyes | Sharp Eyes | 3121002 | crit | +5% |
-
 ## Level-up cards
 
 Every level opens a 3-card choice and pauses the run until a card is picked. Several pending levels open one after another.
-Offers come from: new skills (while fewer than 6), upgrades of owned skills below max, new passives (while fewer than 6),
-upgrades of owned passives below max. Banished keys never return. If nothing is left, offer "Elixir" (full heal) and "Meso bag" (+25 mesos).
+Level 30 first opens a job card choice (docs/CLASSES.md). Offers come from the skills and passives of the jobs unlocked so far: new skills (while fewer than 6), upgrades of owned skills below max, new passives (while fewer than 6),
+upgrades of owned passives below max; one of the three is always a skill card while any is available. Banished keys never return. If nothing is left, offer "Elixir" (full heal) and "Meso bag" (+25 mesos).
 Each run has 2 rerolls and 2 banishes (banish removes that card's key from the run and redraws the slot).
 Cards show icon placeholder, name, "NEW" or "Lv N > N+1", and a one-line effect.
 
@@ -142,7 +117,7 @@ Cards show icon placeholder, name, "NEW" or "Lv N > N+1", and a one-line effect.
 - Mobs: generated textures per tier, colored blobs with eyes and a darker outline, sized from scale. Snails get a shell, mushrooms a cap
   (shape by name keyword: snail, mushroom/shroom, stump, slime, pig, eye, boar, golem, drake, other). Bob on a 2-frame walk cycle.
   Flip horizontally to face movement. White flash for 80 ms on hit. Fade and shrink on death.
-- Bosses: the same generator at boss scale with a crown, plus an HP bar above them.
+- Bosses: the same generator at boss scale with a crown, plus an HP bar above them. Every other enemy shows a small green HP bar above its head for 3 s after its last hit.
 - Player: a small chibi magician (robe, hat, staff) generated texture, flipped toward movement.
 - Skills: simple VFX per kind (missile sprite, strike flash, expanding ring for nova, translucent circle for ground, lightning line for chain).
 - Damage numbers: a pooled set (max ~120 live) of Pixi BitmapText or Text created once and reused; orange for normal, red-ish large for crits,
