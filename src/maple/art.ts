@@ -27,6 +27,8 @@ export interface MobArt {
   hit: Anim | null;
   die: Anim | null;
   attack: Anim | null;
+  /** the ball a ranged mob shoots (Mob.wz attack1/info/ball), when the extractor found one */
+  ball: Anim | null;
 }
 
 export interface SkillArt {
@@ -155,6 +157,7 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
         hit: makeAnim(src, e.frames, 'hit1'),
         die: makeAnim(src, e.frames, 'die1'),
         attack: makeAnim(src, e.frames, 'attack1'),
+        ball: makeAnim(src, e.frames, 'ball'),
       };
       if (!a.stand && !a.move) return null;
       art.counts.mobs++;

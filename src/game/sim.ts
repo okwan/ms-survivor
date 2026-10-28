@@ -18,6 +18,8 @@ import { dropGacha, maybeDropMastery, openGacha, useMasteryBook, ELITE_CAPSULE }
 import { Elites, eliteContact, eliteTitle, eliteDamage, eliteKilled, eliteTick, maybePromote, updateElites } from './elites.ts';
 import { Swarms, eventStep, eventUpkeep, treasureKilled, updateSwarms } from './events.ts';
 import { CLOCK_BOSS_SLOW, COUPON_GEM_MULT, ELIXIR_DAMAGE, FieldState, breakBox, updateField, useFieldItem } from './fieldItems.ts';
+import { Ailments, CURSE_GEM, WEAKNESS_SPEED, cureAilments, updateAilments } from './ailments.ts';
+import { MOVE_WALK, MobAi, behaveStep, bossAilment, mobBehave, resetMob, updateShots } from './mobai.ts';
 import { partnerSlotOpen, pickCard, readyRecipe } from './evolutions.ts';
 import { BOOK_BONUS_CAP, BOOK_COMPLETE, bookBonus } from './book.ts';
 import type { BookData } from './book.ts';
@@ -114,6 +116,10 @@ export class Sim {
   field: FieldState;
   /** false: none of the three runs (baseline for balance comparisons) */
   eventsOn: boolean;
+  /** Mob behaviours (ranged shots, charges, boss ailment casts; src/game/mobai.ts) and the hero's ailments (ailments.ts); false = the old walk-only mobs (baseline for balance comparisons) */
+  mobAi: boolean;
+  mobs: MobAi;
+  ail = new Ailments();
   /** event mobs and boxes alive (they are not counted against the alive target) */
   private extras = 0;
   /** counts up whenever a scroll changed a worn item (the equip window redraws) */
@@ -161,7 +167,7 @@ export class Sim {
   private projPool: Projectile[] = [];
   private areaPool: Area[] = [];
 
-  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean } = {}) {
+  constructor(seed = 1, classKey: string = DEFAULT_CLASS, opts: { pool?: GearPool; gender?: 0 | 1; autoEquip?: boolean; scrolls?: ScrollPool; pet?: boolean; book?: BookData; bookBonus?: number; mobSpeeds?: Record<number, number>; /** elites, swarm events and field items (default on) */ events?: boolean; /** mob behaviours and ailments (default on) */ mobAi?: boolean } = {}) {
     this.seed = seed;
     this.rng = new Rng(seed);
     this.gearRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
@@ -171,6 +177,8 @@ export class Sim {
     this.swarms = new Swarms(seed);
     this.field = new FieldState(seed);
     this.eventsOn = opts.events ?? true;
+    this.mobAi = opts.mobAi ?? true;
+    this.mobs = new MobAi(seed);
     this.scrollPool = opts.scrolls ?? ScrollPool.placeholder();
     this.book = { ...(opts.book ?? {}) };
     this.bookBonus = Math.max(0, Math.min(BOOK_BONUS_CAP, opts.bookBonus ?? bookBonus(opts.book)));
@@ -294,7 +302,7 @@ export class Sim {
   hit(e: Enemy, base: number) {
     if (!e.alive) return;
     let amt = base * this.might * (1 + SKILL_MASTERY_PER * (this.skillMastery[this.curSkill] ?? 0));
-    const crit = this.rng.next() < this.crit;
+    const crit = this.rng.next() < this.crit && !this.ail.dark;
     if (crit) amt *= PLAYER_BASE.critMult;
     if (this.field.elixirT > 0) amt *= ELIXIR_DAMAGE;
     amt = eliteDamage(e, Math.max(1, Math.round(amt)));
@@ -629,6 +637,7 @@ export class Sim {
     e.hitCd = 0.5; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = this.rng.next() * 6.28;
     e.moving = true; e.berserk = false; e.age = 0; e.novaT = 0; e.castT = 0; e.summonT = 0; e.idx = -1;
     e.elite = 0; e.ev = 0; e.vx = 0; e.vy = 0; e.evT = 0;
+    resetMob(this, e, false);
     this.enemies.push(e);
     return e;
   }
@@ -648,6 +657,7 @@ export class Sim {
     e.hitCd = 1.0; e.slowT = 0; e.stunT = 0; e.rootT = 0; e.weakT = 0; e.flash = 0; e.lastHit = -99; e.facing = 1; e.phase = 0; e.moving = true; e.berserk = false; e.age = 0;
     e.novaT = NOVA_EVERY; e.castT = 0; e.summonT = SUMMON_EVERY; e.idx = -1;
     e.elite = 0; e.ev = 0; e.vx = 0; e.vy = 0; e.evT = 0;
+    resetMob(this, e, true);
     this.enemies.push(e);
     this.emit({ type: 'bossSpawn', boss: n, name: def.name, x: e.x, y: e.y });
   }
@@ -805,13 +815,17 @@ export class Sim {
             }
           }
         }
+        if (this.mobAi && def.ailments.length > 0 && bossAilment(this, e, def, dt, d2)) canMove = false;
       }
 
+      // ranged mobs stop and shoot, chargers telegraph and dash (mobai.ts); bosses and event mobs never
+      const mode = e.behave > 0 && !e.ev ? mobBehave(this, e, dt, d2, dx, dy, canMove) : MOVE_WALK;
       e.moving = false;
       if (canMove && d2 > 0.0001) {
         const inv = 1 / Math.sqrt(d2);
         const stepLen = sp * dt;
         if (e.ev === EV_STAMPEDE || e.ev === EV_TREASURE) eventStep(e, dx, dy, inv, stepLen);
+        else if (mode !== MOVE_WALK) behaveStep(e, mode, dx, stepLen);
         else {
           if (d2 > (e.r + pr) * (e.r + pr) * 0.6) {
             e.x += dx * inv * stepLen;
@@ -824,7 +838,7 @@ export class Sim {
       }
 
       // soft separation from neighbours
-      if (!isBoss && e.ev !== EV_STAMPEDE) {
+      if (!isBoss && e.ev !== EV_STAMPEDE && !e.fly) {
         const cnt = grid.query(e.x, e.y, e.r + 1.0, buf);
         for (let k = 0; k < cnt; k++) {
           const j = buf[k];
@@ -880,9 +894,9 @@ export class Sim {
   private collect(p: Pickup) {
     this.emit({ type: 'pickup', kind: p.kind, x: p.x, y: p.y, value: p.value });
     switch (p.kind) {
-      case GEM: this.addXp(this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value); break;
+      case GEM: this.addXp((this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value) * (this.ail.curse ? CURSE_GEM : 1)); break;
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
-      case ELIXIR: this.hp = this.maxHp; break;
+      case ELIXIR: this.hp = this.maxHp; cureAilments(this); break;
       case MESO: case BAG: this.mesos += p.value; break;
       case GEAR: if (p.item) this.gotGear(p.item); break;
       case SCROLL: if (p.scroll) this.useScroll(p.scroll); break;
@@ -1082,6 +1096,7 @@ export class Sim {
       this.takeMastery(c.key);
     } else if (c.kind === 'elixir') {
       this.hp = this.maxHp;
+      cureAilments(this);
     } else {
       this.mesos += 25;
     }
@@ -1113,8 +1128,9 @@ export class Sim {
 
     // player
     if (this.moving) {
-      this.px += this.inputX * this.speed * dt;
-      this.py += this.inputY * this.speed * dt;
+      const sp = this.ail.weak ? this.speed * WEAKNESS_SPEED : this.speed;
+      this.px += this.inputX * sp * dt;
+      this.py += this.inputY * sp * dt;
       if (this.inputX > 0.1) this.facing = 1;
       else if (this.inputX < -0.1) this.facing = -1;
     }
@@ -1144,6 +1160,9 @@ export class Sim {
     if (this.eventsOn) { updateElites(this, dt); updateSwarms(this); updateField(this, dt); }
     this.updateEnemies(dt);
     if (this.over) return true;
+    updateShots(this, dt);
+    updateAilments(this, dt);
+    if (this.over) return true;
 
     updateSkills(this, dt);
     updateProjectiles(this, dt);
@@ -1153,14 +1172,15 @@ export class Sim {
     while (this.notes.length && this.notes[0].until < this.t) this.notes.shift();
 
     // compact dead enemies
-    let w = 0, extras = 0;
+    let w = 0, extras = 0, shooters = 0;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (e.alive) { enemies[w++] = e; if (e.ev) extras++; }
+      if (e.alive) { enemies[w++] = e; if (e.ev) extras++; if (e.shooter) shooters++; }
       else this.enemyPool.push(e);
     }
     enemies.length = w;
     this.extras = extras;
+    this.mobs.shooters = shooters;
 
     this.openOffer();
     return true;
@@ -1191,6 +1211,8 @@ export class Sim {
       elitesKilled: this.elites.killed,
       elites: this.eliteInfo(),
       swarms: [...this.swarms.started],
+      mob: { on: this.mobAi, shooters: this.mobs.shooters, shots: this.mobs.shots.length, fired: this.mobs.fired, hits: this.mobs.hits, charges: this.mobs.charges },
+      ailments: { applied: this.ail.applied, left: [...this.ail.left] },
       field: { boxes: this.field.boxesBroken, used: this.field.itemsUsed, coupon: this.field.couponT, elixir: this.field.elixirT, clock: this.field.clockT },
       mesos: this.mesos,
       alive: this.enemies.length,

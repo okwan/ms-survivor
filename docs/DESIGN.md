@@ -73,6 +73,9 @@ Mob ids are v83 Mob.wz image names (`0100100.img`); the asset step checks them a
 29 Mixed Golem      5150000 360 5.0 40 20  big
 ```
 
+Behaviours (see "Mob behaviours and ailments"): **ranged** Evil Eye, Curse Eye, Jr. Boogie, Lupin, Wraith (tiers 14, 20, 22, 24, 25); **charge** Pig, Ribbon Pig, Axe Stump, Wild Boar,
+Fire Boar (tiers 6, 8, 16, 18, 21); **fly** Evil Eye, Curse Eye, Jr. Boogie, Wraith (no crowding, a hover bob). Every other tier walks.
+
 Big mobs draw at 1.3x and use radius 1.0 yd; others 0.6 yd. Health, damage and xp read from the running peak
 of the ladder, so no later tier is softer (Azeroth's `ladder()`).
 
@@ -80,12 +83,12 @@ of the ladder, so no later tier is softer (Azeroth's `ladder()`).
 
 | # | Name | mob id | HP | speed | dmg | xp | scale | mechanics |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Mano | 2220000 | 900 | 5.2 | 20 | 60 | 1.6 | nova |
-| 2 | Mushmom | 6130101 | 2400 | 5.4 | 32 | 120 | 1.6 | nova, summon |
-| 3 | King Slime | 9300003 | 6000 | 4.0 | 45 | 200 | 1.7 | summon, berserk |
-| 4 | Zombie Mushmom | 6300005 | 11000 | 5.6 | 55 | 300 | 1.7 | nova, summon, berserk |
-| 5 | Jr. Balrog | 8130100 | 20000 | 5.0 | 70 | 400 | 1.8 | nova, summon, berserk |
-| 6 | Zakum | 8800000 | 42000 | 4.8 | 90 | 500 | 1.8 | nova, summon, berserk |
+| 1 | Mano | 2220000 | 900 | 5.2 | 20 | 60 | 1.6 | nova, ailment (Weakness) |
+| 2 | Mushmom | 6130101 | 2400 | 5.4 | 32 | 120 | 1.6 | nova, summon, ailment (Poison) |
+| 3 | King Slime | 9300003 | 6000 | 4.0 | 45 | 200 | 1.7 | summon, berserk, ailment (Weakness) |
+| 4 | Zombie Mushmom | 6300005 | 11000 | 5.6 | 55 | 300 | 1.7 | nova, summon, berserk, ailment (Curse) |
+| 5 | Jr. Balrog | 8130100 | 20000 | 5.0 | 70 | 400 | 1.8 | nova, summon, berserk, ailment (Seal) |
+| 6 | Zakum | 8800000 | 42000 | 4.8 | 90 | 500 | 1.8 | nova, summon, berserk, ailment (Darkness + Seal) |
 
 Boss radius `1.6 * scale` yd. A boss spawns on the ring with a raid warning. A NEXT BOSS countdown is always visible.
 
@@ -108,6 +111,7 @@ Raid mechanics (each boss runs its own timers; a cast bar shows on the HUD while
 - **nova**: every 10 s the boss stops, casts for 2.0 s and shows a growing danger circle of radius 9 yd centred on itself. When the cast ends, the player takes 35% of max HP if inside. Raid warning: "<Boss> is casting Ground Slam! Get out!".
 - **summon**: every 14 s spawn 8 enemies of the current top tier in a ring of 4 yd around the boss. Warning "<Boss> calls for help!".
 - **berserk**: 75 s after spawning the boss enrages: damage x2, speed x1.4, tinted red. Warning "<Boss> goes berserk!".
+- **ailment**: every 16 s the boss stops, casts for 1.2 s and shows a purple danger circle of radius 8 yd around itself; when the cast ends every ailment of the boss lands on a hero inside (see below). Warning "<Boss> casts Seal!".
 
 ## Hero: Magician (and the other classes)
 
@@ -188,15 +192,17 @@ Event mobs and boxes carry `Enemy.ev` (stampede / ring / treasure / box): the sp
   Powder Keg blast are drawn without any extracted art.
 - **Balance** (`node --experimental-strip-types scripts/balance-events.ts 12`, kiting bot, 12 seeds x 4 classes, with vs without all three): see the table below.
 
-| class | wins without / with | final level without / with | Zakum kill time without / with | lowest HP without / with |
-|---|---|---|---|---|
-| Warrior | 12/12, 12/12 | 195 / 223 | 48 s / 36 s | 59% / 70% |
-| Magician | 12/12, 12/12 | 189 / 282 | 21 s / 10 s | 88% / 86% |
-| Bowman | 12/12, 12/12 | 216 / 272 | 15 s / 15 s | 89% / 92% |
-| Thief | 12/12, 12/12 | 214 / 254 | 25 s / 12 s | 89% / 90% |
+| class | wins without / with | final level without / with | lowest HP (average) without / with | damage taken without / with | Zakum kill time without / with |
+|---|---|---|---|---|---|
+| Warrior | 12/12, 12/12 | 220 / 213 | 67% / 60% (worst 30%) | 547 / 1401 | 37 s / 48 s |
+| Magician | 12/12, 12/12 | 267 / 275 | 89% / 87% | 25 / 82 | 11 s / 8 s |
+| Bowman | 12/12, 12/12 | 254 / 260 | 92% / 90% | 24 / 91 | 9 s / 7 s |
+| Thief | 12/12, 12/12 | 262 / 259 | 94% / 80% | 37 / 837 | 15 s / 9 s |
 
-About 14 Elites per run (all slain), 2.8 stampedes, 2.4 rings and 1.4 treasure swarms, 6 to 10 boxes broken and 26 to 37 field items used. The bot wins every run either way;
-the extras make it stronger (more levels from Coupons, Elite capsules and Keg kills), not harder, and the early game is a little faster (level 10 about 10 to 25 s sooner).
+Per run with behaviours: 240 to 2170 shots fired (3 to 61 hit; the bot steps aside from most of them), 25 shooters at the most, 120 to 1450 charges and 0 to 5.6 ailments landed (from shots; the bot
+never stood in a boss circle). Damage taken grows 3 to 23 times and the lowest HP falls for every class, most for the melee Warrior and the Thief, while all 48 runs are still won. The ranged classes
+kill most shooters before they get a shot off and the bot dodges what is left, so a human who does not dodge feels this more than the numbers do (the bot's dodge is deliberately weak: a strong one
+steers it away from the gems and starves it of EXP).
 
 ## Presentation (placeholder art, Pixi v8 WebGL, menus and HUD as a DOM overlay)
 
@@ -224,7 +230,7 @@ In dev builds and when the URL has `?bot`, expose `window.game` with:
 `sim` (the live simulation), `start(seed?)`, `step(seconds)` (advance the sim headlessly in fixed 1/60 s ticks, auto-handling nothing),
 `pick(i)`, `reroll()`, `banish(i)`, `setInput(x, y)`, `god(on)` (no damage taken, damage still recorded), `speed(mult)` (time scale),
 `autopick(on)` (pick card 0 automatically), and `snapshot()` returning a plain object: elapsed, hp, maxHp, level, xp, kills, alive enemies,
-boss info, owned skills and passives, pending card offer, over/won Also in the snapshot: `gacha` (capsules and Mastery Books on the ground), `evolved` (evolved skill keys) and `evolutionReady` (the evolved key whose recipe is ready, or null).
+boss info, owned skills and passives, pending card offer, over/won Also in the snapshot: `mob` (behaviours on, shooters, shots in flight, shots fired / landed, charges) and `ailments` (landed so far, seconds left by id), `gacha` (capsules and Mastery Books on the ground), `evolved` (evolved skill keys) and `evolutionReady` (the evolved key whose recipe is ready, or null).
 
 ## Assets (milestone 3)
 
@@ -232,7 +238,7 @@ boss info, owned skills and passives, pending card offer, over/won Also in the s
 BGM nodes and the manifest types. `scripts/fetch-maple.ts` (run in CI after `vite build`) imports it, gets Mob/Skill/String/Sound `.wz`
 (download from the mirrors in `scripts/maple-sources.json`, `innoextract` then `7z`; cached in `.maple-cache/wz/`) and writes `dist/maple/`:
 
-- `mobs/<id7>.png` atlas per mob (stand, move, hit1, die1, attack1; `info/link` followed; `fly` stands in for a missing `move`), frame records
+- `mobs/<id7>.png` atlas per mob (stand, move, hit1, die1, attack1, and `attack1/info/ball` as action `ball` when a ranged mob has one; `info/link` followed; `fly` stands in for a missing `move`), frame records
   `{action,index,x,y,w,h,ox,oy,delay}`, info (maxHP, speed, level, bodyAttack), name from String.wz.
 - `skills/<id7>.png` atlas (effect, ball, hit) and `skills/<id7>-icon.png` per skill and passive.
 - `bgm/run.mp3` (Bgm00.img/FloralLife) and `bgm/title.mp3` (BgmUI.img/Title), raw Sound_DX8 payload.

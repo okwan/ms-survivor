@@ -1,10 +1,12 @@
 import { Application, BitmapFont, BitmapText, Container, Graphics, Sprite, Text, TilingSprite, Texture } from 'pixi.js';
-import { BOSSES, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
+import { BOSSES, LADDER, NOVA_RADIUS, ORBIT_RADIUS, ORBIT_SPIN, PX_PER_YD, SKILL_BY_KEY } from '../game/data.ts';
 import type { Stance } from '../game/data.ts';
 import type { Sim } from '../game/sim.ts';
+import { AILMENTS } from '../game/ailments.ts';
 import { AFFIXES, ELITE_SCALE, eliteTitle } from '../game/elites.ts';
 import { FIELD_ITEMS, KEG_RADIUS } from '../game/fieldItems.ts';
-import { BAG, ELIXIR, EV_BOX, EV_TREASURE, FIELD, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from '../game/types.ts';
+import { AIL_CAST, AIL_RADIUS, CHARGE_DASH_TIME, CHARGE_SPEED } from '../game/mobai.ts';
+import { BAG, BEH_CHARGE, CHARGE_TELEGRAPH, ELIXIR, EV_BOX, EV_TREASURE, FIELD, GACHA, GEAR, GEM, MASTERY, MESO, POTION, SCROLL } from '../game/types.ts';
 import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts';
 import { frameAt } from '../maple/art.ts';
 import { ItemArt } from '../maple/item-art.ts';
@@ -26,6 +28,10 @@ const MAX_VFX = 110;
 const MAX_GHOSTS = 100;
 const MAX_ANIMFX = 60;
 const MAX_FIRES = 48;
+const MAX_SHOT_SPRITES = 64;
+const MAX_CHARGE_LINES = 32;
+/** ladder tier of Lupin: its shots are bananas */
+const LUPIN = LADDER.findIndex((d) => d.name === 'Lupin');
 /** Maple mobs stand with their feet this many radii below the sim position (the hit circle sits on the body) */
 const FOOT = 0.7;
 const MAX_DECOS = 90;
@@ -86,6 +92,9 @@ export class Renderer {
   private areaPool: Sprite[] = [];
   /** fire patches of Blazing Elites: a glowing disc and a bright rim each */
   private fires: { fill: Sprite; ring: Sprite }[] = [];
+  /** projectiles of ranged mobs (by index in sim.mobs.shots) and the lines that show where a charging mob will dash */
+  private shotSp: Sprite[] = [];
+  private chargeSp: Sprite[] = [];
   private dmg: DmgNum[] = [];
   private dmgNext = 0;
   private vfx: Vfx[] = [];
@@ -206,6 +215,18 @@ export class Renderer {
       fill.visible = ring.visible = false;
       this.fxLayer.addChild(fill, ring);
       this.danger.push({ fill, ring });
+    }
+    for (let i = 0; i < MAX_SHOT_SPRITES; i++) {
+      const sp = new Sprite(tx.shots.orb);
+      sp.anchor.set(0.5); sp.visible = false;
+      this.topLayer.addChild(sp);
+      this.shotSp.push(sp);
+    }
+    for (let i = 0; i < MAX_CHARGE_LINES; i++) {
+      const sp = new Sprite(tx.bar);
+      sp.anchor.set(0, 0.5); sp.tint = 0xff4a22; sp.visible = false;
+      this.groundFx.addChild(sp);
+      this.chargeSp.push(sp);
     }
     for (let i = 0; i < MAX_FIRES; i++) {
       const fill = new Sprite(tx.disc), ring = new Sprite(tx.ring);
@@ -425,6 +446,16 @@ export class Renderer {
       case 'novaHit':
         this.ringFx(tx.ring, e.x, e.y, e.r, 0.5, e.hit ? 0xff3030 : 0xffa070, 1);
         break;
+      case 'ailHit':
+        this.ringFx(tx.ring, e.x, e.y, e.r, 0.5, e.hit ? 0xd040ff : 0xc8a0ff, 1);
+        break;
+      case 'ailment': {
+        // "SEALED!" over the hero in the ailment's colour
+        const c = parseInt(AILMENTS[e.ail - 1].color.slice(1), 16);
+        this.number(sim.px, sim.py - 2.6, e.text, c, 19, 1.3);
+        this.ringFx(tx.glow, sim.px, sim.py, 3, 0.5, c, 0.9);
+        break;
+      }
       case 'levelUp':
         if (this.levelFx && this.art?.levelUp) {
           // the real effect carries its own "LEVEL UP!" lettering; it starts once the card dialog is closed, so it is seen
@@ -569,7 +600,7 @@ export class Renderer {
     // enemies
     const enemies = sim.enemies;
     const frameN = Math.floor(this.time * 7);
-    let dng = 0;
+    let dng = 0, chn = 0;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       let v = this.enemyViews.get(e);
@@ -598,9 +629,19 @@ export class Renderer {
         }
         sp.scale.set(SCALE * e.facing * es, SCALE * es);
       }
+      if (e.fly) footY -= 6 + Math.sin(this.time * 3 + e.phase) * 3; // flyers hover and bob
       sp.position.set(e.x * PX, footY);
       sp.zIndex = e.y * PX;
-      sp.tint = e.elite ? AFFIXES[e.elite - 1].tint : e.ev === EV_TREASURE ? 0xffd23a : e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
+      if (e.behave === BEH_CHARGE && e.bS === CHARGE_TELEGRAPH && chn < MAX_CHARGE_LINES) {
+        // a red line along the dash that is about to happen, pulsing
+        const l = this.chargeSp[chn++], len = e.speed * CHARGE_SPEED * CHARGE_DASH_TIME * PX;
+        l.visible = true;
+        l.position.set(e.x * PX, e.y * PX + e.r * PX * 0.4);
+        l.rotation = Math.atan2(e.by, e.bx);
+        l.scale.set(len / 2, Math.max(7, e.r * PX * 1.1) / 2);
+        l.alpha = 0.3 + 0.3 * Math.sin(this.time * 34);
+      }
+      sp.tint = e.behave === BEH_CHARGE && e.bS === CHARGE_TELEGRAPH ? 0xff9070 : e.elite ? AFFIXES[e.elite - 1].tint : e.ev === EV_TREASURE ? 0xffd23a : e.berserk ? 0xff6a6a : e.slowT > 0 ? 0xa8dcff : 0xffffff;
       if (!boss && e.big && (e.elite || sim.t - e.lastHit < HP_BAR_SECONDS)) {
         // Maple-style bar over the head of big mobs for a few seconds after the last hit (small mobs die too fast to need one)
         this.ensureBar(v);
@@ -625,8 +666,21 @@ export class Renderer {
         v.barBg!.visible = v.barFg!.visible = true;
         v.barBg!.width = bw + 4; v.barBg!.position.set(e.x * PX, by);
         v.barFg!.width = Math.max(0, (e.hp / e.maxHp) * bw); v.barFg!.position.set(e.x * PX - bw / 2, by);
+        if (e.ailC > 0 && dng < this.danger.length) {
+          // ailment cast: a purple circle that fills up, then lands
+          const d = this.danger[dng++];
+          const full = (AIL_RADIUS * PX * 2) / d.ring.texture.width;
+          const prog = 1 - e.ailC / AIL_CAST;
+          d.ring.tint = 0xc040ff; d.fill.tint = 0x9a20e0;
+          d.ring.visible = d.fill.visible = true;
+          d.ring.position.set(e.x * PX, e.y * PX); d.fill.position.set(e.x * PX, e.y * PX);
+          d.ring.scale.set(full); d.ring.alpha = 0.55 + 0.4 * Math.sin(this.time * 20);
+          d.fill.scale.set(full * prog * (d.ring.texture.width / d.fill.texture.width));
+          d.fill.alpha = 0.32;
+        }
         if (e.castT > 0 && dng < this.danger.length) {
           const d = this.danger[dng++];
+          d.ring.tint = 0xff5a3a; d.fill.tint = 0xff2a2a;
           const full = (NOVA_RADIUS * PX * 2) / d.ring.texture.width;
           const prog = 1 - e.castT / 2;
           d.ring.visible = d.fill.visible = true;
@@ -637,6 +691,7 @@ export class Renderer {
         }
       }
     }
+    for (; chn < MAX_CHARGE_LINES; chn++) this.chargeSp[chn].visible = false;
     for (; dng < this.danger.length; dng++) { this.danger[dng].ring.visible = false; this.danger[dng].fill.visible = false; }
     for (const [k, v] of this.enemyViews) {
       if (v.stamp !== stamp) { this.enemyViews.delete(k); this.releaseView(v); }
@@ -734,6 +789,33 @@ export class Renderer {
     for (const [k, v] of this.projViews) {
       if (v.stamp !== stamp) { this.projViews.delete(k); v.sp.visible = false; this.projPool.push(v.sp); }
     }
+
+    // shots of ranged mobs: the mob's own ball frames when extracted, else a banana (Lupin) or a purple orb (tinted by the ailment it carries)
+    const shots = sim.mobs.shots;
+    let si = 0;
+    for (; si < shots.length && si < MAX_SHOT_SPRITES; si++) {
+      const s = shots[si], sp = this.shotSp[si];
+      const ball = this.art?.tiers[s.tier]?.ball;
+      sp.visible = true;
+      sp.position.set(s.x * PX, s.y * PX - 16);
+      if (ball) {
+        const k = frameAt(ball, s.age);
+        if (sp.texture !== ball.tex[k]) sp.texture = ball.tex[k];
+        sp.anchor.set(ball.ax[k], ball.ay[k]);
+        const a = Math.atan2(s.vy, s.vx);
+        if (s.vx < 0) { sp.scale.set(1, 1); sp.rotation = a < 0 ? a + Math.PI : a - Math.PI; } else { sp.scale.set(-1, 1); sp.rotation = a; }
+        sp.tint = 0xffffff;
+        continue;
+      }
+      const banana = s.tier === LUPIN;
+      const t = banana ? tx.shots.banana : tx.shots.orb;
+      if (sp.texture !== t) sp.texture = t;
+      sp.anchor.set(0.5);
+      sp.scale.set(SCALE * (banana ? 1.3 : 1.5) * (1 + 0.08 * Math.sin(this.time * 18 + s.x)));
+      sp.rotation = banana ? s.age * 12 : 0;
+      sp.tint = s.ail ? parseInt(AILMENTS[s.ail - 1].color.slice(1), 16) : 0xffffff;
+    }
+    for (; si < MAX_SHOT_SPRITES; si++) this.shotSp[si].visible = false;
 
     // areas (poison mist)
     const ar = sim.areas;
@@ -906,7 +988,7 @@ export class Renderer {
     v.flashPrev = flash;
     let a: Anim;
     if (v.hitT > 0 && ma.hit) { v.hitT -= dt; a = ma.hit; }
-    else if (e.castT > 0 && ma.attack) a = ma.attack;
+    else if ((e.castT > 0 || e.atk > 0 || e.ailC > 0) && ma.attack) a = ma.attack;
     else a = (e.moving ? ma.move ?? ma.stand : ma.stand ?? ma.move)!;
     if (a !== v.act) { v.act = a; v.t = a === ma.hit ? 0 : e.phase * 0.2; } else v.t += dt;
     const i = frameAt(a, v.t, a !== ma.hit);
