@@ -4,6 +4,7 @@
  * stage (last character with a name tag: name, level, job). Only used when the real button art was extracted (see classic()); without
  * it Screens keeps the plain title window.
  */
+import type { CreateResult } from './create.ts';
 import { CLASS_BY_KEY } from '../game/data.ts';
 import { frameIndexAt } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
@@ -15,6 +16,8 @@ import { theme } from './theme.ts';
 export interface LoginHandlers {
   /** open character creation */
   create(): void;
+  /** the map creator finished: start the run with this character */
+  created?(r: CreateResult): void;
   /** start the run with the saved character */
   select(): void;
   /** resume the saved run in progress */

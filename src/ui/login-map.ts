@@ -4,7 +4,11 @@
  * fields and name tag as a DOM overlay in the same coordinates. Used by Screens when the manifest has a `login` section; otherwise the
  * classic LoginScreen (login.ts) or the plain title window stays. Every screen position is in LAYOUT so it can be tuned from screenshots.
  */
-import { CLASS_BY_KEY } from '../game/data.ts';
+import { CLASSES, CLASS_BY_KEY, DEFAULT_CLASS, SKILL_BY_KEY } from '../game/data.ts';
+import type { ClassKey } from '../game/data.ts';
+import { defaultLook, randomLook, sanitizeLook } from '../maple/avatar-core.ts';
+import type { Look } from '../maple/avatar-core.ts';
+import { ROWS, sanitizeName } from './create.ts';
 import { frameIndexAt } from '../maple/avatar.ts';
 import type { Avatar } from '../maple/avatar.ts';
 import { VIEW_H, VIEW_W, frameAt, placements } from '../maple/login-scene.ts';
@@ -82,6 +86,37 @@ export const LAYOUT = {
     luk: [127, 59] as Pt,
     best: [6, 101] as Pt,
   },
+  /** the v83 creator on the create step's map (screen coords at the create camera) */
+  create: {
+    /** unrolled scroll: top-left, ms per frame */
+    scroll: [104, 112] as Pt,
+    scrollMs: 70,
+    /** first row relative to the scroll, row pitch */
+    rows: [21, 18] as Pt,
+    rowDy: 21,
+    /** relative to a row */
+    left: [68, 1] as Pt,
+    right: [183, 1] as Pt,
+    /** value field between the arrows, relative to a row: x, width, top, height */
+    value: { x: 84, w: 98, y: 1, h: 16 },
+    name: { x: 546, y: 181, w: 150, h: 20 },
+    check: [650, 204] as Pt,
+    /** status text under the name field */
+    status: [548, 228] as Pt,
+    /** top-left of the first stat value, row tops */
+    stats: { x: 588, ys: [249, 267, 286, 306] },
+    dice: [632, 248] as Pt,
+    diceMs: 400,
+    ok: [538, 372] as Pt,
+    cancel: [622, 372] as Pt,
+    /** the character's feet and scale */
+    feet: [430, 343] as Pt,
+    scale: 1,
+    /** the class bubble (top-left) and its text padding / width */
+    bubble: [338, 160] as Pt,
+    bubblePad: 10,
+    bubbleW: 167,
+  },
   /** extras row along the bottom of the book page (the scene shows through x 96..712, y 25..492 inside Common/frame) */
   dock: { x: 100, bottom: 112, w: 608 },
 };
@@ -124,7 +159,7 @@ export class MapLogin implements LoginLike {
   private scene: LoginSection;
   private steps: Record<LoginStep, { x: number; y: number }>;
   private ctx: CanvasRenderingContext2D;
-  private panels: Record<'title' | 'world' | 'select', HTMLDivElement>;
+  private panels: Record<'title' | 'world' | 'select' | 'create', HTMLDivElement>;
   private dock: HTMLDivElement;
   private opts: HTMLDivElement;
   private muteBtn: HTMLButtonElement;
@@ -155,6 +190,21 @@ export class MapLogin implements LoginLike {
   private save: SaveData | null = null;
   private world: number | null = null;
   private channel = 0;
+  // the map creator
+  private cls: ClassKey = DEFAULT_CLASS;
+  private look: Look = defaultLook(CLASS_BY_KEY[DEFAULT_CLASS].weapon);
+  private cScrollT0 = 0;
+  private cRows = false;
+  private cDiceUntil = 0;
+  private cRowEls = new Map<string, { text: HTMLElement; swatch: HTMLElement | null }>();
+  private cStatEls: HTMLElement[] = [];
+  private cBubble: HTMLElement | null = null;
+  private cNameEl: HTMLInputElement | null = null;
+  private cStatusEl: HTMLElement | null = null;
+  private cStatusT = 0;
+  private cClock0 = 0;
+  /** the rolled STR / DEX / INT / LUK (cosmetic) */
+  stats: number[] = [4, 4, 4, 13];
 
   constructor(parent: HTMLElement, private h: LoginHandlers, private avatar: Avatar | null, scene: LoginSection) {
     // the private-server logo of the extracted map is swapped for the real MapleStory logo, keeping its centre
@@ -183,11 +233,11 @@ export class MapLogin implements LoginLike {
     canvas.height = VIEW_H;
     this.ctx = canvas.getContext('2d')!;
     const ui = el('div', 'ml-ui');
-    this.panels = { title: el('div', 'ml-panel hidden'), world: el('div', 'ml-panel hidden'), select: el('div', 'ml-panel hidden') };
+    this.panels = { title: el('div', 'ml-panel hidden'), world: el('div', 'ml-panel hidden'), select: el('div', 'ml-panel hidden'), create: el('div', 'ml-panel hidden') };
     this.dock = el('div', 'ml-dock hidden');
     this.dock.style.cssText = `left:${LAYOUT.dock.x}px;bottom:${LAYOUT.dock.bottom}px;width:${LAYOUT.dock.w}px`;
     this.diffSlot.style.cssText = `left:${LAYOUT.select.diff[0]}px;top:${LAYOUT.select.diff[1]}px`;
-    ui.append(this.panels.title, this.panels.world, this.panels.select, this.diffSlot, this.dock);
+    ui.append(this.panels.title, this.panels.world, this.panels.select, this.panels.create, this.diffSlot, this.dock);
     stage.append(canvas, ui);
     root.appendChild(stage);
 
@@ -318,7 +368,8 @@ export class MapLogin implements LoginLike {
     this.state = step;
     if (step === 'world') this.buildWorld();
     else if (step === 'select') this.buildSelect();
-    if (step !== 'create') this.panels[step].classList.remove('hidden');
+    else if (step === 'create') this.buildCreate();
+    this.panels[step].classList.remove('hidden');
     this.dock.classList.toggle('hidden', step !== 'title' && step !== 'select');
     this.diffSlot.classList.toggle('hidden', step !== 'select');
     then?.();
@@ -333,7 +384,8 @@ export class MapLogin implements LoginLike {
 
   private startCreate() {
     if (this.pan) return;
-    this.goTo('create', () => this.h.create());
+    if (!this.u('NewChar/avatarSel/0/normal')) { this.goTo('create', () => this.h.create()); return; }
+    this.goTo('create');
   }
 
   // ---------------------------------------------------------------- overlay helpers
@@ -585,6 +637,245 @@ export class MapLogin implements LoginLike {
     line(L.best, `Best ${s && s.bestTime > 0 ? fmtTime(s.bestTime) : '-'}  ·  ${(s?.mesos ?? 0).toLocaleString('en-US')} mesos`);
   }
 
+
+  // ---------------------------------------------------------------- the creator (v83 NewChar on the create map)
+
+  private roll() {
+    // v83 dice: four stats >= 4 summing to 25; the class's main stat is forced to be the highest
+    const v = [4, 4, 4, 4];
+    for (let n = 9; n > 0; n--) v[Math.floor(Math.random() * 4)]++;
+    const main = { warrior: 0, bowman: 1, magician: 2, thief: 3 }[this.cls as string] ?? 0;
+    const hi = v.indexOf(Math.max(...v));
+    [v[main], v[hi]] = [v[hi], v[main]];
+    this.stats = v;
+    this.cStatEls.forEach((e, i) => (e.textContent = String(v[i])));
+  }
+
+  private classText(): string {
+    const c = CLASS_BY_KEY[this.cls];
+    return `${c.weaponName} (${c.name})`;
+  }
+
+  private cChanged() {
+    this.look = sanitizeLook(this.look, CLASS_BY_KEY[this.cls].weapon);
+    void this.avatar?.ensureLook(this.look);
+    this.cRefresh();
+  }
+
+  private cRefresh() {
+    for (const r of ROWS) {
+      const e = this.cRowEls.get(r.key);
+      if (!e) continue;
+      e.text.textContent = r.text(this.look);
+      if (e.swatch && r.swatch) e.swatch.style.background = r.swatch(this.look);
+    }
+    const w = this.cRowEls.get('weapon');
+    if (w) w.text.textContent = this.classText();
+    this.cClock0 = performance.now();
+  }
+
+  private cBlurb() {
+    const b = this.cBubble;
+    if (!b) return;
+    const c = CLASS_BY_KEY[this.cls], sk = SKILL_BY_KEY[c.skills[0]];
+    b.textContent = '';
+    const t = el('b', '', c.name);
+    t.style.display = 'block';
+    b.append(t, el('div', '', c.blurb), el('div', 'ml-bubble-skill', `Start skill: ${sk?.name ?? c.skills[0]}`));
+  }
+
+  private cycleClass(dir: number) {
+    const i = (CLASSES.findIndex((c) => c.key === this.cls) + dir + CLASSES.length) % CLASSES.length;
+    this.cls = CLASSES[i].key;
+    this.look.weapon = CLASS_BY_KEY[this.cls].weapon;
+    this.roll();
+    this.cBlurb();
+    this.cChanged();
+  }
+
+  private cycleRow(key: string, dir: number) {
+    if (key === 'class') return this.cycleClass(dir);
+    const r = ROWS.find((x) => x.key === key);
+    if (!r) return;
+    const n = r.count(this.look);
+    r.set(this.look, (r.get(this.look) + dir + n) % n);
+    this.cChanged();
+  }
+
+  private cStatus(msg: string) {
+    if (!this.cStatusEl) return;
+    this.cStatusEl.textContent = msg;
+    clearTimeout(this.cStatusT);
+    this.cStatusT = window.setTimeout(() => { if (this.cStatusEl) this.cStatusEl.textContent = ''; }, 1800);
+  }
+
+  private buildCreate() {
+    const P = this.panels.create, L = LAYOUT.create;
+    P.textContent = '';
+    this.cRowEls.clear();
+    this.cStatEls = [];
+    this.cRows = false;
+    this.cScrollT0 = performance.now();
+    this.cDiceUntil = 0;
+    const ch = this.save?.character;
+    if (ch && CLASS_BY_KEY[ch.cls]) {
+      this.cls = ch.cls as ClassKey;
+      this.look = sanitizeLook(ch.look, CLASS_BY_KEY[this.cls].weapon);
+    } else {
+      this.cls = DEFAULT_CLASS;
+      this.look = defaultLook(CLASS_BY_KEY[this.cls].weapon);
+    }
+    void this.avatar?.ensureLook(this.look);
+
+    // rows (shown once the scroll has unrolled)
+    const rowsEl = el('div', 'ml-crows hidden');
+    P.appendChild(rowsEl);
+    const keys = ['face', 'hair', 'hairColor', 'skin', 'top', 'bottom', 'shoes', 'class', 'gender'];
+    keys.forEach((k, i) => {
+      const x = L.scroll[0] + L.rows[0], y = L.scroll[1] + L.rows[1] + i * L.rowDy;
+      this.spriteImg(rowsEl, `NewChar/avatarSel/${i}/normal`, x, y);
+      const lab = ROWS.find((r) => r.key === k)?.label ?? k;
+      const arrow = (side: 'Left' | 'Right', p: Pt, dir: number) => {
+        const b = this.spriteBtn(rowsEl, `NewChar/Bt${side}`, x + p[0], y + p[1], () => this.cycleRow(k, dir), { label: `${dir < 0 ? 'Previous' : 'Next'} ${lab}` });
+        b?.classList.add('ml-arrow');
+      };
+      arrow('Left', L.left, -1);
+      arrow('Right', L.right, 1);
+      const v = L.value;
+      const box = el('div', 'ml-cval');
+      box.style.cssText = `left:${x + v.x}px;top:${y + v.y}px;width:${v.w}px;height:${v.h}px`;
+      box.dataset.row = k;
+      const swatch = k === 'hairColor' ? el('i', 'ml-cswatch') : null;
+      const text = el('span');
+      if (swatch) box.appendChild(swatch);
+      box.appendChild(text);
+      rowsEl.appendChild(box);
+      this.cRowEls.set(k, { text, swatch });
+    });
+    this.cRowsEl = rowsEl;
+
+    // name
+    const n = el('input', 'ml-cname');
+    n.type = 'text';
+    n.maxLength = 12;
+    n.autocomplete = 'off';
+    n.spellcheck = false;
+    n.setAttribute('aria-label', 'Name of character');
+    n.value = ch?.name ?? '';
+    n.style.cssText = `left:${L.name.x}px;top:${L.name.y}px;width:${L.name.w}px;height:${L.name.h}px`;
+    n.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') this.cCheck(); });
+    P.appendChild(n);
+    this.cNameEl = n;
+    this.spriteBtn(P, 'NewChar/BtCheck', ...L.check, () => this.cCheck(), { label: 'Check name', shot: 'create-check' });
+    this.cStatusEl = this.text(P, L.status[0], L.status[1], '');
+    this.cStatusEl.classList.add('ml-cstatus');
+
+    // stats and dice
+    L.stats.ys.forEach((y) => {
+      const t = this.text(P, L.stats.x, y, '');
+      t.classList.add('ml-info');
+      this.cStatEls.push(t);
+    });
+    const df = this.seq('NewChar/dice');
+    this.diceFrames = df;
+    this.diceAt = -1;
+    this.diceBtn = null;
+    if (df.length) {
+      const d = el('button', 'ml-btn');
+      d.type = 'button';
+      d.setAttribute('aria-label', 'Roll dice');
+      d.dataset.shot = 'dice';
+      d.addEventListener('click', () => this.cDice());
+      P.appendChild(d);
+      this.diceBtn = d;
+      this.cDiceFrame(0);
+    }
+
+    // buttons
+    this.spriteBtn(P, 'NewChar/BtYes', ...L.ok, () => this.cOk(), { label: 'OK', shot: 'create-ok' });
+    this.spriteBtn(P, 'NewChar/BtNo', ...L.cancel, () => this.cCancel(), { label: 'Cancel', shot: 'create-cancel' });
+
+    // class bubble
+    const bub = this.u('NewChar/charAlert');
+    if (bub) {
+      const b = el('div', 'ml-bubble');
+      b.style.cssText = `left:${L.bubble[0]}px;top:${L.bubble[1]}px;width:${bub.w}px;height:${bub.h}px;background-image:${this.url(bub)};background-size:${bub.w}px ${bub.h}px;padding:${L.bubblePad}px;--bw:${L.bubbleW}px`;
+      P.appendChild(b);
+      this.cBubble = b;
+    } else this.cBubble = null;
+    this.roll();
+    this.cBlurb();
+    this.cRefresh();
+  }
+  private cRowsEl: HTMLElement | null = null;
+  private diceFrames: LoginSprite[] = [];
+  private diceAt = -1;
+  private diceBtn: HTMLButtonElement | null = null;
+
+  /** puts dice frame i on the button (each frame has its own origin) */
+  private cDiceFrame(i: number) {
+    const d = this.diceBtn, s = this.diceFrames[i], [x, y] = LAYOUT.create.dice;
+    if (!d || !s || i === this.diceAt) return;
+    this.diceAt = i;
+    d.style.cssText = `left:${x - s.ox}px;top:${y - s.oy}px;width:${s.w}px;height:${s.h}px`;
+    d.style.setProperty('--n', this.url(s));
+    d.style.setProperty('--h', this.url(s));
+    d.style.setProperty('--p', this.url(s));
+  }
+
+  private cDice() {
+    this.roll();
+    this.look = randomLook(Math.random, CLASS_BY_KEY[this.cls].weapon);
+    this.cDiceUntil = performance.now() + LAYOUT.create.diceMs;
+    this.cChanged();
+  }
+
+  private cCheck(): string {
+    const n = sanitizeName(this.cNameEl?.value ?? '');
+    if (this.cNameEl) this.cNameEl.value = n;
+    this.cStatus(n ? 'OK!' : 'Enter a name');
+    return n;
+  }
+
+  private cOk() {
+    const name = this.cCheck();
+    if (!name) { this.cNameEl?.focus(); return; }
+    const cls = this.cls;
+    const r = { cls, look: { ...sanitizeLook(this.look, CLASS_BY_KEY[cls].weapon) }, name };
+    this.h.created ? this.h.created(r) : this.h.create();
+  }
+
+  private cCancel() {
+    this.goTo(this.save?.character ? 'select' : 'title');
+  }
+
+  /** The create map's scroll, the rows once it has unrolled, and the character on the mushroom platform. */
+  private drawCreate(now: number, t: number) {
+    const L = LAYOUT.create, fr = this.seq('NewChar/scroll/0');
+    if (fr.length) {
+      const i = Math.max(0, Math.min(fr.length - 1, Math.floor((now - this.cScrollT0) / L.scrollMs)));
+      this.blit(fr[i], L.scroll[0], L.scroll[1]);
+      if (i === fr.length - 1 && !this.cRows) { this.cRows = true; this.cRowsEl?.classList.remove('hidden'); }
+    } else if (!this.cRows) { this.cRows = true; this.cRowsEl?.classList.remove('hidden'); }
+    // the dice frames play quickly while rolling, then rest on the first
+    const n = this.diceFrames.length;
+    if (n) this.cDiceFrame(now < this.cDiceUntil ? Math.floor(now / 60) % n : 0);
+    const av = this.avatar;
+    if (!av) return;
+    if (!av.ready(this.look)) { void av.ensureLook(this.look); return; }
+    const act = av.stance(this.look, CLASS_BY_KEY[this.cls].stance).stand;
+    const f = av.frame(this.look, act, frameIndexAt(av.timing(this.look, act) ?? [500], (now - this.cClock0) / 1000, true));
+    if (!f) return;
+    const c = this.ctx, s = L.scale;
+    c.save();
+    c.translate(L.feet[0], 0);
+    c.scale(-s, s);
+    c.drawImage(f.canvas, -f.ax, L.feet[1] / s - f.ay);
+    c.restore();
+    this.drawn++;
+    void t;
+  }
+
   // ---------------------------------------------------------------- canvas
 
   private image(src: string): HTMLImageElement | null {
@@ -641,6 +932,7 @@ export class MapLogin implements LoginLike {
     if (!this.pan) {
       if (this.state === 'world') this.drawScroll(now);
       else if (this.state === 'select') this.drawSelect(t);
+      else if (this.state === 'create') this.drawCreate(now, t);
     }
     const f = this.u('Common/frame');
     if (f) this.blit(f, VIEW_W / 2 - f.ox, VIEW_H / 2 - f.oy);

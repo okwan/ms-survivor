@@ -11,6 +11,7 @@ import { canFullscreen, isTouch, toggleFullscreen } from './touch.ts';
 import type { LoginSection } from '../maple/login-scene.ts';
 import { LoginScreen, classic } from './login.ts';
 import type { LoginLike } from './login.ts';
+import type { CreateResult } from './create.ts';
 import { MapLogin, mapLoginOk } from './login-map.ts';
 import { difficultyPicker } from './difficulty.ts';
 import { CLASS_BY_KEY, JOB_BY_CODE, unlockedJobs } from '../game/data.ts';
@@ -20,6 +21,8 @@ import { theme } from './theme.ts';
 export interface ScreenHandlers {
   /** opens character creation */
   start(): void;
+  /** the map creator finished */
+  created?(r: CreateResult): void;
   /** starts straight away with the last created character */
   quick(): void;
   resume(): void;
@@ -109,7 +112,7 @@ export class Screens {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    const lh = { create: () => h.start(), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
+    const lh = { create: () => h.start(), created: (r: CreateResult) => h.created?.(r), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
     if (mapLoginOk(loginScene)) this.login = new MapLogin(parent, lh, avatar, loginScene);
     else if (classic()) this.login = new LoginScreen(parent, lh, avatar);
     // the difficulty picker: ONE element, mounted by the login screen (signboard / character select), else above START on the plain title
@@ -223,7 +226,7 @@ export class Screens {
 
   /** which title screen is up: 'login' / 'select' (classic), 'title' (plain), or '' when none */
   titleState(): string {
-    if (this.login?.visible) return this.login.state === 'select' ? 'select' : 'login';
+    if (this.login?.visible) return this.login.state === 'select' ? 'select' : this.login.state === 'create' ? 'create' : 'login';
     return this.title.classList.contains('hidden') ? '' : 'title';
   }
 

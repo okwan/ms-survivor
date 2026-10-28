@@ -211,6 +211,7 @@ async function boot() {
   const screens = new Screens(
     uiRoot,
     {
+      created: (r) => finishCreate(r),
       start: () => { screens.hideAll({ keepLogin: true }); create.show(save.character ?? { ...hero }); },
       quick: () => {
         const ch = save.character;
@@ -258,17 +259,18 @@ async function boot() {
   const noteUi = new NoteUi(uiRoot);
   const gachaUi = new GachaUi(uiRoot, renderer.tex.icons);
   gachaUi.onReveal = (_i, r) => sfx?.play(r.kind === 'evolve' ? 'game.levelup' : 'game.pickup', { volume: 0.5 });
+  function finishCreate(r: CreateResult) {
+    hero = r;
+    save.character = { cls: r.cls, look: r.look, name: r.name };
+    writeSave(save);
+    create.hide();
+    startRun();
+  }
   const create = new CreateScreen(uiRoot, {
     avatar,
     icons: renderer.tex.icons,
     onBack: () => { create.hide(); screens.showTitle(save, loadRun()); },
-    onStart: (r) => {
-      hero = r;
-      save.character = { cls: r.cls, look: r.look, name: r.name };
-      writeSave(save);
-      create.hide();
-      startRun();
-    },
+    onStart: (r) => finishCreate(r),
   });
   function setMuted(m: boolean) {
     save.settings.muted = m;

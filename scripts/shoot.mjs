@@ -81,8 +81,35 @@ async function main() {
         await page.waitForTimeout(1500);
       }
       await shot('select-saved');
-      if ((await click('[data-shot=cnew]')) || (await click('[data-shot=new]'))) await shot('create');
+      if ((await click('[data-shot=cnew]')) || (await click('[data-shot=new]'))) {
+        await page.waitForTimeout(2500);
+        await shot('create');
+        if (await click('[data-shot=dice]')) {
+          await page.waitForTimeout(800);
+          await shot('create-dice');
+        }
+      }
       console.log(`shoot ${s.tag}: ui ${JSON.stringify(await page.evaluate(() => window.game?.ui?.()))}`);
+      // the other menus, desktop only: windows on the title, then a run (playing, level-up, pause, equip, results)
+      if (s.tag === 'desktop') {
+        await page.reload();
+        await page.waitForFunction(() => window.game, null, { timeout: 30000 });
+        const menu = async (name, fn) => {
+          try {
+            await page.evaluate(fn);
+            await shot(name);
+          } catch (e) {
+            console.log(`shoot ${s.tag}: ${name}: ${e.message}`);
+          }
+        };
+        await menu('shop', () => window.game.shop(true));
+        await menu('hyper', () => { window.game.shop(false); window.game.hyper(0, 'warrior', true); });
+        await menu('playing', () => { window.game.hyper(0, 'warrior', false); window.game.start(7, 'warrior'); window.game.god(true); window.game.step(20); });
+        await menu('levelup', () => window.game.step(120));
+        await menu('equip', () => { window.game.pick(0); window.game.window('equip', true); window.game.window('inventory', true); });
+        await menu('pause', () => { window.game.window('equip', false); window.game.window('inventory', false); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
+        await menu('results', () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); window.game.god(false); window.game.autopick(true); window.game.step(900); });
+      }
     } catch (e) {
       console.log(`shoot ${s.tag}: ${e.message}`);
     }
