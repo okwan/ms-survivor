@@ -59,6 +59,11 @@ export function enemySpeed(fallback: number, factor: number | undefined, heroSpe
 export const START_REROLLS = 2;
 export const START_BANISHES = 2;
 
+/** How a ladder mob moves (src/game/mobai.ts): walk straight at the hero, stop at range and shoot, or telegraph and dash */
+export type Behave = 'walk' | 'ranged' | 'charge';
+/** Ailments of the hero (src/game/ailments.ts) */
+export const AIL_NONE = 0, AIL_SEAL = 1, AIL_DARKNESS = 2, AIL_WEAKNESS = 3, AIL_CURSE = 4, AIL_POISON = 5;
+
 export interface MobDef {
   name: string;
   id: number;
@@ -67,7 +72,26 @@ export interface MobDef {
   dmg: number;
   xp: number;
   big: boolean;
+  behave: Behave;
+  /** flyers ignore the crowding the walkers use and bob a little */
+  fly: boolean;
+  /** ranged mobs: the ailment (AIL_*) a shot carries with MOB_SHOT_AIL_CHANCE */
+  shotAil: number;
 }
+
+/** per-tier behaviour by name: behave, fly, shot ailment (every other tier walks) */
+const BEHAVE: Record<string, [Behave, boolean, number]> = {
+  'Pig': ['charge', false, AIL_NONE],
+  'Ribbon Pig': ['charge', false, AIL_NONE],
+  'Axe Stump': ['charge', false, AIL_NONE],
+  'Wild Boar': ['charge', false, AIL_NONE],
+  'Fire Boar': ['charge', false, AIL_NONE],
+  'Evil Eye': ['ranged', true, AIL_NONE],
+  'Curse Eye': ['ranged', true, AIL_DARKNESS],
+  'Jr. Boogie': ['ranged', true, AIL_NONE],
+  'Lupin': ['ranged', false, AIL_NONE],
+  'Wraith': ['ranged', true, AIL_CURSE],
+};
 
 // name, id, hp, speed, dmg, xp, big
 const L: [string, number, number, number, number, number, boolean][] = [
@@ -112,7 +136,8 @@ export const LADDER: MobDef[] = (() => {
     ph = Math.max(ph, hp);
     pd = Math.max(pd, dmg);
     px = Math.max(px, xp);
-    return { name, id, hp: ph, speed, dmg: pd, xp: px, big };
+    const [behave, fly, shotAil] = BEHAVE[name] ?? ['walk', false, AIL_NONE];
+    return { name, id, hp: ph, speed, dmg: pd, xp: px, big, behave, fly, shotAil };
   });
 })();
 export const TIERS = LADDER.length;
@@ -128,18 +153,20 @@ export interface BossDef {
   nova: boolean;
   summon: boolean;
   berserk: boolean;
+  /** ailment mechanic: the AIL_* ids its circle applies (empty = none) */
+  ailments: number[];
 }
-const B = (name: string, id: number, hp: number, speed: number, dmg: number, xp: number, scale: number, m: string): BossDef => ({
+const B = (name: string, id: number, hp: number, speed: number, dmg: number, xp: number, scale: number, m: string, ailments: number[] = []): BossDef => ({
   name, id, hp, speed, dmg, xp, scale,
-  nova: m.includes('nova'), summon: m.includes('summon'), berserk: m.includes('berserk'),
+  nova: m.includes('nova'), summon: m.includes('summon'), berserk: m.includes('berserk'), ailments,
 });
 export const BOSSES: BossDef[] = [
-  B('Mano', 2220000, 900, 5.2, 20, 60, 1.6, 'nova'),
-  B('Mushmom', 6130101, 2400, 5.4, 32, 120, 1.6, 'nova summon'),
-  B('King Slime', 9300003, 6000, 4.0, 45, 200, 1.7, 'summon berserk'),
-  B('Zombie Mushmom', 6300005, 11000, 5.6, 55, 300, 1.7, 'nova summon berserk'),
-  B('Jr. Balrog', 8130100, 20000, 5.0, 70, 400, 1.8, 'nova summon berserk'),
-  B('Zakum', 8800000, 42000, 4.8, 90, 500, 1.8, 'nova summon berserk'),
+  B('Mano', 2220000, 900, 5.2, 20, 60, 1.6, 'nova', [AIL_WEAKNESS]),
+  B('Mushmom', 6130101, 2400, 5.4, 32, 120, 1.6, 'nova summon', [AIL_POISON]),
+  B('King Slime', 9300003, 6000, 4.0, 45, 200, 1.7, 'summon berserk', [AIL_WEAKNESS]),
+  B('Zombie Mushmom', 6300005, 11000, 5.6, 55, 300, 1.7, 'nova summon berserk', [AIL_CURSE]),
+  B('Jr. Balrog', 8130100, 20000, 5.0, 70, 400, 1.8, 'nova summon berserk', [AIL_SEAL]),
+  B('Zakum', 8800000, 42000, 4.8, 90, 500, 1.8, 'nova summon berserk', [AIL_DARKNESS, AIL_SEAL]),
 ];
 /** bosses per boss time: from the 3rd boss on a wave brings companions (earlier-ladder bosses at BOSS_COMPANION_HP of their health) */
 export const BOSS_WAVES = [1, 1, 2, 2, 3, 3];

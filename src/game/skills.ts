@@ -3,6 +3,7 @@ import {
   skillCooldown, skillCount, skillDmgMult, skillDuration, skillRadius,
 } from './data.ts';
 import type { SkillDef } from './data.ts';
+import { cureAilments } from './ailments.ts';
 import type { Sim } from './sim.ts';
 import type { Enemy, SkillState } from './types.ts';
 
@@ -14,7 +15,8 @@ export function updateSkills(sim: Sim, dt: number) {
   for (let i = 0; i < list.length; i++) {
     const o = list[i];
     o.cd -= dt;
-    if (o.cd > 0) continue;
+    // Seal: cooldowns keep ticking but nothing fires
+    if (o.cd > 0 || sim.ail.seal) continue;
     const def = SKILL_BY_KEY[o.key];
     if (fire(sim, def, o)) {
       o.cd = skillCooldown(def, o.level, sim.haste);
@@ -77,7 +79,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
       if (sim.countNear(px, py, radius) === 0) return false;
       sim.emit({ type: 'cast', skill: def.key, kind: 'nova', x: px, y: py, tx: px, ty: py, r: radius, pts: null });
       sim.areaDamage(px, py, radius, dmg, def.slow ? skillDuration(def.slow, L) : 0);
-      if (def.heal) sim.hp = Math.min(sim.maxHp, sim.hp + def.heal * skillDmgMult(L));
+      if (def.heal) { sim.hp = Math.min(sim.maxHp, sim.hp + def.heal * skillDmgMult(L)); cureAilments(sim); }
       return true;
     }
     case 'ground': {
