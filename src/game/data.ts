@@ -15,6 +15,17 @@ export const MAX_SKILLS = 6;
 export const MAX_PASSIVES = 6;
 export const SKILL_MAX_LEVEL = 8;
 export const PASSIVE_MAX_LEVEL = 5;
+/**
+ * Character level makes every hit bigger, like stat points in MapleStory. Runs reach level 200+, so the bonus grows with the
+ * square root of levels gained: x1.6 at level 10, x2.2 at 40, x3.8 at 200.
+ */
+export const levelDamageMult = (level: number) => 1 + 0.2 * Math.sqrt(Math.max(0, level - 1));
+/** Max HP gained per character level, up to level LEVEL_HP_CAP */
+export const LEVEL_HP = 3;
+export const LEVEL_HP_CAP = 60;
+/** Enemy health and contact damage grow with run progress p (0..1): x(1 + GROWTH * p) */
+export const ENEMY_HP_GROWTH = 3;
+export const ENEMY_DMG_GROWTH = 0.9;
 export const START_REROLLS = 2;
 export const START_BANISHES = 2;
 
