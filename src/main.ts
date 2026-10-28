@@ -31,7 +31,9 @@ import { bookBonus, bookCounts, mergeBook } from './game/book.ts';
 import { applyUiTheme } from './ui/theme.ts';
 import { Input } from './ui/input.ts';
 import { isTouch } from './ui/touch.ts';
-import { loadSave, writeSave } from './ui/save.ts';
+import { clearRun, loadRun, loadSave, writeRun, writeSave } from './ui/save.ts';
+import type { StoredRun } from './ui/save.ts';
+import { captureRun, restoreRun } from './game/runsave.ts';
 import { Screens } from './ui/screens.ts';
 
 type Mode = 'title' | 'playing' | 'paused' | 'ended';
@@ -127,11 +129,15 @@ async function boot() {
   // the hero's look = creation look + equipped gear; re-composited when the equipped set changes
   let seenGear = 0;
 
-  function startRun(seed?: number, cls?: string, look?: Look) {
+  /** Starts a new run, or with `saved` resumes the saved one (its hero, seed and build). */
+  function startRun(seed?: number, cls?: string, look?: Look, saved?: StoredRun) {
+    if (saved) hero = { cls: saved.hero.cls as CreateResult['cls'], look: saved.hero.look, name: saved.hero.name };
+    else clearRun();
     if (cls && CLASS_BY_KEY[cls]) hero = { ...hero, cls: cls as CreateResult['cls'], look: sanitizeLook(look ?? hero.look, CLASS_BY_KEY[cls].weapon) };
     renderer.setHero(avatar, hero.look, CLASS_BY_KEY[hero.cls].stance);
     avatar?.prefetch(hero.look);
-    sim = new Sim(seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta, hyper: save.hyper[hero.cls].ranks, difficulty: save.settings.difficulty });
+    sim = new Sim(saved ? saved.run.seed : seed ?? (Math.random() * 4294967296) >>> 0, hero.cls, { pool: gearPool, gender: hero.look.gender, autoEquip: save.settings.autoEquip, scrolls: scrollPool, pet: save.settings.pet, book: save.book, mobSpeeds, meta: save.meta, hyper: save.hyper[hero.cls].ranks, difficulty: saved ? saved.run.difficulty : save.settings.difficulty });
+    if (saved && !restoreRun(sim, saved.run)) { clearRun(); toTitle(); return; }
     sim.god = god;
     gearUi.reset();
     gachaUi.reset();
@@ -139,9 +145,8 @@ async function boot() {
     seenGear = 0;
     acc = 0;
     mode = 'playing';
-    bgm?.setRegion(0);
     bgm?.play('run');
-    enterRegion(0);
+    enterRegion(sim.region);
     screens.hideAll();
     hud.show(true);
   }
@@ -162,11 +167,27 @@ async function boot() {
     return best;
   }
 
+  /** Writes the run in progress (skipped in god mode and once the run is over). */
+  function saveRun() {
+    if ((mode !== 'playing' && mode !== 'paused') || sim.over || god) return;
+    writeRun({ run: captureRun(sim), hero: { cls: hero.cls, look: hero.look, name: hero.name } });
+  }
+
+  /** Continue from the title: waits (briefly) for the saved hero's avatar parts like Quick start. */
+  function continueRun() {
+    const saved = loadRun();
+    if (!saved) return;
+    const go = () => startRun(undefined, undefined, undefined, saved);
+    if (!avatar) return go();
+    void Promise.race([avatar.ensureLook(saved.hero.look), new Promise((r) => setTimeout(r, 2500))]).then(go);
+  }
+
   function endRun() {
     mode = 'ended';
     const prev = save.cleared;
     const best = bank(false);
     const unlocked = sim.won && sim.difficulty > prev && sim.difficulty + 1 < DIFFICULTIES.length ? DIFFICULTIES[sim.difficulty + 1].name : undefined;
+    clearRun();
     screens.showResults({ won: sim.won, time: sim.t, level: sim.level, kills: sim.kills, mesos: sim.mesos, bosses: sim.bossKills, elites: sim.elites.killed, best, hyperSp, difficulty: sim.difficulty, unlocked });
   }
 
@@ -177,7 +198,7 @@ async function boot() {
     bgm?.play('title');
     banner.hide();
     hud.show(false);
-    screens.showTitle(save);
+    screens.showTitle(save, loadRun());
   }
 
   function setPaused(p: boolean) {
@@ -198,7 +219,9 @@ async function boot() {
         void Promise.race([avatar.ensureLook(hero.look), new Promise((r) => setTimeout(r, 2500))]).then(go);
       },
       resume: () => setPaused(false),
-      quit: () => { bank(true); toTitle(); },
+      continueRun,
+      saveQuit: () => { saveRun(); toTitle(); },
+      quit: () => { bank(true); clearRun(); toTitle(); },
       retry: () => startRun(),
       menu: () => toTitle(),
       pick: (i) => sim.pick(i),
@@ -235,7 +258,7 @@ async function boot() {
   const create = new CreateScreen(uiRoot, {
     avatar,
     icons: renderer.tex.icons,
-    onBack: () => { create.hide(); screens.showTitle(save); },
+    onBack: () => { create.hide(); screens.showTitle(save, loadRun()); },
     onStart: (r) => {
       hero = r;
       save.character = { cls: r.cls, look: r.look, name: r.name };
@@ -262,11 +285,13 @@ async function boot() {
   });
   hud.muteBtn.addEventListener('click', () => setMuted(!save.settings.muted));
   hud.setMuted(save.settings.muted);
-  screens.showTitle(save);
+  screens.showTitle(save, loadRun());
   bgm?.play('title');
   input.onPause = () => { if (mode === 'playing') setPaused(true); else if (mode === 'paused') setPaused(false); };
   hud.pauseBtn.addEventListener('click', () => setPaused(true));
-  document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { setPaused(true); saveRun(); } });
+  window.addEventListener('pagehide', saveRun);
+  let saveAcc = 0;
 
   function applyInput() {
     if (botOn) { const b = botInput(sim); sim.setInput(b.x, b.y); }
@@ -276,6 +301,7 @@ async function boot() {
 
   app.ticker.add((ticker) => {
     const dt = Math.min(0.1, ticker.deltaMS / 1000);
+    if (mode === 'playing' || mode === 'paused') { saveAcc += dt; if (saveAcc >= 10) { saveAcc = 0; saveRun(); } }
     if (mode === 'playing') {
       if (autopick && sim.offer) sim.pick(botPick(sim));
       acc = Math.min(acc + dt * speed, 0.25 * Math.max(1, speed));
@@ -361,6 +387,10 @@ async function boot() {
       pet: () => (sim.pet ? { x: sim.pet.x, y: sim.pet.y, collected: sim.pet.collected } : null),
       /** the Monster Book: kills per mob id (this run included) */
       book: () => ({ ...(mode === 'title' ? save.book : sim.book) }),
+      /** writes the run save now and returns what was stored (null: nothing saved, e.g. god mode) */
+      save() { saveRun(); return loadRun(); },
+      /** resumes the saved run (false: none saved) */
+      resume() { if (!loadRun()) return false; continueRun(); return true; },
       /** the Henesys shop: ranks bought and banked mesos, and open / close the window */
       shop: (on = true) => { if (on) shopPanel.show(); else shopPanel.hide(); return { meta: { ...save.meta }, mesos: save.mesos, open: shopPanel.visible }; },
       /** Hyper Skills: the class's levels, SP and ranks; `give` adds lifetime levels (20 per SP) for testing; opens / closes the window */
