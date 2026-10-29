@@ -21,7 +21,7 @@ export function updateSkills(sim: Sim, dt: number) {
     if (fire(sim, def, o)) {
       const hm = sim.hyper[o.key];
       o.cd = skillCooldown(def, o.level, sim.haste) * (hm !== undefined ? hm.cd : 1);
-      if (def.kind !== 'orbit') sim.lastFire = sim.t;
+      if (def.kind !== 'orbit') { sim.lastFire = sim.t; sim.lastSkill = def.key; }
     }
     else o.cd = 0.1;
   }

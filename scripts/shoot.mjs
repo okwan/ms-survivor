@@ -46,8 +46,8 @@ async function main() {
     const ctx = await browser.newContext({ viewport: s.viewport, hasTouch: s.touch, isMobile: s.touch, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.log(`shoot ${s.tag}: page error ${e.stack}`));
-    const shot = async (name) => {
-      await page.waitForTimeout(1600);
+    const shot = async (name, wait = 1600) => {
+      if (wait) await page.waitForTimeout(wait);
       const b64 = (await page.screenshot({ type: 'jpeg', quality: 72 })).toString('base64');
       for (let i = 0; i < b64.length; i += 3000) console.log(`SHOT ${s.tag}-${name} ${b64.slice(i, i + 3000)}`);
       console.log(`SHOT-END ${s.tag}-${name}`);
@@ -110,6 +110,15 @@ async function main() {
         // a level-up offer blocks pausing: resolve any left open (pick is a no-op without one), then pause through the api
         await menu('pause', () => { window.game.window('equip', false); window.game.window('inventory', false); for (let i = 0; i < 5; i++) window.game.pick(0); if (window.game.pause(true) !== 'paused') throw new Error('did not pause'); });
         await menu('results', () => { window.game.pause(false); window.game.god(false); window.game.autopick(true); window.game.step(900); });
+        // a new run played in real time with the bot; captured right after a skill fired, so the hero is mid-attack (real body action, swing trail, cast effect)
+        try {
+          await page.evaluate(() => { window.game.start(11, 'warrior'); window.game.god(true); window.game.autopick(true); window.game.bot(true); });
+          await page.waitForFunction(() => { const s = window.game.sim; return s.t > 4 && s.t - s.lastFire < 0.1; }, null, { timeout: 30000, polling: 'raf' });
+          await shot('attack', 0);
+          console.log(`shoot ${s.tag}: attack ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, skill: window.game.sim.lastSkill })))}`);
+        } catch (e) {
+          console.log(`shoot ${s.tag}: attack: ${e.message}`);
+        }
       }
     } catch (e) {
       console.log(`shoot ${s.tag}: ${e.message}`);

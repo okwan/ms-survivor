@@ -161,7 +161,7 @@ try {
   for (const slot of ['body', 'head', 'face', 'hair', 'coat', 'pants', 'shoes', 'weapon'] as const) eq(av.items[slot].slice(0, want[slot].length), want[slot], `all ${slot} avatar items extracted (gear items follow them)`);
   ok(av.zmap.indexOf('face') < av.zmap.indexOf('head') && av.zmap.indexOf('head') < av.zmap.indexOf('body'), 'zmap order kept (front-most first)');
   const bodyJson = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'body-00002000.json'), 'utf8'));
-  eq(Object.keys(bodyJson.actions).sort(), ['alert', 'shoot1', 'stabO1', 'stabO2', 'stand1', 'stand2', 'swingO1', 'swingO2', 'swingO3', 'walk1', 'walk2'], 'body actions');
+  eq(Object.keys(bodyJson.actions).sort(), ['alert', 'shoot1', 'stabO1', 'stabO2', 'stand1', 'stand2', 'swingO1', 'swingO2', 'swingO3', 'swingT1', 'walk1', 'walk2'], 'body actions (and the extra base action a skill uses)');
   eq(bodyJson.actions.walk1.length, 4, 'walk1 has 4 frames');
   const l0 = bodyJson.actions.stand1[0].l.find((l: { n: string }) => l.n === 'body');
   eq([l0.z, l0.ox, l0.oy, l0.m.navel, l0.m.neck], ['body', 7, 20, [0, -9], [0, -18]], 'layer z, origin and map points');
@@ -176,6 +176,33 @@ try {
   ok(/avatar: 78\/78 items extracted/.test(run.out), 'avatar totals line');
   ok(/avatar preview Warrior stand1\/0: 11 layers/.test(run.out), 'composite preview log');
   ok(/--- warrior look stand1\/0 \d+x\d+ \(feet at/.test(run.out), 'ASCII preview of the composited character');
+
+  // ---- skill actions, body sequences, weapon info and afterimages ---------------------------------------------------
+  eq(claw.action, ['magic1', 'swingT1', 'ghostly'], 'Magic Claw action list (numbered strings, in order)');
+  eq(m.skills['2101004'].action, ['shoot1'], 'a plain string action becomes a one-item list');
+  eq(m.skills['1000000'].action, undefined, 'no action -> field absent');
+  ok(/skill 2001005 [^\n]*action=\[magic1,swingT1,ghostly\]/.test(run.out), 'skill log line carries the actions');
+  eq(av.seq, { magic1: [{ a: 'swingO3', f: 1, d: 200 }, { a: 'swingT1', f: 0, d: 150, mx: 5, my: -2, flip: 1, rot: 90 }, { a: 'nothere', f: 0, d: 100 }] }, 'body sequence: abs delay, move, flip, rotate');
+  ok(av.actions.includes('swingT1') && !av.actions.includes('magic1') && !av.actions.includes('ghostly'), 'extra base actions join the action list, sequences and missing names do not');
+  ok(bodyJson.actions.swingT1?.length === 2, 'the extra base action is extracted for the body');
+  ok(/avatar: skill action magic1 = swingO3\/1 swingT1\/0@5,-2Fr90 nothere\/0/.test(run.out), 'sequence log line');
+  ok(/avatar: skill action ghostly missing in body/.test(run.out), 'missing skill action log line');
+  const swordJson = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'weapon-01302000.json'), 'utf8'));
+  eq([swordJson.info.attack, swordJson.info.afterImage], [1, 'swordOL'], 'weapon info keeps attack and afterImage');
+  eq((av.afterimages ?? []).sort(), ['bow', 'swordOL'], 'afterimages written for the weapons whose Afterimage image exists');
+  ok(/avatar: afterimage swordOL: levels 0,1,2 \(1 aliased\)/.test(run.out), 'afterimage log line');
+  ok(/afterimage [^\n]*not found/.test(run.out), 'a weapon whose afterimage is missing is logged, not fatal');
+  const after = JSON.parse(readFileSync(join(run.dist, 'maple', 'avatar', 'afterimage-swordOL.json'), 'utf8'));
+  eq(after.levels['1'], '0', 'identical level aliases the earlier one');
+  eq(Object.keys(after.levels['0']).sort(), ['swingO1', 'swingO3'], 'afterimage actions (lt/rb ignored)');
+  eq(after.levels['0'].swingO1['2'].length, 1, 'swingO1 body frame 2 has one canvas');
+  eq(after.levels['2'].swingO1['2'].length, 2, 'level 2 has an extra canvas');
+  eq(Object.keys(after.levels).sort(), ['0', '1', '2'], 'the "charge" level is ignored');
+  const f0 = after.levels['0'].swingO1['2'][0];
+  const f1 = after.levels['2'].swingO1['2'][0];
+  eq([f0.x, f0.y, f0.w, f0.h, f0.ox, f0.oy, f0.d], [f1.x, f1.y, f1.w, f1.h, f1.ox, f1.oy, f1.d], 'identical canvases share one atlas slot');
+  const ai = decodePng(join(run.dist, 'maple', 'avatar', 'afterimage-swordOL.png'));
+  eq([ai.w, ai.h], after.size, 'afterimage atlas size matches the json');
 
   // ---- gear (scripts/fetch-maple-gear.ts) --------------------------------------------------------------------------
   const gear = av.gear!;

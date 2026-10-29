@@ -10,11 +10,12 @@
 //   Character.wz/Hair/*.img        hair:  default/{hair,hairOverHead,hairShade}, backDefault/{backHair,...}, <action>/<frame>/hair -> UOL ../../default/hair
 //   Character.wz/{Coat,Longcoat,Pants,Shoes,Weapon}/*.img  <action>/<frame>/{mail,mailArm | pants | shoes | weapon}
 //   Base.wz/zmap.img               layer names, front-most first
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLASSES } from '../src/game/data.ts';
-import { AVATAR_ACTIONS, SLOTS, emptyItems, SLOT_FOLDERS, compose, framesOf, itemFile, rasterize, stanceActions, wantedItems, zDepthTable, defaultLook, lookItems } from '../src/maple/avatar-core.ts';
-import type { AvatarManifest, FrameData, ItemJson, LayerRec, Part, Placed, Slot, Vec } from '../src/maple/avatar-core.ts';
+import { AVATAR_ACTIONS, SLOTS, afterimageFile, emptyItems, SLOT_FOLDERS, compose, framesOf, itemFile, rasterize, stanceActions, wantedItems, zDepthTable, defaultLook, lookItems } from '../src/maple/avatar-core.ts';
+import type { AfterFrameRec, AfterLevel, AfterimageJson, AvatarManifest, FrameData, ItemJson, LayerRec, Part, Placed, SeqFrame, Slot, Vec } from '../src/maple/avatar-core.ts';
 import { asciiPreview, encodePng } from './png.mjs';
 import { canvasRgba } from './wz.mjs';
 import { extractGear, previewGear } from './fetch-maple-gear.ts';
@@ -102,7 +103,7 @@ export interface ExtractedItem {
 }
 
 /** Reads one part image into an ItemJson + atlas. Exported for the tests. */
-export function extractItem(root: Any, key: Any, slot: Slot, id: string, problems: string[]): ExtractedItem | null {
+export function extractItem(root: Any, key: Any, slot: Slot, id: string, problems: string[], actionList: string[] = AVATAR_ACTIONS): ExtractedItem | null {
   const decoded = new Map<Any, Decoded | null>();
   const decode = (c: Any): Decoded | null => {
     if (decoded.has(c)) return decoded.get(c)!;
@@ -117,7 +118,7 @@ export function extractItem(root: Any, key: Any, slot: Slot, id: string, problem
     return d;
   };
 
-  const wantActions = slot === 'face' || slot === 'hair' ? ['default', ...AVATAR_ACTIONS] : AVATAR_ACTIONS;
+  const wantActions = slot === 'face' || slot === 'hair' ? ['default', ...actionList] : actionList;
   const raw = new Map<string, { delay: number; face?: number; layers: RawLayer[] }[]>();
   const counts: string[] = [];
   for (const action of wantActions) {
@@ -186,7 +187,7 @@ export function extractItem(root: Any, key: Any, slot: Slot, id: string, problem
     }
   }
   const info: Record<string, string | number> = {};
-  for (const k of ['islot', 'vslot', 'attackSpeed', 'cash']) {
+  for (const k of ['islot', 'vslot', 'attackSpeed', 'cash', 'attack', 'afterImage']) {
     const v = root.get(`info/${k}`)?.value;
     if (typeof v === 'string' || typeof v === 'number') info[k] = v;
   }
@@ -195,13 +196,157 @@ export function extractItem(root: Any, key: Any, slot: Slot, id: string, problem
   return { json, atlas: { w: atlas.w, h: atlas.h, rgba: atlas.rgba }, bytes: png.length + JSON.stringify(json).length, summary: `${counts.join(' ')} -> ${atlas.w}x${atlas.h}` };
 }
 
+/** Does an action node hold frames with canvases (a base action)? */
+function hasCanvases(fns: Any[]): boolean {
+  return fns.some((fn) => fn.keys().some((k: string) => fn.child(k)?.resolve()?.type === 'canvas'));
+}
+
+/**
+ * Reads the skill-specific actions out of the body image (magic1, savage...): a base action when its frames hold canvases, else a
+ * sequence of references {action, frame, delay, move, flip, rotate} to base action frames. Returns the sequences and the extra
+ * base actions they need.
+ */
+export function bodySequences(body: Any, skillActions: string[], lg: Logger): { seq: Record<string, SeqFrame[]>; bases: string[] } {
+  const seq: Record<string, SeqFrame[]> = {};
+  const bases: string[] = [];
+  const base = (a: string) => {
+    if (!AVATAR_ACTIONS.includes(a) && !bases.includes(a)) bases.push(a);
+  };
+  for (const name of skillActions) {
+    if (name in seq || AVATAR_ACTIONS.includes(name) || bases.includes(name)) continue;
+    const fns = frameNodes(body.get(name));
+    if (!fns.length) {
+      lg.log(`avatar: skill action ${name} missing in body`);
+      continue;
+    }
+    if (hasCanvases(fns)) {
+      base(name);
+      lg.log(`avatar: skill action ${name} = base action, ${fns.length} frames`);
+      continue;
+    }
+    const steps: SeqFrame[] = [];
+    for (const fn of fns) {
+      const a = fn.get('action')?.value;
+      if (typeof a !== 'string' || !a) continue;
+      const f = fn.get('frame')?.value;
+      const delay = fn.num('delay', 100);
+      const mv = vecOf(fn.get('move'));
+      const rot = fn.num('rotate', 0);
+      const st: SeqFrame = { a, f: typeof f === 'number' ? f : 0, d: Math.abs(delay) || 100 };
+      if (mv && (mv[0] || mv[1])) { st.mx = mv[0]; st.my = mv[1]; }
+      if (fn.num('flip', 0)) st.flip = 1;
+      if (rot) st.rot = Math.round(rot);
+      steps.push(st);
+    }
+    if (!steps.length) {
+      lg.log(`avatar: skill action ${name} missing in body (frames have no action reference; children: ${fns[0].keys().join(',')})`);
+      continue;
+    }
+    seq[name] = steps;
+    for (const st of steps) base(st.a);
+    lg.log(`avatar: skill action ${name} = ${steps.map((x) => `${x.a}/${x.f}${x.mx || x.my ? `@${x.mx ?? 0},${x.my ?? 0}` : ''}${x.flip ? 'F' : ''}${x.rot ? `r${x.rot}` : ''}`).join(' ')}`);
+  }
+  return { seq, bases };
+}
+
+const AFTER_LEVELS = Array.from({ length: 11 }, (_, i) => String(i));
+
+/**
+ * Character.wz/Afterimage/<name>.img/<level>/<action>/<bodyFrame>/<n> canvases -> afterimage-<name>.{png,json}. Identical canvases
+ * share one atlas slot; a level equal to an earlier one is stored as that level's name. Never throws.
+ */
+export function extractAfterimage(root: Any, key: Any, name: string, dir: string, lg: Logger): { bytes: number; summary: string } | null {
+  const decoded = new Map<Any, Decoded | null>();
+  const canv: Decoded[] = [];
+  const byHash = new Map<string, number>();
+  const byNode = new Map<Any, number>();
+  const slot = (c: Any): number | null => {
+    if (byNode.has(c)) return byNode.get(c)!;
+    let d: Decoded | null = null;
+    try {
+      const [w, h, rgba] = canvasRgba(c, key);
+      if (w > 0 && h > 0) d = { w, h, rgba };
+    } catch (e) {
+      lg.warn(`afterimage ${name}: ${(e as Error).message}`);
+    }
+    decoded.set(c, d);
+    if (!d) return null;
+    const hk = `${d.w}x${d.h}:${createHash('sha1').update(d.rgba).digest('hex')}`;
+    let i = byHash.get(hk);
+    if (i === undefined) {
+      i = canv.length;
+      canv.push(d);
+      byHash.set(hk, i);
+    }
+    byNode.set(c, i);
+    return i;
+  };
+  // pass 1: per level / action / body frame, the canvases as (atlas slot, origin, delay)
+  type Ref = { s: number; ox: number; oy: number; d: number };
+  const levels: Record<string, Record<string, Record<string, Ref[]>>> = {};
+  for (const lvl of AFTER_LEVELS) {
+    const ln = root.get(lvl);
+    if (!ln?.children) continue;
+    const L: Record<string, Record<string, Ref[]>> = {};
+    for (const action of ln.keys()) {
+      const an = ln.child(action)?.resolve();
+      if (!an?.children) continue;
+      const A: Record<string, Ref[]> = {};
+      for (const bf of an.keys().filter(isNum).sort(byNum)) {
+        const fnode = an.child(bf)?.resolve();
+        const list: Ref[] = [];
+        for (const k of (fnode?.keys() ?? []).filter(isNum).sort(byNum)) {
+          const c = fnode.child(k)?.resolve();
+          if (c?.type !== 'canvas') continue;
+          const s = slot(c);
+          if (s === null) continue;
+          const o = c.get('origin')?.value;
+          list.push({ s, ox: o?.x ?? 0, oy: o?.y ?? 0, d: Math.round(c.num('delay', 100)) });
+        }
+        if (list.length) A[bf] = list;
+      }
+      if (Object.keys(A).length) L[action] = A;
+    }
+    if (Object.keys(L).length) levels[lvl] = L;
+  }
+  if (!canv.length) return null;
+  const atlas = shelfPack(canv);
+  const out: Record<string, AfterLevel | string> = {};
+  const seen = new Map<string, string>();
+  for (const [lvl, L] of Object.entries(levels)) {
+    const lv: AfterLevel = {};
+    for (const [a, A] of Object.entries(L)) {
+      lv[a] = {};
+      for (const [bf, list] of Object.entries(A))
+        lv[a][bf] = list.map((r): AfterFrameRec => ({ x: atlas.pos[r.s].x, y: atlas.pos[r.s].y, w: canv[r.s].w, h: canv[r.s].h, ox: r.ox, oy: r.oy, d: r.d }));
+    }
+    const sig = JSON.stringify(lv);
+    const same = seen.get(sig);
+    if (same) out[lvl] = same;
+    else {
+      seen.set(sig, lvl);
+      out[lvl] = lv;
+    }
+  }
+  const json: AfterimageJson = { name, size: [atlas.w, atlas.h], levels: out };
+  const png = encodePng(atlas.w, atlas.h, atlas.rgba);
+  const js = JSON.stringify(json);
+  writeFileSync(join(dir, afterimageFile(name, 'png')), png);
+  writeFileSync(join(dir, afterimageFile(name, 'json')), js);
+  const actions = new Set(Object.values(levels).flatMap((l) => Object.keys(l)));
+  return {
+    bytes: png.length + js.length,
+    summary: `levels ${Object.keys(levels).join(',')} (${Object.values(out).filter((v) => typeof v === 'string').length} aliased), actions ${[...actions].join(',')}, ${canv.length} canvases, atlas ${atlas.w}x${atlas.h}, ${png.length + js.length} bytes`,
+  };
+}
+
 const describeLayer = (l: LayerRec) => `${l.n}[z=${l.z} ${l.w}x${l.h} origin=${l.ox},${l.oy} map=${Object.entries(l.m).map(([k, v]) => `${k}:${v[0]},${v[1]}`).join(' ') || '-'}]`;
 
 /**
  * Extracts the avatar items. Returns the manifest block (or null when no body and head could be read) and the bytes written.
  * `outDir` is the maple/ folder (avatar files go to <outDir>/avatar/).
  */
-export function extractAvatar(character: WzLike | null, base: WzLike | null, outDir: string, lg: Logger, strings: WzLike | null = null): { manifest: AvatarManifest | null; bytes: number; previewPng: Buffer | null } {
+export function extractAvatar(character: WzLike | null, base: WzLike | null, outDir: string, lg: Logger, strings: WzLike | null = null, opts: { skillActions?: string[] } = {}): { manifest: AvatarManifest | null; bytes: number; previewPng: Buffer | null } {
   const { log, warn } = lg;
   let bytes = 0;
   try {
@@ -226,6 +371,21 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
     }
     const z = zDepthTable(zmap);
 
+    // ---- skill-specific body actions ----
+    let actionList = AVATAR_ACTIONS;
+    let seq: Record<string, SeqFrame[]> = {};
+    const skillActions = [...new Set(opts.skillActions ?? [])];
+    if (skillActions.length) {
+      const bodyImg = character.image('00002000.img');
+      if (bodyImg) {
+        const r = bodySequences(bodyImg.root, skillActions, { log, warn });
+        seq = r.seq;
+        actionList = [...AVATAR_ACTIONS, ...r.bases];
+        log(`avatar: ${skillActions.length} skill actions: ${Object.keys(seq).length} sequences, ${r.bases.length} extra base actions (${r.bases.join(',')}); ${actionList.length} actions per item`);
+      } else warn('avatar: body 00002000.img not found; skill actions are not extracted');
+    }
+    const extract = (root: Any, key: Any, slot: Slot, id: string, problems: string[]) => extractItem(root, key, slot, id, problems, actionList);
+
     // ---- items ----
     const want = wantedItems();
     const have = emptyItems();
@@ -249,7 +409,7 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
         }
         try {
           const problems: string[] = [];
-          const it = extractItem(found.root, found.key, slot, id, problems);
+          const it = extract(found.root, found.key, slot, id, problems);
           for (const p of problems.slice(0, 2)) warn(`avatar ${where}: ${p}`);
           if (!it) {
             missing.push(`${slot}/${id} (no frames; children: ${found.root.keys().slice(0, 12).join(',')})`);
@@ -274,21 +434,53 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
     }
     const total = SLOTS.reduce((a, s) => a + have[s].length, 0);
     const wanted = SLOTS.reduce((a, s) => a + want[s].length, 0);
-    log(`avatar: ${total}/${wanted} items extracted (${SLOTS.map((s) => `${s} ${have[s].length}/${want[s].length}`).join(', ')}), ${(bytes / 1e6).toFixed(2)} MB`);
+    log(`avatar: ${total}/${wanted} items extracted (${SLOTS.map((s) => `${s} ${have[s].length}/${want[s].length}`).join(', ')}), ${actionList.length} actions, ${(bytes / 1e6).toFixed(2)} MB`);
     if (missing.length) log(`avatar: missing ${missing.length}: ${missing.slice(0, 60).join('; ')}${missing.length > 60 ? ' ...' : ''}`);
     if (!have.body.length || !have.head.length) {
       warn('avatar: no body or no head could be extracted; the hero keeps the placeholder look');
       return { manifest: null, bytes, previewPng: null };
     }
-    const manifest: AvatarManifest = { version: 1, zmap, items: have, actions: AVATAR_ACTIONS, dir: 'avatar/' };
+    const manifest: AvatarManifest = { version: 1, zmap, items: have, actions: actionList, ...(Object.keys(seq).length ? { seq } : {}), dir: 'avatar/' };
 
     // ---- droppable equipment (scripts/fetch-maple-gear.ts): its frame files join the item lists, its block is manifest.gear ----
-    const gear = extractGear({ extractItem, frameNodes, shelfPack }, character, strings, dir, { log, warn }, loaded);
+    const gear = extractGear({ extractItem: extract, frameNodes, shelfPack }, character, strings, dir, { log, warn }, loaded);
     bytes += gear.bytes;
     if (gear.manifest) {
       manifest.gear = gear.manifest;
       for (const [slot, ids] of Object.entries(gear.ids)) have[slot as Slot].push(...ids);
       for (const [k, v] of gear.items) loaded.set(k, v);
+    }
+
+    // ---- weapon swing trails (Character.wz/Afterimage) of every extracted weapon, class and gear ----
+    try {
+      const names = new Set<string>();
+      for (const [k, it] of loaded) if (k.startsWith('weapon/') && typeof it.json.info?.afterImage === 'string' && it.json.info.afterImage) names.add(it.json.info.afterImage);
+      const written: string[] = [];
+      let abytes = 0;
+      for (const name of names) {
+        try {
+          const img = character.image(`Afterimage/${name}.img`);
+          if (!img) {
+            warn(`avatar: afterimage ${name}: Afterimage/${name}.img not found`);
+            continue;
+          }
+          const r = extractAfterimage(img.root, img.key, name, dir, { log, warn });
+          if (!r) {
+            warn(`avatar: afterimage ${name}: no canvases (children: ${img.root.keys().slice(0, 14).join(',')})`);
+            continue;
+          }
+          written.push(name);
+          abytes += r.bytes;
+          log(`avatar: afterimage ${name}: ${r.summary}`);
+        } catch (e) {
+          warn(`avatar: afterimage ${name}: ${(e as Error).stack}`);
+        }
+      }
+      bytes += abytes;
+      if (written.length) manifest.afterimages = written;
+      log(`avatar: ${written.length}/${names.size} afterimages (${[...names].join(',') || '-'}), ${(abytes / 1e6).toFixed(2)} MB`);
+    } catch (e) {
+      warn(`avatar: afterimages: ${(e as Error).stack}`);
     }
 
     // ---- composite previews (same code as the browser) ----
@@ -304,7 +496,7 @@ export function extractAvatar(character: WzLike | null, base: WzLike | null, out
           else if (slot === 'weapon' || slot === 'coat') log(`avatar preview ${c.name}: ${slot} ${ids[slot]} not extracted`);
         }
         const wpn = parts.find((p) => p.slot === 'weapon')?.item ?? null;
-        const st = stanceActions(c.stance, wpn);
+        const st = stanceActions(c.stance, wpn, seq);
         for (const action of [st.stand, st.walk, st.attack[0]]) {
           const comp = compose(parts, action, 0, z);
           if (!comp) {

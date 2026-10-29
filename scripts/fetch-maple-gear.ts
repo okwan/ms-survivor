@@ -24,6 +24,7 @@ type Any = any;
 
 /** Pieces of fetch-maple-character.ts used here (passed in so that the two files do not import each other). */
 export interface GearTools {
+  /** extracts a part with the full action list (base skill actions included); the caller binds the list */
   extractItem(root: Any, key: Any, slot: Slot, id: string, problems: string[]): ExtractedItem | null;
   frameNodes(node: Any): Any[];
   shelfPack(items: { w: number; h: number; rgba: Buffer }[]): { w: number; h: number; pos: { x: number; y: number }[]; rgba: Buffer };
