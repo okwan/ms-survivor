@@ -24,7 +24,7 @@ export interface FieldItemDef {
 }
 export const FIELD_ITEMS: FieldItemDef[] = [
   { key: 'apple', name: 'Apple', weight: 35, desc: 'Heals 30% of your max HP.', color: '#e8383c' },
-  { key: 'coupon', name: '2x EXP Coupon', weight: 20, desc: 'Pulls every gem to you; gems are worth 2x for 30 s.', color: '#5ab4ff' },
+  { key: 'coupon', name: '2x EXP Coupon', weight: 20, desc: 'Pulls every gem to you; new gems are worth 2x for 30 s.', color: '#5ab4ff' },
   { key: 'elixir', name: 'Warrior Elixir', weight: 20, desc: '+40% damage for 20 s.', color: '#ff9a3a' },
   { key: 'clock', name: 'Ludibrium Clock', weight: 15, desc: 'Freezes every mob for 5 s; bosses are slowed 50%.', color: '#b58cff' },
   { key: 'keg', name: 'Powder Keg', weight: 10, desc: 'Blows up every mob within 20 yd; bosses and Elites lose 10% max HP.', color: '#8a5a2a' },
@@ -130,7 +130,7 @@ export function useFieldItem(sim: Sim, item: number, x: number, y: number) {
     case FIELD_COUPON: {
       f.couponT = COUPON_SECONDS;
       const ps = sim.pickups;
-      for (let i = 0; i < ps.length; i++) if (ps[i].kind === GEM) ps[i].pulled = true;
+      for (let i = 0; i < ps.length; i++) if (ps[i].kind === GEM) { ps[i].pulled = true; ps[i].vac = true; }
       break;
     }
     case FIELD_ELIXIR:

@@ -4,7 +4,7 @@
 // detours, determinism for a fixed seed, and that no Elite appears while two bosses are alive.
 import assert from 'node:assert/strict';
 import { botInput } from '../src/game/bot.ts';
-import { BOSS_EVERY, CLASSES, LADDER, SKILL_BY_KEY, SKILL_MAX_LEVEL, SPAWN_RING_MAX, SPAWN_RING_MIN, aliveTarget, jobOfId, poolLo, progress, unlockedJobs } from '../src/game/data.ts';
+import { BOSS_EVERY, CLASSES, XP_BURST_LEVELS, LADDER, SKILL_BY_KEY, SKILL_MAX_LEVEL, SPAWN_RING_MAX, SPAWN_RING_MIN, aliveTarget, jobOfId, poolLo, progress, unlockedJobs } from '../src/game/data.ts';
 import {
   AFFIXES, AFFIX_ARMORED, AFFIX_BLAZING, AFFIX_SPLITTING, AFFIX_SWIFT, AFFIX_VAMPIRIC, ARMOR_REDUCE, ELITE_BOSS_LIMIT, ELITE_DMG, ELITE_FIRST, ELITE_GAP_MAX, ELITE_GAP_MIN,
   ELITE_SCALE, FIRE_DELAY, FIRE_EVERY, SPLIT_COUNT, SWIFT_SPEED, VAMP_HEAL, eliteHpMult, eliteTitle, maybePromote,
@@ -588,6 +588,15 @@ function stage(seed = 31) {
   eq(s.pickups.filter((p) => p.kind === GEM).length, 0, 'all gems reached the hero');
   const gained = s.xp + (s.level - 1) * 1e6 - xp0;
   ok(gained > 0, 'xp gained');
+  // vacuumed gems are 1x; a gem dropped during the buff is 2x
+  const c = stage(35);
+  c.dropPickup(GEM, 30, -20, 1);
+  useFieldItem(c, FIELD_COUPON, 0, 0);
+  c.dropPickup(GEM, 0.2, 0, 1);
+  ok(c.pickups.filter((p) => p.kind === GEM).map((p) => p.vac).join() === 'true,false', 'only the vacuumed gem is marked');
+  c.pickups.find((p) => p.vac)!.x = 0.2; c.pickups.find((p) => p.vac)!.y = 0; // same spot: both collected on one tick
+  c.tick();
+  near(c.xp, 1 + 2, 1e-9, 'vacuumed gem 1x, later gem 2x');
   // exact: one gem collected with the buff
   const t = stage(32);
   t.dropPickup(GEM, 0.2, 0, 2);
@@ -608,6 +617,24 @@ function stage(seed = 31) {
   const w0 = v.xp;
   v.tick();
   near(v.xp - w0, 2, 1e-9, 'gems are worth 1x again');
+}
+{
+  // XP guards: one grant is capped at 2 levels; at most 5 level-ups per rolling 10 s
+  const g = stage(36);
+  g.dropPickup(GEM, 0.2, 0, 1e6);
+  g.tick();
+  eq(g.level, 3, 'one huge gem gives at most 2 levels');
+  const h = stage(37);
+  const burst = () => { h.pickups.length = 0; h.gemCount = 0; for (let i = 0; i < 40; i++) h.dropPickup(GEM, 0.2, 0, 1e6); };
+  burst();
+  h.tick(); // 40 gems collected inside one second
+  ok(h.level <= 1 + XP_BURST_LEVELS, `at most 5 levels in the window (level ${h.level})`);
+  eq(h.level, 1 + XP_BURST_LEVELS, 'and the cap is reached');
+  eq(h.xp, h.xpNeed, 'the bar is held full');
+  for (let i = 0; i < 8 * 60; i++) { h.pendingLevels = 0; h.offer = null; h.tick(); }
+  eq(h.level, 1 + XP_BURST_LEVELS, 'still capped inside the window');
+  for (let i = 0; i < 3 * 60; i++) { h.pendingLevels = 0; h.offer = null; h.tick(); }
+  ok(h.level > 1 + XP_BURST_LEVELS, 'levelling resumes once the window frees');
 }
 {
   // Elixir: +40% damage for 20 s

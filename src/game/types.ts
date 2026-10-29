@@ -112,6 +112,8 @@ export interface Pickup {
   value: number;
   life: number;
   pulled: boolean;
+  /** a gem the 2x EXP Coupon vacuumed: it is not doubled */
+  vac: boolean;
   /** the item of a GEAR pickup */
   item: GearItem | null;
   /** the scroll of a SCROLL pickup */

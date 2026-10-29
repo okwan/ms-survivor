@@ -207,6 +207,12 @@ export function xpToNext(level: number): number {
   return 455 + 16 * (level - 40);
 }
 
+/** One EXP grant (a gem) is capped at the XP for reaching at most this many levels; the excess is discarded. */
+export const XP_GRANT_LEVELS = 2;
+/** At most XP_BURST_LEVELS level-ups in any rolling XP_BURST_SECONDS of run time; a capped hero holds a full bar until a slot frees. */
+export const XP_BURST_LEVELS = 5;
+export const XP_BURST_SECONDS = 10;
+
 export function progress(elapsed: number): number {
   const p = elapsed / RUN_LENGTH;
   return p < 0 ? 0 : p > 1 ? 1 : p;
