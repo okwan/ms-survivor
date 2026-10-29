@@ -69,6 +69,8 @@ export interface LoginLike {
   setContinue(label: string | null): void;
   /** places the difficulty picker */
   mountDifficulty(el: HTMLElement): void;
+  /** Loads the art of the title step before the first show (fraction 0..1 reported); later steps load in the background. */
+  preload?(onProgress?: (frac: number) => void): Promise<void>;
 }
 
 export class LoginScreen implements LoginLike {

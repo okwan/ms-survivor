@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="booting">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -12,8 +12,39 @@
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%icon.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
     <title>MapleStory Survivor</title>
+    <style>
+      html.booting, html.booting body { background: #0b1224; }
+      #boot { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); background: radial-gradient(ellipse at center, #24345a 0%, #0b1224 100%); color: #f8f2e2; font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif; transition: opacity 450ms ease; user-select: none; -webkit-user-select: none; }
+      #boot.out { opacity: 0; pointer-events: none; }
+      #boot .bt-col { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 90vw; }
+      #boot .bt-leaf { width: clamp(56px, 14vh, 96px); height: auto; transform-origin: 50% 90%; animation: bt-sway 3.2s ease-in-out infinite; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .45)); }
+      #boot .bt-name { margin: 0; font-size: clamp(22px, 5.5vh, 34px); font-weight: bold; letter-spacing: .03em; text-align: center; text-shadow: 0 2px 6px rgba(0, 0, 0, .55); }
+      #boot .bt-rule { width: 64px; height: 3px; margin-top: -6px; border-radius: 2px; background: #f5b942; }
+      #boot .bt-track { position: relative; box-sizing: border-box; width: min(320px, 70vw); height: 10px; margin-top: 6px; overflow: hidden; border-radius: 6px; background: #16213b; border: 1px solid rgba(255, 255, 255, .25); }
+      #boot .bt-fill { position: relative; width: 0; height: 100%; overflow: hidden; border-radius: 6px; background: linear-gradient(90deg, #f5b942, #ff9a1f); }
+      #boot .bt-fill::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); animation: bt-sheen 2.4s ease-in-out infinite; }
+      #boot .bt-status { display: flex; justify-content: space-between; gap: 12px; width: min(320px, 70vw); font-size: 12.5px; color: rgba(248, 242, 226, .75); }
+      #boot .bt-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #boot .bt-pct { flex: none; font-variant-numeric: tabular-nums; }
+      @keyframes bt-sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+      @keyframes bt-sheen { from { left: -40%; } to { left: 100%; } }
+      @media (prefers-reduced-motion: reduce) { #boot .bt-leaf, #boot .bt-fill::after { animation: none; } #boot { transition-duration: 150ms; } }
+    </style>
   </head>
   <body>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="bt-col">
+        <svg class="bt-leaf" viewBox="0 0 100 100" aria-hidden="true">
+          <defs><linearGradient id="bt-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7a1a" /><stop offset="1" stop-color="#f5b942" /></linearGradient></defs>
+          <path d="M50 4 L58 22 L72 14 L70 34 L90 30 L80 46 L96 54 L76 62 L82 78 L62 74 L56 86 L52 76 L52 96 L48 96 L48 76 L44 86 L38 74 L18 78 L24 62 L4 54 L20 46 L10 30 L30 34 L28 14 L42 22 Z" fill="url(#bt-g)" stroke="#b9560b" stroke-width="2" stroke-linejoin="round" />
+          <path d="M50 90 V30 M50 62 L28 46 M50 62 L72 46 M50 48 L36 30 M50 48 L64 30" fill="none" stroke="#b9560b" stroke-opacity=".55" stroke-width="2" stroke-linecap="round" />
+        </svg>
+        <h1 class="bt-name">MapleStory Survivor</h1>
+        <div class="bt-rule"></div>
+        <div class="bt-track"><div class="bt-fill"></div></div>
+        <div class="bt-status"><span class="bt-txt">Loading</span><span class="bt-pct">0%</span></div>
+      </div>
+    </div>
     <div id="app"></div>
     <div id="ui"></div>
     <script type="module" src="/src/main.ts"></script>

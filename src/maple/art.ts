@@ -135,13 +135,19 @@ export function makeAnim(source: ImageSource, frames: FrameRec[], action: string
 }
 
 /** Loads every atlas and icon the manifest lists. Never throws; missing pieces are left null/absent. */
-export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<MapleArt> {
+export async function buildArt(m: MapleManifest, base = 'maple/', onProgress?: (done: number, total: number) => void): Promise<MapleArt> {
   const art = new MapleArt();
   const sources = new Map<string, Promise<ImageSource | null>>();
+  let started = 0, finished = 0;
   const atlas = (path: string) => {
     let p = sources.get(path);
     if (!p) {
-      p = loadImage(base + path).then((img) => (img ? new ImageSource({ resource: img, scaleMode: 'nearest' }) : null));
+      started++;
+      p = loadImage(base + path).then((img) => {
+        finished++;
+        onProgress?.(finished, started);
+        return img ? new ImageSource({ resource: img, scaleMode: 'nearest' }) : null;
+      });
       sources.set(path, p);
     }
     return p;

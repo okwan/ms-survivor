@@ -5,6 +5,14 @@
 .ml-canvas { position: absolute; left: 0; top: 0; width: 800px; height: 600px; image-rendering: pixelated; }
 .ml-ui { position: absolute; left: 0; top: 0; width: 800px; height: 600px; font: 12px Arial, "Segoe UI", sans-serif; }
 .ml-panel { position: absolute; inset: 0; }
+/* the backdrop: a tiny copy of the scene, blurred, so the letterbox bars are not flat black */
+.ml-backdrop { position: absolute; left: -6%; top: -6%; width: 112%; height: 112%; filter: blur(22px) brightness(.5) saturate(1.15); image-rendering: auto; pointer-events: none; }
+/* fades: the whole screen on first show, panels / dock / difficulty picker whenever they become visible (display none -> block restarts the animation) */
+.screen.mlogin.ml-in { animation: ml-fade 400ms ease-out; }
+.ml-panel, .ml-dock, .ml-diff { animation: ml-rise 180ms ease-out; }
+@keyframes ml-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ml-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .screen.mlogin.ml-in, .ml-panel, .ml-dock, .ml-diff { animation: none; } }
 
 /* sprite pieces: static images and the four-state buttons (CSS vars --n / --h / --p / --d hold the state images) */
 .ml-img { position: absolute; background-repeat: no-repeat; background-size: 100% 100%; image-rendering: pixelated; pointer-events: none; }
@@ -18,14 +26,14 @@
 
 /* title signboard fields and texts */
 .ml-field { position: absolute; box-sizing: border-box; margin: 0; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: #222; font: 12px Arial, sans-serif; outline: none; cursor: default; }
-.ml-field::placeholder { color: #8a8a8a; opacity: 1; }
+.ml-field::placeholder { color: rgba(255,240,215,.8); opacity: 1; }
 .ml-field:not([readonly]) { cursor: text; }
 .ml-txt { position: absolute; font: bold 12px Arial, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; white-space: nowrap; pointer-events: none; }
 .ml-hint { position: absolute; margin: 0; left: 0; right: 0; text-align: center; font: 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
 
 /* our own extras (not in the real client): a vertical stack of modern buttons in the window's top-right corner, OUTSIDE the scaled stage
    (a child of .screen.mlogin). When the gutter beside the stage is narrow (.ml-compact, set by login-map.ts) it turns into 44px icon buttons. */
-.ml-dock { position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 150px; }
+.ml-dock { position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 136px; }
 .ml-dock .btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-width: 0; height: 38px; min-height: 38px; padding: 0 8px; font-size: 13px; line-height: 1.1; white-space: nowrap; }
 .ml-dock .ml-ico { display: none; width: 22px; height: 22px; flex: none; }
 .ml-dock .ml-ico svg { display: block; width: 100%; height: 100%; }

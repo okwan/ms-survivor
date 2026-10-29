@@ -36,6 +36,7 @@ import { clearRun, loadRun, loadSave, writeRun, writeSave } from './ui/save.ts';
 import type { StoredRun } from './ui/save.ts';
 import { captureRun, restoreRun } from './game/runsave.ts';
 import { Screens } from './ui/screens.ts';
+import { Loading, veil } from './ui/loading.ts';
 
 type Mode = 'title' | 'playing' | 'paused' | 'ended';
 
@@ -44,16 +45,18 @@ let avatarManifest: AvatarManifest | null = null;
 /** move-speed factor per mob id from Mob.wz (info/speed), empty without a manifest: the sim then keeps its hand-tuned speeds */
 let mobSpeeds: Record<number, number> = {};
 let mapleManifest: MapleManifest | null = null;
-async function loadArt(): Promise<MapleArt | null> {
+async function loadArt(loading: Loading): Promise<MapleArt | null> {
   try {
     const run = async () => {
+      loading.stage('Fetching game data', 0.06, 0.14);
       const m = await loadManifest();
       if (!m) return null;
       avatarManifest = m.avatar ?? null;
       mobSpeeds = {};
       for (const [id, e] of Object.entries(m.mobs)) if (typeof e.speed === 'number' && Number.isFinite(e.speed)) mobSpeeds[Number(id)] = e.speed;
       mapleManifest = m;
-      const art = await buildArt(m);
+      loading.stage('Loading monsters, skills and maps', 0.14, 0.72);
+      const art = await buildArt(m, 'maple/', (done, total) => loading.progress(done / Math.max(1, total)));
       console.info(`maple art: ${art.counts.mobs} mobs, ${art.counts.skills} skill animations, ${art.counts.icons} icons, ${art.counts.objects} map objects, ${art.counts.digitSets} damage sets, ${art.counts.uiPieces} ui pieces, bgm ${art.bgm.run ? 'run' : '-'}/${art.bgm.title ? 'title' : '-'} (source ${m.source?.mirror ?? '?'})`);
       return art;
     };
@@ -65,6 +68,8 @@ async function loadArt(): Promise<MapleArt | null> {
 }
 
 async function boot() {
+  const loading = new Loading();
+  loading.stage('Starting', 0, 0.06);
   if (isTouch()) document.documentElement.classList.add('touch');
   const uiRoot = document.getElementById('ui')!;
   const host = document.getElementById('app')!;
@@ -79,10 +84,12 @@ async function boot() {
   });
   host.appendChild(app.canvas);
 
-  const art = await loadArt();
+  const art = await loadArt(loading);
+  if (!art) loading.note('Using simple graphics');
   const gearPool = GearPool.fromManifest(avatarManifest?.gear);
   const scrollPool = ScrollPool.fromManifest((mapleManifest as MapleManifest | null)?.items?.scrolls);
   const gearIcons = new GearIcons(avatarManifest?.gear ?? null);
+  loading.stage('Loading equipment', 0.72, 0.8);
   await gearIcons.load();
   console.info(`maple gear: ${gearPool.items.size} ${gearPool.real ? 'extracted' : 'placeholder'} items`);
   const avatar = avatarManifest ? new Avatar(avatarManifest) : null;
@@ -176,12 +183,13 @@ async function boot() {
   }
 
   /** Continue from the title: waits (briefly) for the saved hero's avatar parts like Quick start. */
-  function continueRun() {
+  function continueRun(fade = false) {
     const saved = loadRun();
     if (!saved) return;
     const go = () => startRun(undefined, undefined, undefined, saved);
-    if (!avatar) return go();
-    void Promise.race([avatar.ensureLook(saved.hero.look), new Promise((r) => setTimeout(r, 2500))]).then(go);
+    const goVeiled = () => (fade ? veil(go) : go());
+    if (!avatar) return goVeiled();
+    void Promise.race([avatar.ensureLook(saved.hero.look), new Promise((r) => setTimeout(r, 2500))]).then(goVeiled);
   }
 
   function endRun() {
@@ -224,16 +232,16 @@ async function boot() {
         const ch = save.character;
         if (!ch) return;
         hero = { cls: ch.cls as CreateResult['cls'], look: ch.look, name: ch.name };
-        const go = () => startRun();
+        const go = () => veil(() => startRun());
         if (!avatar) return go();
         void Promise.race([avatar.ensureLook(hero.look), new Promise((r) => setTimeout(r, 2500))]).then(go);
       },
       resume: () => setPaused(false),
-      continueRun,
-      saveQuit: () => { saveRun(); toTitle(); },
-      quit: () => { bank(true); clearRun(); toTitle(); },
+      continueRun: () => continueRun(true),
+      saveQuit: () => { saveRun(); veil(toTitle); },
+      quit: () => { bank(true); clearRun(); veil(toTitle); },
       retry: () => startRun(),
-      menu: () => toTitle(),
+      menu: () => veil(toTitle),
       pick: (i) => sim.pick(i),
       reroll: () => sim.reroll(),
       banish: (i) => sim.banish(i),
@@ -251,6 +259,8 @@ async function boot() {
     avatar,
     (mapleManifest as MapleManifest | null)?.login ?? null,
   );
+  loading.stage('Setting up the login screen', 0.8, 1);
+  await screens.login?.preload?.((f) => loading.progress(f));
   const bookPanel = new BookPanel(uiRoot, (mapleManifest as MapleManifest | null)?.mobs ?? {});
   const shopPanel = new ShopPanel(uiRoot, renderer.tex.icons, (mapleManifest as MapleManifest | null)?.npc ?? null, {
     save: () => save,
@@ -271,8 +281,7 @@ async function boot() {
     hero = r;
     save.character = { cls: r.cls, look: r.look, name: r.name };
     writeSave(save);
-    create.hide();
-    startRun();
+    veil(() => { create.hide(); startRun(); });
   }
   const create = new CreateScreen(uiRoot, {
     avatar,
@@ -314,6 +323,7 @@ async function boot() {
   hud.setMuted(save.settings.muted);
   screens.showTitle(save, loadRun());
   bgm?.play('title');
+  void loading.finish();
   input.onPause = () => { if (mode === 'playing') setPaused(true); else if (mode === 'paused') setPaused(false); };
   hud.pauseBtn.addEventListener('click', () => setPaused(true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) { setPaused(true); saveRun(); } });
@@ -442,6 +452,8 @@ async function boot() {
 
 boot().catch((e) => {
   console.error(e);
+  document.getElementById('boot')?.remove();
+  document.documentElement.classList.remove('booting');
   const d = document.createElement('pre');
   d.style.cssText = 'color:#fff;padding:16px;position:fixed;inset:0;background:#300';
   d.textContent = 'Failed to start: ' + String(e);
