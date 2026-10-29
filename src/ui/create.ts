@@ -125,7 +125,11 @@ export class CreateScreen {
     this.nameEl.value = this.name;
     this.nameEl.autocomplete = 'off';
     this.nameEl.spellcheck = false;
+    this.nameEl.autocapitalize = 'words';
+    this.nameEl.enterKeyHint = 'done';
     this.nameEl.addEventListener('input', () => (this.name = this.nameEl.value));
+    // the name starts filled in ("Maple"), so focusing selects it and the first key replaces it
+    this.nameEl.addEventListener('focus', () => this.nameEl.select());
     left.append(this.canvas, this.statusEl, el('label', 'create-namelabel', 'Name'), this.nameEl, dice);
     const right = el('div', 'create-pickers');
     for (const r of ROWS) right.appendChild(this.buildRow(r));
