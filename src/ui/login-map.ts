@@ -182,6 +182,7 @@ export class MapLogin implements LoginLike {
   private vol: HTMLInputElement;
   private sfxVol: HTMLInputElement;
   private petEl: HTMLInputElement;
+  private fxEl: HTMLInputElement;
   private idEl!: HTMLInputElement;
   private pwEl!: HTMLInputElement;
   private tabsEl = el('div', 'hidden');
@@ -269,6 +270,11 @@ export class MapLogin implements LoginLike {
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
     this.opts.appendChild(petOpt);
+    const fxOpt = el('label', 'pet-opt', '<input type="checkbox"> Fewer effects');
+    fxOpt.title = 'Fewer, fainter skill effects around your character';
+    this.fxEl = fxOpt.querySelector('input')!;
+    this.fxEl.addEventListener('change', () => this.h.effects(this.fxEl.checked));
+    this.opts.appendChild(fxOpt);
     const optBtn = this.dockBtn('Options', () => this.opts.classList.toggle('hidden'));
     optBtn.classList.add('ml-optbtn');
     optBtn.dataset.shot = 'options';
@@ -307,6 +313,7 @@ export class MapLogin implements LoginLike {
     this.sfxVol.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
     this.petEl.checked = save.settings.pet;
+    this.fxEl.checked = save.settings.effects === 'reduced';
     this.refresh(save);
     if (this.shown) {
       // coming back from the creator: pan to where the player belongs instead of snapping

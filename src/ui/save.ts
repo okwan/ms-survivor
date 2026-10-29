@@ -21,7 +21,7 @@ export interface SavedCharacter {
 export interface SaveData {
   mesos: number;
   bestTime: number;
-  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean; /** damage meter shown (unset: on for desktop, off on touch) */ meter?: boolean; /** selected difficulty tier (<= cleared + 1) */ difficulty: number };
+  settings: { volume: number; sfxVolume: number; muted: boolean; autoEquip: boolean; pet: boolean; /** damage meter shown (unset: on for desktop, off on touch) */ meter?: boolean; /** skill effects around the hero: all of them, or fewer and fainter (unset: full) */ effects?: 'full' | 'reduced'; /** selected difficulty tier (<= cleared + 1) */ difficulty: number };
   /** highest difficulty tier won (-1: none yet); tier n + 1 is unlocked */
   cleared: number;
   character: SavedCharacter | null;
@@ -62,6 +62,7 @@ export function loadSave(): SaveData {
         autoEquip: o.settings?.autoEquip !== false,
         pet: o.settings?.pet !== false,
         difficulty: Math.min(clampDifficulty(o.settings?.difficulty), cleared + 1),
+        ...(o.settings?.effects === 'reduced' ? { effects: 'reduced' as const } : {}),
         ...(typeof o.settings?.meter === 'boolean' ? { meter: o.settings.meter } : {}),
       },
       character: readCharacter(o.character),

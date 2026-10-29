@@ -143,6 +143,11 @@ async function main() {
             await page.waitForFunction(() => { const s = window.game.sim; return s.t - s.lastFire < 0.05; }, null, { timeout: 30000, polling: 'raf' });
             await shot(`crowded-${cls}`, 250);
             console.log(`shoot ${s.tag}: crowded-${cls} ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, level: window.game.sim.level, skills: window.game.sim.skills.length, enemies: window.game.sim.enemies.length })))}`);
+            // the same moment with Fewer effects on
+            await page.evaluate(() => window.game.effects?.(true));
+            await page.waitForFunction(() => { const s = window.game.sim; return s.t - s.lastFire < 0.05; }, null, { timeout: 30000, polling: 'raf' });
+            await shot(`crowded-${cls}-reduced`, 250);
+            await page.evaluate(() => window.game.effects?.(false));
           } catch (e) {
             console.log(`shoot ${s.tag}: crowded-${cls}: ${e.message}`);
           }

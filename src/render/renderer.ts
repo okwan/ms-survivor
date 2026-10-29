@@ -41,8 +41,26 @@ const SCALE = 1 / RES;
 const HERO_FOOT = 10;
 /** seconds the hero keeps facing the target of its last attack */
 const ATK_FACE_TIME = 0.6;
-/** least seconds between two cast effects of one skill on the hero */
-const HERO_FX_GAP = 0.15;
+/** least seconds between two cast effects of one skill on the hero (full, reduced) */
+const HERO_FX_GAP = [0.6, 1.2];
+/** least seconds between any two cast effects on the hero (full, reduced) */
+const HERO_FX_GLOBAL_GAP = [0.25, 0.6];
+/** most cast effects playing on the hero at once (full, reduced) */
+const HERO_FX_MAX = [2, 1];
+/** alpha of a cast effect on the hero (full, reduced) */
+const HERO_FX_ALPHA = [0.7, 0.4];
+/** rings and lines centred within this many yards of the hero are dimmed */
+const NEAR_HERO = 2.5;
+/** their start alpha is multiplied by this (full, reduced) */
+const NEAR_HERO_DIM = [0.6, 0.3];
+/** alpha of the weapon swing trail (full, reduced) */
+const AFTER_ALPHA = [1, 0.55];
+/** reduced effects: real-art ground / strike animations are skipped while this many are playing */
+const ANIMFX_SOFT_CAP = 24;
+/** the pale ring on the ground under the hero's feet: width in yards, flattening, alpha */
+const MARKER_YD = 1.2;
+const MARKER_FLAT = 0.45;
+const MARKER_ALPHA = 0.35;
 const DEG = Math.PI / 180;
 /** seconds an enemy's HP bar stays up after its last hit */
 const HP_BAR_SECONDS = 3;
@@ -80,6 +98,10 @@ export class Renderer {
   private entities = new Container();
   private fxLayer = new Container();
   private topLayer = new Container();
+  /** the hero and the swing trail: above every effect */
+  private heroLayer = new Container();
+  /** faint ring on the ground under the hero's feet */
+  private marker: Sprite;
   private playerSp: Sprite;
   /** the weapon swing trail drawn over the hero, and its state: the hero frame it belongs to, time in it, the frames playing */
   private afterSp: Sprite;
@@ -91,6 +113,12 @@ export class Renderer {
   private atkFaceT = 0;
   /** render time of the last cast effect on the hero, by skill key */
   private heroFxAt = new Map<string, number>();
+  /** render time of the last cast effect on the hero, any skill */
+  private heroFxLast = -9;
+  /** Fewer effects setting (see setReducedEffects), and the hero's position in yards, for dimming effects near the hero */
+  private reduced = false;
+  private heroX = 0;
+  private heroY = 0;
   private hero: AvatarPlayer | null = null;
   private gearIcons: GearIcons | null = null;
   private orbitSp: Sprite[] = [];
@@ -163,7 +191,7 @@ export class Renderer {
       this.world.addChild(this.scenery.decorLayer);
     }
     if (this.decor) this.world.addChild(this.decor.layer);
-    this.world.addChild(this.glowFx, this.groundFx, this.entities, this.fxLayer, this.topLayer);
+    this.world.addChild(this.glowFx, this.groundFx, this.entities, this.fxLayer, this.heroLayer, this.topLayer);
 
     for (let i = 0; i < MAX_DECOS; i++) {
       const s = new Sprite(tx.decos[0]);
@@ -173,10 +201,14 @@ export class Renderer {
     }
     this.playerSp = new Sprite(tx.player);
     this.playerSp.anchor.set(0.5, 0.9);
-    this.entities.addChild(this.playerSp);
     this.afterSp = new Sprite(Texture.EMPTY);
     this.afterSp.visible = false;
-    this.entities.addChild(this.afterSp);
+    this.heroLayer.addChild(this.playerSp, this.afterSp);
+    this.marker = new Sprite(tx.ring);
+    this.marker.anchor.set(0.5); this.marker.tint = 0xfff0b8; this.marker.alpha = MARKER_ALPHA; this.marker.visible = false;
+    this.marker.scale.set((MARKER_YD * PX) / tx.ring.width);
+    this.marker.scale.y *= MARKER_FLAT;
+    this.groundFx.addChild(this.marker);
     this.petSp = new Sprite(this.itemArt.placeholderPet());
     this.petSp.anchor.set(0.5, 0.95);
     this.petSp.visible = false;
@@ -276,6 +308,11 @@ export class Renderer {
     this.ground.height = this.h;
   }
 
+  /** Fewer effects: fewer, fainter cast effects, dimmer trail and rings near the hero. */
+  setReducedEffects(on: boolean) {
+    this.reduced = on;
+  }
+
   /** Sets the hero's real-art look (null look or avatar = chibi placeholder). The look may still be loading; the placeholder shows until it is ready. */
   setHero(avatar: Avatar | null, look: Look | null, stance: Stance) {
     if (!avatar || !look) { this.hero = null; return; }
@@ -334,13 +371,18 @@ export class Renderer {
   /** Expanding ring/disc sized in yards of radius. */
   private ringFx(tex: Texture, x: number, y: number, r: number, dur: number, tint: number, a0 = 0.9) {
     const px = tex.width;
-    this.spawnVfx(tex, x, y, dur, (r * 0.2 * PX * 2) / px, (r * PX * 2) / px, a0, 0, tint);
+    this.spawnVfx(tex, x, y, dur, (r * 0.2 * PX * 2) / px, (r * PX * 2) / px, a0 * this.nearDim(x, y), 0, tint);
+  }
+
+  /** 1, or the dimming factor for an effect centred at (x, y) yards when it is close to the hero */
+  private nearDim(x: number, y: number): number {
+    return Math.hypot(x - this.heroX, y - this.heroY) < NEAR_HERO ? NEAR_HERO_DIM[+this.reduced] : 1;
   }
 
   private lineFx(x0: number, y0: number, x1: number, y1: number, dur: number, tint: number, thick: number) {
     const dx = (x1 - x0) * PX, dy = (y1 - y0) * PX;
     const len = Math.hypot(dx, dy);
-    const v = this.spawnVfx(this.tex.bar, x0, y0, dur, 1, 1, 1, 0, tint);
+    const v = this.spawnVfx(this.tex.bar, x0, y0, dur, 1, 1, this.nearDim(x0, y0), 0, tint);
     v.sp.anchor.set(0, 0.5);
     v.sp.rotation = Math.atan2(dy, dx);
     v.sp.scale.set(len / 2, thick / 2);
@@ -353,10 +395,23 @@ export class Renderer {
     this.animFxNext = (this.animFxNext + 1) % MAX_ANIMFX;
     f.anim = a; f.t = 0; f.active = true; f.follow = follow; f.sx = sx;
     f.sp.scale.set(sx, 1);
+    f.sp.alpha = follow ? HERO_FX_ALPHA[+this.reduced] : 1;
     f.sp.texture = a.tex[0];
     f.sp.anchor.set(a.ax[0], a.ay[0]);
     f.sp.position.set(x, y);
     f.sp.visible = true;
+  }
+
+  private followCount(): number {
+    let n = 0;
+    for (const f of this.animFx) if (f.active && f.follow) n++;
+    return n;
+  }
+
+  private animFxCount(): number {
+    let n = 0;
+    for (const f of this.animFx) if (f.active) n++;
+    return n;
   }
 
   private number(x: number, y: number, text: string, tint: number, size: number, life = 0.75) {
@@ -424,8 +479,11 @@ export class Renderer {
         // the hero turns toward what it attacks for a moment; the skill's cast effect plays on its feet, following it (art faces left)
         if (Math.abs(e.tx - e.x) > 0.05) { this.atkFace = Math.sign(e.tx - e.x); this.atkFaceT = ATK_FACE_TIME; }
         const ef = this.art?.skills.get(e.skill)?.effect;
-        if (ef && e.kind !== 'ground' && e.kind !== 'strike' && this.time - (this.heroFxAt.get(e.skill) ?? -9) >= HERO_FX_GAP) {
+        const m = +this.reduced;
+        if (ef && e.kind !== 'ground' && e.kind !== 'strike' && this.time - (this.heroFxAt.get(e.skill) ?? -9) >= HERO_FX_GAP[m]
+          && this.time - this.heroFxLast >= HERO_FX_GLOBAL_GAP[m] && this.followCount() < HERO_FX_MAX[m]) {
           this.heroFxAt.set(e.skill, this.time);
+          this.heroFxLast = this.time;
           const face = this.atkFaceT > 0 ? this.atkFace : sim.facing;
           this.spawnAnim(ef, sim.px * PX, sim.py * PX + HERO_FOOT, true, e.kind === 'nova' ? 1 : face >= 0 ? -1 : 1);
         }
@@ -434,7 +492,7 @@ export class Renderer {
       case 'cast': {
         const def = SKILL_BY_KEY[e.skill];
         const ef = this.art?.skills.get(e.skill)?.effect;
-        if (ef && (e.kind === 'ground' || e.kind === 'strike')) this.spawnAnim(ef, e.tx * PX, e.ty * PX);
+        if (ef && (e.kind === 'ground' || e.kind === 'strike') && !(this.reduced && this.animFxCount() >= ANIMFX_SOFT_CAP)) this.spawnAnim(ef, e.tx * PX, e.ty * PX);
         const el = def?.element;
         const tint = el === 'fire' ? 0xff7a2a : el === 'ice' ? 0x6fd6ff : el === 'lightning' ? 0xffe84a : el === 'poison' ? 0x62d85e : 0xb58cff;
         if (e.kind === 'bolt') this.ringFx(tx.disc, e.x, e.y, e.r, 0.3, tint, 0.8);
@@ -554,6 +612,7 @@ export class Renderer {
     const stamp = this.stamp;
     const tx = this.tex;
     const z = this.zoom;
+    this.heroX = sim.px; this.heroY = sim.py;
 
     // events first (drained here)
     const evs = sim.events;
@@ -593,7 +652,6 @@ export class Renderer {
 
     // player: composited Maple character (native pixel size, art faces left) or the chibi placeholder
     const ps = this.playerSp;
-    ps.zIndex = sim.py * PX;
     const hf = this.hero?.frame(dt, sim.moving, sim.lastFire, this.art?.skillActions.get(sim.lastSkill) ?? null) ?? null;
     if (this.atkFaceT > 0) this.atkFaceT -= dt;
     const face = this.atkFaceT > 0 ? this.atkFace : sim.facing;
@@ -621,6 +679,8 @@ export class Renderer {
     if (this.hurt > 0) { this.hurt -= dt; ps.tint = 0xff8080; } else ps.tint = 0xffffff;
     ps.visible = !sim.over || sim.won;
     af.visible = af.visible && ps.visible;
+    this.marker.visible = ps.visible;
+    this.marker.position.set(sim.px * PX, sim.py * PX + HERO_FOOT);
 
     this.renderPet(sim, dt);
 
@@ -982,7 +1042,7 @@ export class Renderer {
     af.position.copyFrom(ps.position);
     af.scale.x = ps.scale.x;
     af.rotation = ps.rotation;
-    af.zIndex = ps.zIndex + 1;
+    af.alpha = AFTER_ALPHA[+this.reduced];
     af.visible = true;
   }
 
