@@ -16,7 +16,6 @@ import { MapLogin, mapLoginOk } from './login-map.ts';
 import { difficultyPicker } from './difficulty.ts';
 import { CLASS_BY_KEY, JOB_BY_CODE, unlockedJobs } from '../game/data.ts';
 import type { SaveData, StoredRun } from './save.ts';
-import { theme } from './theme.ts';
 
 export interface ScreenHandlers {
   /** opens character creation */
@@ -297,13 +296,13 @@ export class Screens {
     this.offerSig = sig;
     this.levelup.classList.remove('hidden');
     const job = offer[0]?.kind === 'job';
-    this.luHead.innerHTML = job ? `JOB ADVANCEMENT! Lv ${sim.level}` : theme.has('lv.0') ? `LEVEL UP! ${theme.lv(sim.level)}` : 'LEVEL UP!';
+    this.luHead.innerHTML = `${job ? 'JOB ADVANCEMENT!' : 'LEVEL UP!'} <span class="lvpill">Lv ${sim.level}</span>`;
     this.cardsEl.textContent = '';
     offer.forEach((c, i) => {
       const card = el('div', 'card ' + c.kind);
       if (c.kind === 'job') {
         const sig = (c.sig ?? []).map((s) => `<div class="sig"><img src="${this.icons[s.key] ?? ''}" alt=""><div><b>${s.name}</b><span>${s.desc}</span></div></div>`).join('');
-        card.innerHTML = `<div class="key">${i + 1}</div><h3>${c.name}</h3><p>${c.desc}</p>${sig}<div class="kind">Job advancement</div>`;
+        card.innerHTML = `<div class="key">${i + 1}</div><h3>${c.name}</h3><p>${c.desc}</p>${sig}<div class="card-foot"><div class="kind">Job advancement</div></div>`;
         card.addEventListener('click', () => this.h.pick(i));
         this.cardsEl.appendChild(card);
         return;
@@ -311,14 +310,16 @@ export class Screens {
       const hint = c.kind === 'skill' || c.kind === 'passive' ? evolutionHint(c.key) : null;
       const tag = c.isNew ? '<span class="tag new">NEW</span>' : c.kind === 'skill' || c.kind === 'passive' ? `<span class="tag">Lv ${c.from} &gt; ${c.to}</span>` : c.kind === 'mastery' ? `<span class="tag">x${c.from} &gt; x${c.to}</span>` : '';
       card.innerHTML = `<div class="key">${i + 1}</div><img src="${this.icons[c.icon ?? c.key] ?? ''}" alt=""><h3>${c.name}</h3>${tag}<p>${c.desc}</p>${hint ? `<p class="hint">${hint}</p>` : ''}`;
-      const kind = el('div', 'kind', c.kind === 'skill' ? 'Skill' : c.kind === 'passive' ? 'Passive' : c.kind === 'mastery' ? 'Mastery' : 'Bonus');
-      card.appendChild(kind);
+      // the kind label and Banish sit in a footer pushed to the bottom, so every card of the row lines up
+      const foot = el('div', 'card-foot');
+      foot.appendChild(el('div', 'kind', c.kind === 'skill' ? 'Skill' : c.kind === 'passive' ? 'Passive' : c.kind === 'mastery' ? 'Mastery' : 'Bonus'));
+      card.appendChild(foot);
       card.addEventListener('click', () => this.h.pick(i));
       if (c.kind === 'skill' || c.kind === 'passive') {
         const b = el('button', 'banish', `Banish (${sim.banishes})`);
         b.disabled = sim.banishes <= 0;
         b.addEventListener('click', (ev) => { ev.stopPropagation(); this.h.banish(i); });
-        card.appendChild(b);
+        foot.appendChild(b);
       }
       this.cardsEl.appendChild(card);
     });
