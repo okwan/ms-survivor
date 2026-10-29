@@ -502,13 +502,26 @@ export class MapLogin implements LoginLike {
       i.readOnly = true;
       i.tabIndex = -1;
       i.autocomplete = 'off';
+      i.spellcheck = false;
       i.placeholder = placeholder;
       i.setAttribute('aria-label', label);
       i.style.cssText = `left:${sx + r.x}px;top:${sy + r.y}px;width:${r.w}px;height:${r.h}px`;
       P.appendChild(i);
       return i;
     };
-    this.idEl = field(L.id, 'ID', 'New player');
+    // the ID box is the character's name: typing renames the saved character (or names the next one to be created)
+    const id = (this.idEl = field(L.id, 'Character name', 'Your name'));
+    id.readOnly = false;
+    id.tabIndex = 0;
+    id.maxLength = 12;
+    id.autocapitalize = 'words';
+    id.enterKeyHint = 'go';
+    id.addEventListener('focus', () => id.select());
+    id.addEventListener('change', () => this.rename());
+    id.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.repeat) { this.rename(); id.blur(); this.goTo('world'); }
+    });
     this.pwEl = field(L.pw, 'Password', '');
     const at = (p: Pt): Pt => [sx + p[0], sy + p[1]];
     const btn = (key: string, p: Pt, label: string, fn?: () => void, shot?: string) => this.spriteBtn(P, key, ...at(p), fn, { label, shot });
@@ -710,6 +723,17 @@ export class MapLogin implements LoginLike {
     this.cStatusT = window.setTimeout(() => { if (this.cStatusEl) this.cStatusEl.textContent = ''; }, 1800);
   }
 
+  /** commits the ID box: renames the saved character, or keeps the name for the creator */
+  private rename() {
+    const n = sanitizeName(this.idEl.value);
+    const ch = this.save?.character;
+    if (!n) { this.idEl.value = ch?.name ?? ''; return; }
+    this.idEl.value = n;
+    this.typedName = n;
+    if (ch && ch.name !== n) this.h.rename?.(n);
+  }
+  private typedName = '';
+
   private buildCreate() {
     const P = this.panels.create, L = LAYOUT.create;
     P.textContent = '';
@@ -766,7 +790,7 @@ export class MapLogin implements LoginLike {
     n.enterKeyHint = 'done';
     n.placeholder = 'Name';
     n.addEventListener('focus', () => n.select());
-    n.value = ch?.name ?? '';
+    n.value = this.typedName || ch?.name || '';
     n.style.cssText = `left:${L.name.x}px;top:${L.name.y}px;width:${L.name.w}px;height:${L.name.h}px`;
     n.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') this.cCheck(); });
     P.appendChild(n);

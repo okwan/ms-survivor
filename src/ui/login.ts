@@ -20,6 +20,8 @@ export interface LoginHandlers {
   created?(r: CreateResult): void;
   /** start the run with the saved character */
   select(): void;
+  /** renames the saved character (typed into the ID box of the login map) */
+  rename?(name: string): void;
   /** resume the saved run in progress */
   continueRun(): void;
   volume(v: number): void;

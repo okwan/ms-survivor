@@ -212,6 +212,13 @@ async function boot() {
     uiRoot,
     {
       created: (r) => finishCreate(r),
+      rename: (name) => {
+        const ch = save.character;
+        if (!ch || !name) return;
+        if (hero.name === ch.name) hero = { ...hero, name };
+        ch.name = name;
+        writeSave(save);
+      },
       start: () => { screens.hideAll({ keepLogin: true }); create.show(save.character ?? { ...hero }); },
       quick: () => {
         const ch = save.character;
