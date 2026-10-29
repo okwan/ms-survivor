@@ -43,11 +43,13 @@ export class ShopPanel {
     this.root.className = 'screen shop hidden';
     this.root.innerHTML = `<div class="mwin mwin-shop">
       <div class="mwin-title"><span>Henesys Shop</span><button class="mwin-x" title="Close"></button></div>
-      <div class="shop-body">
-        <div class="shop-npc"><div class="shop-portrait"></div><b>Rina</b><i>Henesys</i><p class="shop-say"></p></div>
-        <div class="shop-list"></div>
+      <div class="mwin-surface">
+        <div class="shop-body">
+          <div class="shop-npc"><div class="shop-portrait"></div><b>Rina</b><i>Henesys</i><p class="shop-say"></p></div>
+          <div class="shop-list"></div>
+        </div>
+        <div class="shop-foot"><span class="shop-mesos"></span><span class="shop-refund-row"><button class="shop-btn shop-refund">Refund all</button><button class="shop-btn shop-cancel">Cancel</button></span></div>
       </div>
-      <div class="shop-foot"><span class="shop-mesos"></span><span class="shop-refund-row"><button class="shop-btn shop-refund">Refund all</button><button class="shop-btn shop-cancel">Cancel</button></span></div>
     </div>`;
     this.listEl = this.root.querySelector('.shop-list')!;
     this.mesoEl = this.root.querySelector('.shop-mesos')!;

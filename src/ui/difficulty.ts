@@ -3,9 +3,11 @@ import { DIFFICULTIES } from '../game/data.ts';
 const CSS = `
 .dpick { display: flex; flex-direction: column; gap: 4px; align-items: stretch; margin: 6px 0; pointer-events: auto; }
 .dpick-row { display: flex; gap: 4px; }
-.dpick-b { flex: 1 1 0; min-width: 0; min-height: 40px; padding: 4px 2px; font: 900 13px var(--font); color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.4); cursor: pointer; border-radius: 8px; border: 2px solid #fff; background: linear-gradient(#7ab8f5, #2d6fd0); outline: 0; }
-.dpick-b:disabled { filter: grayscale(.9); opacity: .55; cursor: default; }
-.dpick-b.sel { background: linear-gradient(#ffb23f, #e57400); box-shadow: 0 0 0 2px #a65200; }
+.dpick-b { flex: 1 1 0; min-width: 0; min-height: 36px; padding: 4px 2px; font: 900 13px var(--font); color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.35); cursor: pointer; border-radius: 7px; border: 1px solid #1d4a96; background: linear-gradient(#5b9ff0, #2c66c6); box-shadow: inset 0 1px 0 rgba(255,255,255,.35); transition: filter .12s; }
+.dpick-b:hover:not(:disabled) { filter: brightness(1.1); }
+.dpick-b:focus-visible { outline: 2px solid #ffe27a; outline-offset: 1px; }
+.dpick-b:disabled { background: #b9bfcc; border-color: #a2a9ba; color: #eef0f4; text-shadow: none; box-shadow: none; cursor: default; }
+.dpick-b.sel { background: linear-gradient(#ffb547, #f07c12); border-color: #b45708; }
 .dpick-d { font: bold 12px var(--font); text-align: center; color: inherit; opacity: .85; min-height: 2.4em; }
 `;
 

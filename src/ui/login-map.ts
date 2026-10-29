@@ -66,8 +66,9 @@ export const LAYOUT = {
     back: [8, 540] as Pt,
     /** the character's feet */
     feet: [330, 368] as Pt,
-    /** top-left of the difficulty picker */
-    diff: [330, 66] as Pt,
+    /** top-left of the difficulty picker (below the character info table, above the copyright line at y 515) and its width */
+    diff: [515, 417] as Pt,
+    diffW: 190,
     /** name tag offset from the feet (centred) */
     tag: [0, 4] as Pt,
     /** relative to the CharSelect signboard */
@@ -118,8 +119,22 @@ export const LAYOUT = {
     bubblePad: [9, 8, 8, 66] as [number, number, number, number],
     bubbleW: 113,
   },
-  /** extras row along the bottom of the book page (the scene shows through x 96..712, y 25..492 inside Common/frame) */
-  dock: { x: 100, bottom: 112, w: 608 },
+  /** the extras dock (Continue, Monster Book, Henesys Shop, Hyper Skills, Options) lives outside the scaled stage, top-right of the window */
+  dock: {
+    /** margin from the window corner (plus the safe-area insets) */
+    inset: 12,
+    /** the side gutter beside the scaled stage under which the dock turns into 44px icon buttons */
+    gutter: 170,
+  },
+};
+
+/** Glyphs of the compact dock (24x24, currentColor); a button without one shows the first letter of its label. */
+const DOCK_ICON: Record<string, string> = {
+  'Monster Book': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 17h11M9 8h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  'Henesys Shop': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 10V7a3 3 0 0 1 6 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  'Hyper Skills': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8L12 3z" fill="currentColor"/></svg>',
+  Options: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  Continue: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5-12-7.5z" fill="currentColor"/></svg>',
 };
 
 const BASE = 'maple/';
@@ -236,11 +251,12 @@ export class MapLogin implements LoginLike {
     const ui = el('div', 'ml-ui');
     this.panels = { title: el('div', 'ml-panel hidden'), world: el('div', 'ml-panel hidden'), select: el('div', 'ml-panel hidden'), create: el('div', 'ml-panel hidden') };
     this.dock = el('div', 'ml-dock hidden');
-    this.dock.style.cssText = `left:${LAYOUT.dock.x}px;bottom:${LAYOUT.dock.bottom}px;width:${LAYOUT.dock.w}px`;
-    this.diffSlot.style.cssText = `left:${LAYOUT.select.diff[0]}px;top:${LAYOUT.select.diff[1]}px`;
-    ui.append(this.panels.title, this.panels.world, this.panels.select, this.panels.create, this.diffSlot, this.dock);
+    this.dock.style.cssText = `top:calc(${LAYOUT.dock.inset}px + env(safe-area-inset-top, 0px));right:calc(${LAYOUT.dock.inset}px + env(safe-area-inset-right, 0px))`;
+    this.diffSlot.style.cssText = `left:${LAYOUT.select.diff[0]}px;top:${LAYOUT.select.diff[1]}px;width:${LAYOUT.select.diffW}px`;
+    ui.append(this.panels.title, this.panels.world, this.panels.select, this.panels.create, this.diffSlot);
     stage.append(canvas, ui);
-    root.appendChild(stage);
+    // the dock is a child of the screen, not of the scaled stage: it keeps its size and never covers the scene art
+    root.append(stage, this.dock);
 
     // extras dock: Options (music / SFX / mute / pet), then whatever addButton adds above it
     this.opts = el('div', 'ml-opts hidden');
@@ -254,15 +270,21 @@ export class MapLogin implements LoginLike {
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
     this.opts.appendChild(petOpt);
     const optBtn = this.dockBtn('Options', () => this.opts.classList.toggle('hidden'));
+    optBtn.classList.add('ml-optbtn');
     optBtn.dataset.shot = 'options';
     this.contBtn = this.dockBtn('Continue', () => this.h.continueRun());
-    this.contBtn.classList.add('hidden', 'ml-continue');
+    this.contBtn.classList.add('hidden', 'ml-continue', 'primary');
     this.dock.append(this.contBtn, optBtn, this.opts);
 
     this.buildTitle();
     parent.appendChild(root);
 
-    const fit = () => root.style.setProperty('--ls', String(Math.max(0.3, Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H))));
+    // --ls scales the stage; when the side gutter beside the scaled stage is too narrow for the labelled dock it turns into icon buttons
+    const fit = () => {
+      const ls = Math.max(0.3, Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H));
+      root.style.setProperty('--ls', String(ls));
+      root.classList.toggle('ml-compact', (window.innerWidth - VIEW_W * ls) / 2 < LAYOUT.dock.gutter);
+    };
     fit();
     window.addEventListener('resize', fit);
     window.addEventListener('keydown', (e) => {
@@ -339,7 +361,7 @@ export class MapLogin implements LoginLike {
   /** Shows (label) or hides (null) the Continue button for a run in progress (top of the dock). */
   setContinue(label: string | null) {
     this.contBtn.classList.toggle('hidden', !label);
-    if (label) { this.contBtn.textContent = label; this.contBtn.setAttribute('aria-label', label); }
+    if (label) { this.contBtn.querySelector('.ml-lbl')!.textContent = label; this.contBtn.setAttribute('aria-label', label); this.contBtn.title = label; }
   }
 
   /** Adds a button to the extras dock (e.g. the Monster Book). */
@@ -462,9 +484,13 @@ export class MapLogin implements LoginLike {
   }
 
   private dockBtn(label: string, fn: () => void): HTMLButtonElement {
-    const b = el('button', 'btn pbtn', label);
+    const b = el('button', 'btn pbtn');
     b.type = 'button';
     b.setAttribute('aria-label', label);
+    b.title = label;
+    // label always; the glyph is shown instead of it in the compact dock (buttons without a glyph, like Mute in the options, stay text)
+    if (label in DOCK_ICON) b.append(el('span', 'ml-ico', DOCK_ICON[label]), el('span', 'ml-lbl', label));
+    else b.textContent = label;
     b.addEventListener('click', fn);
     return b;
   }

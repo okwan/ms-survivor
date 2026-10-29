@@ -14,6 +14,14 @@ export const JOB_HUE: Record<string, number> = { warrior: 355, magician: 215, bo
 /** The window buttons of the status bar. */
 export type BarWindow = 'equip' | 'inventory' | 'stats';
 
+/** Glyphs of the top-right icon buttons (24x24, filled with currentColor). */
+const ICON = {
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  mute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="slash" d="M4 4l16 16" fill="none" stroke="#ff7a7a" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  meter: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="5" width="4" height="15" rx="1"/><rect x="16" y="9" width="4" height="11" rx="1"/></svg>',
+  fullscreen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
 export const fmtTime = (s: number) => {
   const t = Math.max(0, Math.floor(s));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
@@ -97,23 +105,23 @@ export class Hud {
     this.radar = new Radar(this.el.tr);
     this.pauseBtn = document.createElement('button');
     this.pauseBtn.className = 'pausebtn';
-    this.pauseBtn.textContent = 'II';
+    this.pauseBtn.innerHTML = ICON.pause;
     this.pauseBtn.title = 'Pause (Esc)';
     this.muteBtn = document.createElement('button');
     this.muteBtn.className = 'pausebtn mutebtn';
-    this.muteBtn.textContent = 'M';
+    this.muteBtn.innerHTML = ICON.mute;
     this.muteBtn.title = 'Mute music';
     this.meterBtn = document.createElement('button');
     this.meterBtn.className = 'pausebtn meterbtn';
-    this.meterBtn.textContent = 'DPS';
+    this.meterBtn.innerHTML = ICON.meter;
     this.meterBtn.title = 'Damage meter (T)';
     const btns = document.createElement('div');
     btns.className = 'hud-btns';
     btns.append(this.meterBtn, this.muteBtn, this.pauseBtn);
     if (isTouch() && canFullscreen()) {
       const fs = (this.fsBtn = document.createElement('button'));
-      fs.className = 'pausebtn mutebtn fsbtn';
-      fs.textContent = '\u26F6';
+      fs.className = 'pausebtn fsbtn';
+      fs.innerHTML = ICON.fullscreen;
       fs.title = 'Fullscreen';
       fs.addEventListener('click', () => void toggleFullscreen());
       btns.prepend(fs);
@@ -202,6 +210,7 @@ export class Hud {
 
   setMuted(m: boolean) {
     this.muteBtn.classList.toggle('off', m);
+    this.muteBtn.setAttribute('aria-pressed', String(m));
     this.muteBtn.title = m ? 'Unmute music' : 'Mute music';
   }
 
@@ -242,18 +251,13 @@ export class Hud {
     this.width(this.el.expfill, xp * 100);
     const job = JOB_BY_CODE[sim.jobs[sim.jobs.length - 1]]?.name ?? sim.cls.name;
     this.text(this.el.job, job);
-    if (theme.active) {
-      // MapleStory status bar: level in the big level digits, "HP [120/120]" and "EXP 1234[12.34%]" in the tiny bar digits
-      this.html(this.el.lv, theme.lv(sim.level));
-      this.html(this.el.hptext, theme.num(`HP [${Math.ceil(sim.hp)}/${Math.round(sim.maxHp)}]`));
-      this.html(this.el.mptext, theme.num(`MP [${Math.round(mp * 100)}/100]`));
-      this.html(this.el.exptext, theme.num(`EXP ${Math.floor(sim.xp)}[${(xp * 100).toFixed(2)}%]`));
-    } else {
-      this.text(this.el.lv, String(sim.level));
-      this.text(this.el.hptext, `${Math.ceil(sim.hp)} / ${Math.round(sim.maxHp)}`);
-      this.text(this.el.mptext, `MP ${Math.round(mp * 100)}%`);
-      this.text(this.el.exptext, `EXP ${Math.floor(sim.xp)} / ${sim.xpNeed} [${(xp * 100).toFixed(1)}%]`);
-    }
+    // gauge texts are plain text in both modes (HP never shown above its max); only the level plate uses the bitmap level digits
+    if (theme.active) this.html(this.el.lv, theme.lv(sim.level));
+    else this.text(this.el.lv, String(sim.level));
+    const maxHp = Math.round(sim.maxHp);
+    this.text(this.el.hptext, `HP ${Math.min(Math.ceil(sim.hp), maxHp)} / ${maxHp}`);
+    this.text(this.el.mptext, `MP ${Math.round(mp * 100)}%`);
+    this.text(this.el.exptext, `EXP ${Math.floor(sim.xp)} / ${Math.floor(sim.xpNeed)} (${(xp * 100).toFixed(2)}%)`);
 
     for (let i = 0; i < MAX_SKILLS; i++) {
       const s = sim.skills[i];

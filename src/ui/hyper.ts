@@ -37,10 +37,12 @@ export class HyperPanel {
     this.root.className = 'screen hyper hidden';
     this.root.innerHTML = `<div class="mwin mwin-hyper">
       <div class="mwin-title"><span>Hyper Skills</span><button class="mwin-x" title="Close"></button></div>
-      <div class="hy-tabs"></div>
-      <div class="hy-info"><span class="hy-sp"></span><button class="shop-btn hy-reset">Reset</button></div>
-      <div class="hy-scroll"><div class="hy-grid"></div></div>
-      <div class="hy-say"></div>
+      <div class="mwin-surface">
+        <div class="hy-tabs"></div>
+        <div class="hy-info"><span class="hy-sp"></span><button class="shop-btn hy-reset">Reset</button></div>
+        <div class="hy-scroll"><div class="hy-grid"></div></div>
+        <div class="hy-say"></div>
+      </div>
     </div>`;
     const q = <T extends HTMLElement>(s: string) => this.root.querySelector<T>(s)!;
     this.tabsEl = q('.hy-tabs');
