@@ -226,7 +226,6 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 .ms-hp .statusbar .hp .fill { background: var(--u-sb-hp) left center / var(--u-hp-size, auto 100%) repeat-x; }
 .ms-mp .statusbar .mp .fill { background: var(--u-sb-mp) left center / var(--u-mp-size, auto 100%) repeat-x; }
 .ms-exp .statusbar .exp { height: calc((var(--u-expfill-h) + 2px) * var(--sbs)); }
-.ms-exp .statusbar .exp .fill { background: var(--u-expfill) left center / var(--u-expfill-size) repeat-x; filter: hue-rotate(calc((var(--job-hue) - var(--exp-base, 50)) * 1deg)); }
 .ms-sb .sbtn { border: 0; border-radius: 0; background: rgba(0,0,0,.45); border: 1px solid #aab4cc; font-size: 10px; }
 
 
