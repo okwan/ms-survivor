@@ -50,20 +50,21 @@ async function main() {
     await cdp.send('Network.enable');
     await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 80, downloadThroughput: (6 * 1024 * 1024) / 8, uploadThroughput: (1024 * 1024) / 8 });
     const t0 = Date.now();
-    await page.goto('http://localhost:4173/index.html', { waitUntil: 'commit' });
-    for (const at of [300, 1500, 4000]) {
+    await page.goto('http://localhost:4173/index.html?bot', { waitUntil: 'commit' });
+    for (const at of [300, 1500, 4000, 10000]) {
       await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
       const b64 = (await page.screenshot({ type: 'jpeg', quality: 72 })).toString('base64');
       for (let i = 0; i < b64.length; i += 3000) console.log(`SHOT loading-${at}ms ${b64.slice(i, i + 3000)}`);
       console.log(`SHOT-END loading-${at}ms`);
     }
-    await page.waitForFunction(() => window.game, null, { timeout: 60000 });
+    // ready = the debug api exists and the boot overlay (if any) is gone
+    await page.waitForFunction(() => window.game && !document.getElementById('boot'), null, { timeout: 90000 });
     const ready = Date.now() - t0;
     await page.waitForTimeout(1200);
     const b64 = (await page.screenshot({ type: 'jpeg', quality: 72 })).toString('base64');
     for (let i = 0; i < b64.length; i += 3000) console.log(`SHOT loading-done ${b64.slice(i, i + 3000)}`);
     console.log(`SHOT-END loading-done`);
-    console.log(`shoot loading: game ready after ${ready} ms on a 6 Mbps link`);
+    console.log(`shoot loading: title ready after ${ready} ms on a 6 Mbps link`);
     await ctx.close();
   } catch (e) {
     console.log(`shoot loading: ${e.message}`);
