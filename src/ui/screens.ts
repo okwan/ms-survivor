@@ -25,6 +25,8 @@ export interface ScreenHandlers {
   created?(r: CreateResult): void;
   /** starts straight away with the last created character */
   quick(): void;
+  /** renames the saved character */
+  rename?(name: string): void;
   resume(): void;
   /** resumes the saved run from the title screen */
   continueRun(): void;
@@ -112,7 +114,7 @@ export class Screens {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    const lh = { create: () => h.start(), created: (r: CreateResult) => h.created?.(r), select: () => h.quick(), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
+    const lh = { create: () => h.start(), created: (r: CreateResult) => h.created?.(r), select: () => h.quick(), rename: (n: string) => h.rename?.(n), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
     if (mapLoginOk(loginScene)) this.login = new MapLogin(parent, lh, avatar, loginScene);
     else if (classic()) this.login = new LoginScreen(parent, lh, avatar);
     // the difficulty picker: ONE element, mounted by the login screen (signboard / character select), else above START on the plain title

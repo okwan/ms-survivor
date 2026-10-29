@@ -76,6 +76,17 @@ async function main() {
       await page.reload();
       await page.waitForFunction(() => window.game, null, { timeout: 30000 });
       await shot('title-saved');
+      // the name can be typed: rename through the title's ID box (WASD included), then check the save
+      const typed = async (sel, text) => {
+        const el = page.locator(`${sel} >> visible=true`).first();
+        if (!(await el.count())) return `no ${sel}`;
+        await el.click();
+        await page.keyboard.type(text);
+        await page.keyboard.press('Tab');
+        return el.inputValue();
+      };
+      const savedName = () => page.evaluate(() => JSON.parse(localStorage.getItem('maple-survivor-save-v1') || '{}').character?.name);
+      const nameCheck = [`id box "${await typed('.ml-field[aria-label="Character name"]', 'Swadd')}", saved "${await savedName()}"`];
       for (const sel of ['[data-shot=login]', '[data-shot=world]', '[data-shot=channel]']) {
         await click(sel);
         await page.waitForTimeout(1500);
@@ -84,12 +95,14 @@ async function main() {
       if ((await click('[data-shot=cnew]')) || (await click('[data-shot=new]'))) {
         await page.waitForTimeout(2500);
         await shot('create');
+        nameCheck.push(`creator box "${await typed('.ml-cname, .create-name', 'Wasd')}"`);
         if (await click('[data-shot=dice]')) {
           await page.waitForTimeout(800);
           await shot('create-dice');
         }
       }
       console.log(`shoot ${s.tag}: ui ${JSON.stringify(await page.evaluate(() => window.game?.ui?.()))}`);
+      console.log(`shoot ${s.tag}: name check: ${nameCheck.join(', ')}`);
       // the other menus, desktop only: windows on the title, then a run (playing, level-up, pause, equip, results)
       if (s.tag === 'desktop') {
         await page.reload();
