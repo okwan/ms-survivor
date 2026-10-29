@@ -115,7 +115,7 @@ async function main() {
           await page.evaluate(() => { window.game.start(11, 'warrior'); window.game.god(true); window.game.autopick(true); window.game.bot(true); });
           await page.waitForFunction(() => { const s = window.game.sim; return s.t > 4 && s.t - s.lastFire < 0.1; }, null, { timeout: 30000, polling: 'raf' });
           await shot('attack', 0);
-          console.log(`shoot ${s.tag}: attack ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, skill: window.game.sim.lastSkill })))}`);
+          console.log(`shoot ${s.tag}: attack ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, skill: window.game.sim.lastSkill, aimDx: window.game.sim.aimX - window.game.sim.px, facing: window.game.sim.facing })))}`);
         } catch (e) {
           console.log(`shoot ${s.tag}: attack: ${e.message}`);
         }

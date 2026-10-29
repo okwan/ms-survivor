@@ -420,20 +420,21 @@ export class Renderer {
         if (e.boss >= 0) this.ringFx(tx.ring, e.x, e.y, 10, 0.8, 0xffd23a);
         break;
       }
+      case 'attack': {
+        // the hero turns toward what it attacks for a moment; the skill's cast effect plays on its feet, following it (art faces left)
+        if (Math.abs(e.tx - e.x) > 0.05) { this.atkFace = Math.sign(e.tx - e.x); this.atkFaceT = ATK_FACE_TIME; }
+        const ef = this.art?.skills.get(e.skill)?.effect;
+        if (ef && e.kind !== 'ground' && e.kind !== 'strike' && this.time - (this.heroFxAt.get(e.skill) ?? -9) >= HERO_FX_GAP) {
+          this.heroFxAt.set(e.skill, this.time);
+          const face = this.atkFaceT > 0 ? this.atkFace : sim.facing;
+          this.spawnAnim(ef, sim.px * PX, sim.py * PX + HERO_FOOT, true, e.kind === 'nova' ? 1 : face >= 0 ? -1 : 1);
+        }
+        break;
+      }
       case 'cast': {
         const def = SKILL_BY_KEY[e.skill];
         const ef = this.art?.skills.get(e.skill)?.effect;
-        // the hero turns toward what it attacks for a moment (orbiting summons do not count)
-        if (e.kind !== 'orbit' && e.tx !== e.x) { this.atkFace = Math.sign(e.tx - e.x); this.atkFaceT = ATK_FACE_TIME; }
-        if (ef) {
-          if (e.kind === 'ground' || e.kind === 'strike') this.spawnAnim(ef, e.tx * PX, e.ty * PX);
-          else if (e.kind !== 'orbit' && this.time - (this.heroFxAt.get(e.skill) ?? -9) >= HERO_FX_GAP) {
-            // on the hero's feet, following it; the art faces left
-            this.heroFxAt.set(e.skill, this.time);
-            const face = this.atkFaceT > 0 ? this.atkFace : sim.facing;
-            this.spawnAnim(ef, sim.px * PX, sim.py * PX + HERO_FOOT, true, e.kind === 'nova' ? 1 : face >= 0 ? -1 : 1);
-          }
-        }
+        if (ef && (e.kind === 'ground' || e.kind === 'strike')) this.spawnAnim(ef, e.tx * PX, e.ty * PX);
         const el = def?.element;
         const tint = el === 'fire' ? 0xff7a2a : el === 'ice' ? 0x6fd6ff : el === 'lightning' ? 0xffe84a : el === 'poison' ? 0x62d85e : 0xb58cff;
         if (e.kind === 'bolt') this.ringFx(tx.disc, e.x, e.y, e.r, 0.3, tint, 0.8);

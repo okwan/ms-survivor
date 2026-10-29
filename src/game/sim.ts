@@ -58,6 +58,9 @@ export class Sim {
   lastFire = -99;
   /** key of the skill behind `lastFire` (the renderer picks its body action) */
   lastSkill = '';
+  /** where the last fired skill aimed (yd) */
+  aimX = 0;
+  aimY = 0;
   facing = 1;
   /** key of the skill currently dealing damage; carried on 'hit' events so the renderer can pick hit art */
   curSkill = '';

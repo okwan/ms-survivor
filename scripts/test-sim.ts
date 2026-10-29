@@ -188,6 +188,15 @@ for (const c of CLASSES) for (let i = 0; i < c.branches.length; i++) jobRun(c.ke
   m.enemies.push({ ...e1, x: 2, stunT: 0 });
   m.tick();
   ok(m.hp > 50, 'heal restores hero HP when it fires');
+  {
+    // an attack event per fire, aimed at the target (the renderer turns the hero toward it)
+    const a = new Sim(8, 'warrior');
+    a.enemies.push({ ...e1, x: a.px - 3, y: a.py, stunT: 0 });
+    a.skills[0].cd = 0;
+    a.tick();
+    const at = a.events.find((v) => v.type === 'attack');
+    ok(at && at.type === 'attack' && at.tx < at.x && at.skill === a.skills[0].key, 'a fired skill emits an attack event aimed at its target');
+  }
   t.curSkill = 'panic';
   t.hit(e2, 1);
   ok(e2.weakT > 3.9, 'panic weakens');

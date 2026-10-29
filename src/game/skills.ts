@@ -21,7 +21,10 @@ export function updateSkills(sim: Sim, dt: number) {
     if (fire(sim, def, o)) {
       const hm = sim.hyper[o.key];
       o.cd = skillCooldown(def, o.level, sim.haste) * (hm !== undefined ? hm.cd : 1);
-      if (def.kind !== 'orbit') { sim.lastFire = sim.t; sim.lastSkill = def.key; }
+      if (def.kind !== 'orbit') {
+        sim.lastFire = sim.t; sim.lastSkill = def.key;
+        sim.emit({ type: 'attack', skill: def.key, kind: def.kind, x: sim.px, y: sim.py, tx: sim.aimX, ty: sim.aimY });
+      }
     }
     else o.cd = 0.1;
   }
@@ -29,6 +32,8 @@ export function updateSkills(sim: Sim, dt: number) {
 
 function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
   sim.curSkill = def.key;
+  // where the hero aims (the renderer turns the hero toward it); a nova aims at the hero itself
+  sim.aimX = sim.px; sim.aimY = sim.py;
   const L = o.level;
   const dmg = def.dmg * skillDmgMult(L);
   const hm = sim.hyper[def.key];
@@ -40,6 +45,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     case 'pierce': {
       const found = sim.nearestN(px, py, def.range, def.kind === 'pierce' ? 1 : count);
       if (found === 0) return false;
+      sim.aimX = sim.sel[0].x; sim.aimY = sim.sel[0].y;
       for (let i = 0; i < count; i++) {
         const tgt = sim.sel[i % found];
         let ang = Math.atan2(tgt.y - py, tgt.x - px);
@@ -67,6 +73,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     case 'strike': {
       const found = sim.nearestN(px, py, def.range, count);
       if (found === 0) return false;
+      sim.aimX = sim.sel[0].x; sim.aimY = sim.sel[0].y;
       // copy targets: areaDamage reuses query buffers but not sel
       for (let i = 0; i < found; i++) {
         const t = sim.sel[i];
@@ -87,6 +94,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     case 'ground': {
       const found = sim.nearestN(px, py, def.range, 24);
       if (found === 0) return false;
+      sim.aimX = sim.sel[0].x; sim.aimY = sim.sel[0].y;
       used.length = 0;
       for (let n = 0; n < count; n++) {
         let bi = -1, bc = -1;
@@ -116,6 +124,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     }
     case 'chain': {
       if (sim.nearestN(px, py, def.range, 1) === 0) return false;
+      sim.aimX = sim.sel[0].x; sim.aimY = sim.sel[0].y;
       let cur: Enemy | null = sim.sel[0];
       const pts: number[] = [px, py];
       let n = 0;
@@ -141,6 +150,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     case 'melee': {
       const found = sim.nearestN(px, py, def.range, count);
       if (found === 0) return false;
+      sim.aimX = sim.sel[0].x; sim.aimY = sim.sel[0].y;
       const hits = def.hits ?? 1;
       for (let i = 0; i < found; i++) {
         const t = sim.sel[i];
@@ -153,6 +163,7 @@ function fire(sim: Sim, def: SkillDef, o: SkillState): boolean {
     case 'cone': {
       if (sim.nearestN(px, py, radius, 1) === 0) return false;
       const t = sim.sel[0];
+      sim.aimX = t.x; sim.aimY = t.y;
       const ang = Math.atan2(t.y - py, t.x - px);
       const half = CONE_ANGLE / 2;
       const cnt = sim.grid.query(px, py, radius + 3.4, sim.qbuf2);

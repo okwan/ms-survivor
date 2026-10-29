@@ -191,6 +191,8 @@ export type SimEvent =
   | { type: 'playerHit'; x: number; y: number; amount: number }
   | { type: 'death'; x: number; y: number; tier: number; boss: number; big: boolean; facing: number }
   | { type: 'cast'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number; r: number; pts: number[] | null }
+  /** a skill fired (not orbit summons): once per fire, from the hero toward its aim */
+  | { type: 'attack'; skill: string; kind: SkillKind; x: number; y: number; tx: number; ty: number }
   | { type: 'novaHit'; x: number; y: number; r: number; hit: boolean }
   | { type: 'ailHit'; x: number; y: number; r: number; hit: boolean }
   | { type: 'ailment'; ail: number; name: string; text: string }
