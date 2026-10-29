@@ -26,7 +26,7 @@
 
 /* title signboard fields and texts */
 .ml-field { position: absolute; box-sizing: border-box; margin: 0; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: #222; font: 12px Arial, sans-serif; outline: none; cursor: default; }
-.ml-field::placeholder { color: #8a8a8a; opacity: 1; }
+.ml-field::placeholder { color: rgba(255,240,215,.8); opacity: 1; }
 .ml-field:not([readonly]) { cursor: text; }
 .ml-txt { position: absolute; font: bold 12px Arial, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; white-space: nowrap; pointer-events: none; }
 .ml-hint { position: absolute; margin: 0; left: 0; right: 0; text-align: center; font: 11px Arial, sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
