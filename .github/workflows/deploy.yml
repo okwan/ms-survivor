@@ -50,6 +50,9 @@ jobs:
         run: node --experimental-strip-types scripts/fetch-maple.ts dist
         env:
           MAPLE_ARCHIVE_URL: ${{ vars.MAPLE_ARCHIVE_URL }}
+      - name: Dump attack data (temporary)
+        continue-on-error: true
+        run: node --experimental-strip-types scripts/dump-attack.ts
       # Branch builds only: screenshots of the login screens with the real art, logged as base64 (scripts/shoot.mjs)
       - name: Screenshots
         if: github.ref != 'refs/heads/main'
