@@ -11,7 +11,7 @@ import type { Area, Enemy, Pickup, Projectile, SimEvent } from '../game/types.ts
 import { frameAt } from '../maple/art.ts';
 import { ItemArt } from '../maple/item-art.ts';
 import { AvatarPlayer } from '../maple/avatar.ts';
-import type { Avatar } from '../maple/avatar.ts';
+import type { AfterFrame, Avatar, PlayerFrame } from '../maple/avatar.ts';
 import type { Look } from '../maple/avatar-core.ts';
 import { tierColor } from '../game/gear.ts';
 import type { GearIcons } from './gear-icons.ts';
@@ -39,6 +39,11 @@ const DECO_CELL = 14; // yards
 const SCALE = 1 / RES;
 /** the hero's feet stand this many px below the sim position (the hit circle is centred on the body) */
 const HERO_FOOT = 10;
+/** seconds the hero keeps facing the target of its last attack */
+const ATK_FACE_TIME = 0.6;
+/** least seconds between two cast effects of one skill on the hero */
+const HERO_FX_GAP = 0.15;
+const DEG = Math.PI / 180;
 /** seconds an enemy's HP bar stays up after its last hit */
 const HP_BAR_SECONDS = 3;
 
@@ -52,7 +57,8 @@ interface EnemyView {
 interface DmgNum { t: BitmapText; life: number; vy: number; active: boolean; max: number }
 interface Vfx { sp: Sprite; active: boolean; t: number; dur: number; s0: number; s1: number; a0: number; a1: number; x: number; y: number; vy: number }
 interface Ghost { sp: Sprite; active: boolean; t: number; s: number; anim: Anim | null; age: number }
-interface AnimFx { sp: Sprite; active: boolean; anim: Anim | null; t: number }
+/** `follow`: stays on the hero's feet while it plays (skill effects cast on the hero); `sx` is its horizontal scale (-1 mirrors) */
+interface AnimFx { sp: Sprite; active: boolean; anim: Anim | null; t: number; follow: boolean; sx: number }
 /** the real level-up effect: plays once on the player, following them */
 interface FollowFx { sp: Sprite; active: boolean; t: number; pending: boolean }
 
@@ -75,6 +81,16 @@ export class Renderer {
   private fxLayer = new Container();
   private topLayer = new Container();
   private playerSp: Sprite;
+  /** the weapon swing trail drawn over the hero, and its state: the hero frame it belongs to, time in it, the frames playing */
+  private afterSp: Sprite;
+  private afterSerial = -1;
+  private afterT = 0;
+  private afterFrames: AfterFrame[] | null = null;
+  /** facing (+1 / -1) toward the target of the last attack, for atkFaceT seconds */
+  private atkFace = 1;
+  private atkFaceT = 0;
+  /** render time of the last cast effect on the hero, by skill key */
+  private heroFxAt = new Map<string, number>();
   private hero: AvatarPlayer | null = null;
   private gearIcons: GearIcons | null = null;
   private orbitSp: Sprite[] = [];
@@ -158,6 +174,9 @@ export class Renderer {
     this.playerSp = new Sprite(tx.player);
     this.playerSp.anchor.set(0.5, 0.9);
     this.entities.addChild(this.playerSp);
+    this.afterSp = new Sprite(Texture.EMPTY);
+    this.afterSp.visible = false;
+    this.entities.addChild(this.afterSp);
     this.petSp = new Sprite(this.itemArt.placeholderPet());
     this.petSp.anchor.set(0.5, 0.95);
     this.petSp.visible = false;
@@ -206,7 +225,7 @@ export class Renderer {
       const sp = new Sprite(tx.disc);
       sp.visible = false;
       this.fxLayer.addChild(sp);
-      this.animFx.push({ sp, active: false, anim: null, t: 0 });
+      this.animFx.push({ sp, active: false, anim: null, t: 0, follow: false, sx: 1 });
     }
     for (let i = 0; i < 6; i++) {
       const fill = new Sprite(tx.disc), ring = new Sprite(tx.ring);
@@ -329,10 +348,11 @@ export class Renderer {
   }
 
   /** Plays a real-art frame sequence once, anchored at its origin, at pixel position (x, y). */
-  private spawnAnim(a: Anim, x: number, y: number) {
+  private spawnAnim(a: Anim, x: number, y: number, follow = false, sx = 1) {
     const f = this.animFx[this.animFxNext];
     this.animFxNext = (this.animFxNext + 1) % MAX_ANIMFX;
-    f.anim = a; f.t = 0; f.active = true;
+    f.anim = a; f.t = 0; f.active = true; f.follow = follow; f.sx = sx;
+    f.sp.scale.set(sx, 1);
     f.sp.texture = a.tex[0];
     f.sp.anchor.set(a.ax[0], a.ay[0]);
     f.sp.position.set(x, y);
@@ -400,13 +420,21 @@ export class Renderer {
         if (e.boss >= 0) this.ringFx(tx.ring, e.x, e.y, 10, 0.8, 0xffd23a);
         break;
       }
+      case 'attack': {
+        // the hero turns toward what it attacks for a moment; the skill's cast effect plays on its feet, following it (art faces left)
+        if (Math.abs(e.tx - e.x) > 0.05) { this.atkFace = Math.sign(e.tx - e.x); this.atkFaceT = ATK_FACE_TIME; }
+        const ef = this.art?.skills.get(e.skill)?.effect;
+        if (ef && e.kind !== 'ground' && e.kind !== 'strike' && this.time - (this.heroFxAt.get(e.skill) ?? -9) >= HERO_FX_GAP) {
+          this.heroFxAt.set(e.skill, this.time);
+          const face = this.atkFaceT > 0 ? this.atkFace : sim.facing;
+          this.spawnAnim(ef, sim.px * PX, sim.py * PX + HERO_FOOT, true, e.kind === 'nova' ? 1 : face >= 0 ? -1 : 1);
+        }
+        break;
+      }
       case 'cast': {
         const def = SKILL_BY_KEY[e.skill];
         const ef = this.art?.skills.get(e.skill)?.effect;
-        if (ef) {
-          if (e.kind === 'nova') this.spawnAnim(ef, e.x * PX, e.y * PX);
-          else if (e.kind === 'ground' || e.kind === 'strike') this.spawnAnim(ef, e.tx * PX, e.ty * PX);
-        }
+        if (ef && (e.kind === 'ground' || e.kind === 'strike')) this.spawnAnim(ef, e.tx * PX, e.ty * PX);
         const el = def?.element;
         const tint = el === 'fire' ? 0xff7a2a : el === 'ice' ? 0x6fd6ff : el === 'lightning' ? 0xffe84a : el === 'poison' ? 0x62d85e : 0xb58cff;
         if (e.kind === 'bolt') this.ringFx(tx.disc, e.x, e.y, e.r, 0.3, tint, 0.8);
@@ -566,22 +594,33 @@ export class Renderer {
     // player: composited Maple character (native pixel size, art faces left) or the chibi placeholder
     const ps = this.playerSp;
     ps.zIndex = sim.py * PX;
-    const hf = this.hero?.frame(dt, sim.moving, sim.lastFire) ?? null;
+    const hf = this.hero?.frame(dt, sim.moving, sim.lastFire, this.art?.skillActions.get(sim.lastSkill) ?? null) ?? null;
+    if (this.atkFaceT > 0) this.atkFaceT -= dt;
+    const face = this.atkFaceT > 0 ? this.atkFace : sim.facing;
+    const af = this.afterSp;
+    af.visible = false;
     if (hf) {
       if (ps.texture !== hf.tex) ps.texture = hf.tex;
       ps.anchor.set(hf.ax / hf.tex.frame.width, hf.ay / hf.tex.frame.height);
-      ps.position.set(sim.px * PX, sim.py * PX + HERO_FOOT);
-      ps.scale.set(sim.facing >= 0 ? -1 : 1, 1);
+      // the art faces left; a sequence frame's move / rotate are in that space, so they mirror with the sprite
+      const mir = face >= 0 ? -1 : 1;
+      const sx = hf.flip ? -mir : mir;
+      ps.position.set(sim.px * PX + hf.mx * mir, sim.py * PX + HERO_FOOT + hf.my);
+      ps.scale.set(sx, 1);
+      ps.rotation = hf.rot * DEG * (sx < 0 ? -1 : 1);
+      this.drawAfterimage(sim, hf, dt);
     } else {
       if (ps.texture !== tx.player) ps.texture = tx.player;
       ps.anchor.set(0.5, 0.9);
       ps.position.set(sim.px * PX, sim.py * PX);
       const bob = sim.moving ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 3) * 1;
       ps.y -= bob;
-      ps.scale.set(SCALE * (sim.facing >= 0 ? 1 : -1), SCALE);
+      ps.scale.set(SCALE * (face >= 0 ? 1 : -1), SCALE);
+      ps.rotation = 0;
     }
     if (this.hurt > 0) { this.hurt -= dt; ps.tint = 0xff8080; } else ps.tint = 0xffffff;
     ps.visible = !sim.over || sim.won;
+    af.visible = af.visible && ps.visible;
 
     this.renderPet(sim, dt);
 
@@ -887,6 +926,7 @@ export class Renderer {
       const k = frameAt(a, f.t, false);
       f.sp.texture = a.tex[k];
       f.sp.anchor.set(a.ax[k], a.ay[k]);
+      if (f.follow) f.sp.position.set(sim.px * PX, sim.py * PX + HERO_FOOT);
     }
     this.dmgNums?.update(dt);
     const lf = this.levelFx;
@@ -911,6 +951,39 @@ export class Renderer {
       d.vy *= 0.94;
       d.t.alpha = Math.min(1, (d.life / d.max) * 2.2);
     }
+  }
+
+  /**
+   * The weapon swing trail over the hero: the trail frames of the hero's current body frame (action + index) at the hero's level,
+   * played with their own delays from the moment that body frame starts; hidden when there are none.
+   */
+  private drawAfterimage(sim: Sim, hf: PlayerFrame, dt: number) {
+    const hero = this.hero;
+    if (!hero) return;
+    if (hf.serial !== this.afterSerial) {
+      this.afterSerial = hf.serial;
+      this.afterT = 0;
+      this.afterFrames = hero.avatar.afterimage(hero.afterName)?.frames(Math.floor(sim.level / 10), hf.action, hf.index) ?? null;
+    } else this.afterT += dt * hf.speed;
+    const fr = this.afterFrames;
+    if (!fr) return;
+    let ms = this.afterT * 1000;
+    let k = 0;
+    for (; k < fr.length; k++) {
+      if (ms < fr[k].d) break;
+      ms -= fr[k].d;
+    }
+    if (k >= fr.length) return;
+    const f = fr[k];
+    const af = this.afterSp;
+    const ps = this.playerSp;
+    af.texture = f.tex;
+    af.anchor.set(f.ax / f.tex.frame.width, f.ay / f.tex.frame.height);
+    af.position.copyFrom(ps.position);
+    af.scale.x = ps.scale.x;
+    af.rotation = ps.rotation;
+    af.zIndex = ps.zIndex + 1;
+    af.visible = true;
   }
 
   /** The pet behind the hero: move while travelling, stand otherwise, a hop after each pickup; the drawn cat without art. */

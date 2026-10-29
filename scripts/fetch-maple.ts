@@ -388,7 +388,21 @@ function extractMobs(mobs: WzSet | null, strings: WzSet | null, dist: string, re
 
 // ---- skills ------------------------------------------------------------------------------------------------------
 
-function extractSkills(skillWz: WzSet | null, dist: string, report: Report): Record<string, SkillEntry> {
+/** Skill.wz skill/<id>/action: one string, or numbered strings in order. */
+export function skillActionsOf(node: Any): string[] {
+  const a = node?.get?.('action');
+  if (!a) return [];
+  if (typeof a.value === 'string') return a.value ? [a.value] : [];
+  const out: string[] = [];
+  for (const k of (a.keys?.() ?? []).filter((x: string) => /^\d+$/.test(x)).sort((x: string, y: string) => Number(x) - Number(y))) {
+    const v = a.child(k)?.resolve?.()?.value;
+    if (typeof v === 'string' && v) out.push(v);
+  }
+  return out;
+}
+
+/** `actions` collects the union of all skill body actions (the avatar extractor adds the ones the body has). */
+function extractSkills(skillWz: WzSet | null, dist: string, report: Report, actions: Set<string>): Record<string, SkillEntry> {
   const out: Record<string, SkillEntry> = {};
   const images = new Map<string, OpenImage | null>();
   let claw: { w: number; h: number; rgba: Buffer } | null = null;
@@ -438,9 +452,11 @@ function extractSkills(skillWz: WzSet | null, dist: string, report: Report): Rec
         report.bytes += writePng(join(dist, 'maple', rel), atlas.w, atlas.h, atlas.rgba);
         report.skillFrames += atlas.recs.length;
       }
-      out[String(want.id)] = { atlas: rel, size: atlas ? [atlas.w, atlas.h] : null, icon, frames: atlas ? atlas.recs : [] };
+      const action = skillActionsOf(node);
+      for (const a of action) actions.add(a);
+      out[String(want.id)] = { atlas: rel, size: atlas ? [atlas.w, atlas.h] : null, icon, frames: atlas ? atlas.recs : [], ...(action.length ? { action } : {}) };
       report.skillsOk++;
-      log(`skill ${want.id} ${want.name}: icon ${iconDesc}, ${counts.join(' ')}${atlas ? `, atlas ${atlas.w}x${atlas.h}` : ''}`);
+      log(`skill ${want.id} ${want.name}: icon ${iconDesc}, ${counts.join(' ')}${atlas ? `, atlas ${atlas.w}x${atlas.h}` : ''}, action=[${action.join(',')}]`);
     } catch (e) {
       warn(`skill ${want.id} ${want.name}: ${(e as Error).stack}`);
       report.skillsMissing.push(`${want.id} ${want.name} (error)`);
@@ -530,9 +546,10 @@ export function buildAssets(distDir: string, wzDir: string, mirror: string): Bui
       if (!sets[stem]) warn(`${stem}.wz not found or unreadable in ${wzDir}`);
     }
     const mobs = extractMobs(sets.Mob, sets.String, distDir, report);
-    const skills = extractSkills(sets.Skill, distDir, report);
+    const skillActions = new Set<string>();
+    const skills = extractSkills(sets.Skill, distDir, report, skillActions);
     report.bgm = extractBgm(sets.Sound, distDir, report);
-    const av = extractAvatar(sets.Character, sets.Base, join(distDir, 'maple'), { log, warn }, sets.String);
+    const av = extractAvatar(sets.Character, sets.Base, join(distDir, 'maple'), { log, warn }, sets.String, { skillActions: [...skillActions] });
     report.bytes += av.bytes;
 
     const world = buildWorld({ dist: distDir, sets: { Map: sets.Map, Effect: sets.Effect, UI: sets.UI }, log, warn, canvasList, packAtlas });

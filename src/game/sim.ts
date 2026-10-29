@@ -56,6 +56,11 @@ export class Sim {
   maxHp = PLAYER_BASE.hp;
   /** sim time of the last non-summon skill that fired (the renderer plays the weapon's attack action) */
   lastFire = -99;
+  /** key of the skill behind `lastFire` (the renderer picks its body action) */
+  lastSkill = '';
+  /** where the last fired skill aimed (yd) */
+  aimX = 0;
+  aimY = 0;
   facing = 1;
   /** key of the skill currently dealing damage; carried on 'hit' events so the renderer can pick hit art */
   curSkill = '';

@@ -101,6 +101,14 @@ function bodyTree(skin) {
   const col = SKIN[skin];
   return {
     info: { islot: 'Bd', vslot: 'Bd', cash: 0 },
+    // skill-specific actions, as in the real body: magic1 is a sequence of references to base action frames (negative delay = a
+    // wind-up, move / flip / rotate optional), swingT1 is an extra base action only skills use
+    swingT1: Object.fromEntries([0, 1].map((i) => [i, { body: cv(14, 20, () => [...col, 255], 7, 20, 'body', { navel: [0, -9], neck: [0, -18] }), arm: cv(5, 11, box(5, 11, col), 2, 0, 'arm', { navel: [6 + i, 8], hand: [0, 10] }), delay: 130 }])),
+    magic1: {
+      0: { action: 'swingO3', frame: 1, delay: -200 },
+      1: { action: 'swingT1', frame: 0, delay: 150, move: vec(5, -2), flip: 1, rotate: 90 },
+      2: { action: 'nothere', frame: 0, delay: 100 },
+    },
     ...forFrames((a, i) => {
       const bob = bobOf(a, i);
       const sw = swingOf(a, i);
@@ -156,10 +164,21 @@ function shoesTree(id) {
   const col = tint(id + 3);
   return { info: { islot: 'So', vslot: 'So', cash: 0 }, ...forFrames((a, i) => ({ shoes: cv(16, 4, box(16, 4, shade(col, 0.7)), 8, 0, 'shoes', { navel: [0, -6 + bobOf(a, i)] }) })) };
 }
+/** info/attack (attack action type) and info/afterImage (swing trail name) as in the real weapons */
+const WEAPON_INFO = { sword: { attack: 1, afterImage: 'swordOL' }, wand: { attack: 6, afterImage: 'mace' }, bow: { attack: 3, afterImage: 'bow' }, dagger: { attack: 1, afterImage: 'swordOS' } };
+/** Character.wz/Afterimage/<name>.img: <level>/<action>/<bodyFrame>/<n> canvases. Levels 0 and 1 are identical (aliased), 2 has more frames; a non-numeric "charge" level is ignored. */
+export function afterimageTree(col) {
+  const trail = (w, h, ox, oy, delay) => cv(w, h, box(w, h, col), ox, oy, 'x', {}, { delay });
+  const lvl = (extra) => ({
+    swingO1: { 2: { 0: trail(20, 12, 15, 9, 60), ...extra }, lt: vec(-20, -10), rb: vec(0, 5) },
+    swingO3: { 1: { 0: trail(20, 12, 15, 9, 60) } },
+  });
+  return { 0: lvl({}), 1: lvl({}), 2: lvl({ 1: trail(14, 8, 10, 6, 40) }), charge: { swingO1: { 2: { 0: trail(4, 4, 2, 2, 50) } } } };
+}
 /** Weapons point left of the hand; the bow is a tall arc, attacks tilt the blade. Only the actions the weapon type provides exist. */
 function weaponTree(kind) {
   const acts = kind === 'bow' ? ['stand2', 'walk2', 'alert', 'shoot1', 'swingO1'] : kind === 'dagger' ? ['stand1', 'walk1', 'alert', 'stabO1', 'stabO2', 'swingO1'] : ['stand1', 'walk1', 'alert', 'swingO1', 'swingO2', 'swingO3', 'stabO1'];
-  const t = { info: { islot: 'Wp', vslot: 'Wp', cash: 0, attackSpeed: 4 } };
+  const t = { info: { islot: 'Wp', vslot: 'Wp', cash: 0, attackSpeed: 4, ...WEAPON_INFO[kind] } };
   for (const a of acts) {
     t[a] = {};
     for (let i = 0; i < ACTION_FRAMES[a]; i++) {
@@ -202,6 +221,8 @@ export async function characterImages({ noBase = false, skip = () => false } = {
   for (const id of want.pants) put('pants', id, pantsTree(Number(id)));
   for (const id of want.shoes) put('shoes', id, shoesTree(Number(id)));
   for (const id of want.weapon) put('weapon', id, weaponTree(weaponKind(id)));
+  Character['Afterimage/swordOL.img'] = afterimageTree([230, 240, 255]);
+  Character['Afterimage/bow.img'] = afterimageTree([200, 160, 90]);
   const Base = noBase ? null : { 'zmap.img': Object.fromEntries(ZMAP.map((n) => [n, 0])), 'smap.img': Object.fromEntries(ZMAP.map((n) => [n, 'Bd'])) };
   return { Base, Character };
 }
@@ -335,8 +356,8 @@ export async function writeFixture(dir, { all = false, noTitle = false, characte
   if (all) {
     WANTED_SKILLS.forEach((s, i) => add(s.image, s.id, skillTree(hue(i * 3 + 1, 0.7, 0.5), { full: true, iconOnly: s.passive })));
   } else {
-    add('200.img', 2001005, skillTree([120, 80, 240])); // Magic Claw: everything
-    add('210.img', 2101004, skillTree([240, 100, 40], { iconOnly: true })); // Fire Arrow: icon only
+    add('200.img', 2001005, { ...skillTree([120, 80, 240]), action: { 0: 'magic1', 1: 'swingT1', 2: 'ghostly' } }); // Magic Claw: everything, three body actions (sequence, extra base action, missing)
+    add('210.img', 2101004, { ...skillTree([240, 100, 40], { iconOnly: true }), action: 'shoot1' }); // Fire Arrow: icon only, one action as a plain string
     add('100.img', 1000000, skillTree([60, 200, 90], { iconOnly: true })); // Improved HP Recovery: a 1st-job passive
   }
 

@@ -112,6 +112,8 @@ export interface SkillEntry {
   /** standalone icon PNG (usable as <img src>), or null */
   icon: string | null;
   frames: FrameRec[];
+  /** body actions the hero plays for this skill (Skill.wz skill/<id>/action); absent: the weapon's normal attack */
+  action?: string[];
 }
 
 export interface MapleManifest {

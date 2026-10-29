@@ -54,6 +54,44 @@ export interface ItemJson {
   actions: Record<string, FrameData[] | string>;
   info?: Record<string, string | number>;
 }
+/** One step of a body skill action: base action `a`, its frame `f`, ms `d`, optional offset (px, art space), mirror and rotation (degrees). */
+export interface SeqFrame {
+  a: string;
+  f: number;
+  d: number;
+  mx?: number;
+  my?: number;
+  flip?: 1;
+  rot?: number;
+}
+/** A frame to play (a base action frame with the sequence's move / flip / rotate; plain actions have zeros). */
+export interface PlayFrame {
+  a: string;
+  f: number;
+  d: number;
+  mx: number;
+  my: number;
+  flip: boolean;
+  rot: number;
+}
+/** Afterimage json (afterimage-<name>.json): a level is its actions, or the name of an earlier level with identical content. */
+export interface AfterFrameRec {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  ox: number;
+  oy: number;
+  d: number;
+}
+export type AfterLevel = Record<string, Record<string, AfterFrameRec[]>>;
+export interface AfterimageJson {
+  name: string;
+  size: [number, number];
+  levels: Record<string, AfterLevel | string>;
+}
+export const afterimageFile = (name: string, ext: 'json' | 'png') => `afterimage-${name}.${ext}`;
+
 export interface AvatarManifest {
   version: number;
   /** Base.wz zmap.img layer names in file order */
@@ -61,6 +99,10 @@ export interface AvatarManifest {
   /** extracted item ids (8 digits) per slot */
   items: Record<Slot, string[]>;
   actions: string[];
+  /** skill body actions that are sequences of references to base action frames (magic1, savage, shot...) */
+  seq?: Record<string, SeqFrame[]>;
+  /** names of the weapon swing trails written as afterimage-<name>.{png,json} */
+  afterimages?: string[];
   /** folder under maple/ */
   dir: string;
   /** droppable equipment (their frame files are listed in `items` too); absent when none could be extracted */
@@ -230,18 +272,54 @@ const STANCE_PREF: Record<Stance, { stand: string[]; walk: string[]; attack: str
   shoot: { stand: ['stand2', 'stand1'], walk: ['walk2', 'walk1'], attack: ['shoot1', 'swingO1'] },
   stab: { stand: ['stand1', 'stand2'], walk: ['walk1', 'walk2'], attack: ['stabO1', 'stabO2', 'swingO1'] },
 };
+/** the weapon's normal attack actions by its info/attack type (1 one-hand, 2 spear/polearm, 3 bow, 4 crossbow, 5 two-hand, 6 wand/staff/mace, 8 knuckle, 9 gun) */
+export const WEAPON_ATTACKS: Record<number, string[]> = {
+  1: ['stabO1', 'stabO2', 'swingO1', 'swingO2', 'swingO3'],
+  2: ['stabT1', 'stabT2', 'swingP1', 'swingP2'],
+  3: ['shoot1'],
+  4: ['shoot2'],
+  5: ['swingT1', 'swingT2', 'swingT3'],
+  6: ['swingO1', 'swingO2', 'swingO3'],
+  7: ['swingO1', 'swingO2', 'swingO3'],
+  8: ['stabO1', 'stabO2'],
+  9: ['shot'],
+};
 export interface StanceActions {
   stand: string;
   walk: string;
   attack: string[];
 }
-/** The actions a character with this stance uses, limited to those the weapon item (if loaded) provides. */
-export function stanceActions(stance: Stance, weapon: ItemJson | null): StanceActions {
+/**
+ * The actions a character with this stance uses, limited to those the weapon item (if loaded) provides. The attack list comes from
+ * the weapon's info/attack type; without it the stance's own list. Sequence names (`shot`) count when `seq` has them.
+ */
+export function stanceActions(stance: Stance, weapon: ItemJson | null, seq?: Record<string, SeqFrame[]>): StanceActions {
   const pref = STANCE_PREF[stance];
   const has = (a: string) => !weapon || a in weapon.actions;
   const first = (l: string[]) => l.find(has) ?? l[0];
-  const attack = pref.attack.filter(has);
+  const type = Number(weapon?.info?.attack);
+  const table = WEAPON_ATTACKS[type];
+  let attack = table ? table.filter((a) => (seq && a in seq) || (has(a) && !!weapon)) : [];
+  if (!attack.length) attack = pref.attack.filter(has);
   return { stand: first(pref.stand), walk: first(pref.walk), attack: attack.length ? attack : [pref.attack[0]] };
+}
+
+/**
+ * The frames to play for an action: a base action the body has (its frames in order), or a sequence (its steps whose base action
+ * the body has). Null when the body can play neither. Callers cache the result per (look, action).
+ */
+export function playable(action: string, body: ItemJson, seq?: Record<string, SeqFrame[]>): PlayFrame[] | null {
+  const base = framesOf(body, action);
+  if (base) return base.map((f, i) => ({ a: action, f: i, d: f.d, mx: 0, my: 0, flip: false, rot: 0 }));
+  const s = seq?.[action];
+  if (!s) return null;
+  const out: PlayFrame[] = [];
+  for (const x of s) {
+    const bf = framesOf(body, x.a);
+    if (!bf || x.f < 0 || x.f >= bf.length) continue;
+    out.push({ a: x.a, f: x.f, d: x.d, mx: x.mx ?? 0, my: x.my ?? 0, flip: !!x.flip, rot: x.rot ?? 0 });
+  }
+  return out.length ? out : null;
 }
 
 // ---- z order -----------------------------------------------------------------------------------------------------

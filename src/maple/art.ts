@@ -90,6 +90,8 @@ export class MapleArt {
   bosses: (MobArt | null)[] = [];
   /** attack skills by key */
   skills = new Map<string, SkillArt>();
+  /** body actions per attack skill key (Skill.wz skill/<id>/action); absent: the weapon's normal attack */
+  skillActions = new Map<string, string[]>();
   /** icon URLs by skill/passive key */
   icons: Record<string, string> = {};
   bgm: { run: string | null; title: string | null } = { run: null, title: null };
@@ -199,6 +201,8 @@ export async function buildArt(m: MapleManifest, base = 'maple/'): Promise<Maple
       [...SKILLS, ...EVOLVED_SKILLS].map(async (s) => {
         const a = await skillArt(s.id);
         if (a) art.skills.set(s.key, a);
+        const act = m.skills[String(s.id)]?.action;
+        if (Array.isArray(act) && act.length) art.skillActions.set(s.key, act);
       }),
     ),
     Promise.all([...SKILLS, ...EVOLVED_SKILLS].map((s) => icon(s.key, s.id)).concat(PASSIVES.map((p) => icon(p.key, p.id)))),
