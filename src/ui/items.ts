@@ -33,7 +33,7 @@ export class NoteUi {
     this.root.textContent = '';
     for (const n of live) {
       const d = document.createElement('div');
-      d.className = `note ${n.kind}`;
+      d.className = `note note-${n.kind}`;
       d.textContent = n.text;
       this.root.appendChild(d);
     }
