@@ -21,7 +21,7 @@ export interface Recipe {
 const E = (key: string, name: string, id: number, kind: SkillDef['kind'], element: SkillDef['element'], dmg: number, cd: number, range: number, radius: number, count: number, desc: string, extra: Partial<SkillDef> = {}): SkillDef =>
   ({ key, name, id, kind, element, dmg, cd, range, radius, count, desc, ...extra, evolved: true });
 
-// v83 Skill.wz ids (4th job codes 112, 122, 132, 212, 222, 232, 312, 322, 412, 422). A wrong id only costs the art; the asset step logs it as MISMATCH.
+// v83 Skill.wz ids (4th job codes 112, 122, 132, 212, 222, 232, 312, 322, 412, 422, 512, 522). A wrong id only costs the art; the asset step logs it as MISMATCH.
 export const EVOLVED_SKILLS: SkillDef[] = [
   E('brandish', 'Brandish', 1121008, 'cone', 'fire', 26, 2.8, 0, 9, 1, 'Two huge sweeps through everything in front. Weakens.', { hits: 2, weaken: 4 }),
   E('blast', 'Blast', 1221009, 'melee', 'lightning', 84, 3.0, 6, 2.8, 1, 'One colossal blow to the nearest enemy. Stuns.', { stun: 1.2 }),
@@ -33,6 +33,8 @@ export const EVOLVED_SKILLS: SkillDef[] = [
   E('piercing_arrow', 'Piercing Arrow', 3221001, 'pierce', 'arcane', 20, 2.0, 34, 0, 1, 'A long arrow that pierces a whole line of enemies.', { pierceBase: 8, missile: 44 }),
   E('triple_throw', 'Triple Throw', 4121007, 'bolt', 'arcane', 65, 1.5, 24, 1.1, 3, 'Three exploding stars at the nearest enemies.'),
   E('boomerang_step', 'Boomerang Step', 4221007, 'melee', 'arcane', 54, 2.0, 7, 2.0, 5, 'A dashing combo that hits many enemies around you.'),
+  E('barrage', 'Barrage', 5121007, 'melee', 'arcane', 30, 1.6, 6, 0, 1, 'A six-punch barrage on the nearest enemy.', { hits: 6 }),
+  E('rapid_fire', 'Rapid Fire', 5221004, 'pierce', 'arcane', 10, 0.45, 26, 0, 2, 'A stream of bullets that pierce enemies.', { pierceBase: 6, missile: 42 }),
 ];
 
 export const RECIPES: Recipe[] = [
@@ -46,6 +48,8 @@ export const RECIPES: Recipe[] = [
   { base: 'arrow_eruption', partner: 'mortal_blow_sniper', evolved: 'piercing_arrow' },
   { base: 'avenger', partner: 'shadow_partner', evolved: 'triple_throw' },
   { base: 'meso_explosion', partner: 'meso_guard', evolved: 'boomerang_step' },
+  { base: 'energy_blast', partner: 'energy_charge', evolved: 'barrage' },
+  { base: 'flamethrower', partner: 'gun_mastery', evolved: 'rapid_fire' },
 ];
 
 // the sim, skills.ts and the UI look skills up by key

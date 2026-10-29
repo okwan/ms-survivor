@@ -8,8 +8,8 @@ import { statusScale } from './layout.ts';
 import { theme } from './theme.ts';
 import { canFullscreen, isPortrait, isTouch, toggleFullscreen } from './touch.ts';
 
-/** Status bar theme per class: the hue of the EXP / level plate (warrior red, magician blue, bowman green, thief purple). */
-export const JOB_HUE: Record<string, number> = { warrior: 355, magician: 215, bowman: 125, thief: 280 };
+/** Status bar theme per class: the hue of the EXP / level plate (warrior red, magician blue, bowman green, thief purple, pirate orange). */
+export const JOB_HUE: Record<string, number> = { warrior: 355, magician: 215, bowman: 125, thief: 280, pirate: 35 };
 
 /** The window buttons of the status bar. */
 export type BarWindow = 'equip' | 'inventory' | 'stats';

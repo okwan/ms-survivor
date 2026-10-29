@@ -111,13 +111,15 @@ async function main() {
         await menu('pause', () => { window.game.window('equip', false); window.game.window('inventory', false); for (let i = 0; i < 5; i++) window.game.pick(0); if (window.game.pause(true) !== 'paused') throw new Error('did not pause'); });
         await menu('results', () => { window.game.pause(false); window.game.god(false); window.game.autopick(true); window.game.step(900); });
         // a new run played in real time with the bot; captured right after a skill fired, so the hero is mid-attack (real body action, swing trail, cast effect)
-        try {
-          await page.evaluate(() => { window.game.start(11, 'warrior'); window.game.god(true); window.game.autopick(true); window.game.bot(true); });
-          await page.waitForFunction(() => { const s = window.game.sim; return s.t > 4 && s.t - s.lastFire < 0.1; }, null, { timeout: 30000, polling: 'raf' });
-          await shot('attack', 0);
-          console.log(`shoot ${s.tag}: attack ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, skill: window.game.sim.lastSkill, aimDx: window.game.sim.aimX - window.game.sim.px, facing: window.game.sim.facing })))}`);
-        } catch (e) {
-          console.log(`shoot ${s.tag}: attack: ${e.message}`);
+        for (const cls of ['warrior', 'pirate', 'thief']) {
+          try {
+            await page.evaluate((c) => { window.game.start(11, c); window.game.god(true); window.game.autopick(true); window.game.bot(true); }, cls);
+            await page.waitForFunction(() => { const s = window.game.sim; return s.t > 4 && s.t - s.lastFire < 0.1; }, null, { timeout: 30000, polling: 'raf' });
+            await shot(`attack-${cls}`, 0);
+            console.log(`shoot ${s.tag}: attack-${cls} ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, skill: window.game.sim.lastSkill, aimDx: window.game.sim.aimX - window.game.sim.px, facing: window.game.sim.facing })))}`);
+          } catch (e) {
+            console.log(`shoot ${s.tag}: attack-${cls}: ${e.message}`);
+          }
         }
       }
     } catch (e) {

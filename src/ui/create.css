@@ -9,7 +9,7 @@
 .create .create-buttons .btn { min-width: 110px; }
 
 /* class cards */
-.create .create-classes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.create .create-classes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .create .class-card { font-family: var(--font); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 10px; border-radius: 14px; background: linear-gradient(#f4f9ff, #dcebff); border: 3px solid #b9d3f5; color: #26324f; cursor: pointer; text-align: center; transition: transform .08s, border-color .08s; pointer-events: auto; }
 .create .class-card:hover { transform: translateY(-2px); border-color: #5aa0ee; }
 .create .class-card.selected { border-color: #ff9a1f; background: linear-gradient(#fff9ea, #ffe6b0); box-shadow: 0 0 0 2px #fff inset, 0 0 12px rgba(255,154,31,.7); }
@@ -39,6 +39,7 @@
 
 @media (max-width: 640px) {
   .create .create-classes { grid-template-columns: repeat(2, 1fr); }
+  .create .class-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .create .create-layout { grid-template-columns: 1fr; }
   .create .create-canvas { width: 150px; height: 172px; }
   .create .pick-row { grid-template-columns: 82px 34px 1fr 34px; }

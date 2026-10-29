@@ -28,7 +28,7 @@ const ph = GearPool.placeholder();
 ok(!ph.real && ph.items.size > 50, 'placeholder pool exists without a manifest');
 eq(GearPool.fromManifest(null).real, false, 'no manifest -> placeholder pool');
 eq(GearPool.fromManifest({ items: {}, iconAtlas: '' }).real, false, 'an empty manifest -> placeholder pool');
-for (const cls of ['warrior', 'magician', 'bowman', 'thief'] as const) {
+for (const cls of ['warrior', 'magician', 'bowman', 'thief', 'pirate'] as const) {
   const rng = new Rng(5);
   const seen = new Set<string>();
   for (let t = 0; t < 900; t += 100) for (let i = 0; i < 60; i++) {
@@ -36,7 +36,7 @@ for (const cls of ['warrior', 'magician', 'bowman', 'thief'] as const) {
     ok(!!it, `${cls} rolls an item at ${t}s`);
     seen.add(it.slot);
     ok(it.slot !== 'shield' || cls === 'warrior', 'only the warrior gets shields');
-    ok(it.slot !== 'weapon' || it.job === ({ warrior: 1, magician: 2, bowman: 4, thief: 8 })[cls], 'weapons are class weapons');
+    ok(it.slot !== 'weapon' || it.job === ({ warrior: 1, magician: 2, bowman: 4, thief: 8, pirate: 16 })[cls], 'weapons are class weapons');
   }
   eq(seen.size, cls === 'warrior' ? 8 : 7, `${cls} sees every slot it can wear`);
 }

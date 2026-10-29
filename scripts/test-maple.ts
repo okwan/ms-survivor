@@ -173,7 +173,7 @@ try {
   ok(ap.w <= 1024 && ap.rgba.some((v, i) => i % 4 === 3 && v > 0), 'avatar atlas PNG has pixels');
   ok(existsSync(join(run.dist, 'maple', 'avatar', 'coat-01041006.png')), 'a coat stored in Longcoat/ is found');
   ok(/maple: avatar: zmap.img has 31 layers, front-most first/.test(run.out), 'zmap log line');
-  ok(/avatar: 78\/78 items extracted/.test(run.out), 'avatar totals line');
+  ok(/avatar: 79\/79 items extracted/.test(run.out), 'avatar totals line');
   ok(/avatar preview Warrior stand1\/0: 11 layers/.test(run.out), 'composite preview log');
   ok(/--- warrior look stand1\/0 \d+x\d+ \(feet at/.test(run.out), 'ASCII preview of the composited character');
 
@@ -210,7 +210,7 @@ try {
   const gi = gear.items;
   const ids = Object.keys(gi);
   ok(ids.length > 60 && ids.length <= 320, `gear items extracted (${ids.length})`);
-  for (const skip of ['01002999', '01002998', '01002997', '01002996', '01009998', '01009997', '01009999', '01432000', '01092002']) ok(!(skip in gi), `${skip} (no tuc, event flag, no stats, cash, pirate-only, no walk frames, spear, mage shield) is skipped`);
+  for (const skip of ['01002999', '01002998', '01002997', '01002996', '01009998', '01009999', '01432000', '01092002']) ok(!(skip in gi), `${skip} (no tuc, event flag, no stats, cash, no walk frames, spear, mage shield) is skipped`);
   eq(gi['01302103'], { slot: 'weapon', name: 'Test Sword 3', level: 30, job: 1, tuc: 7, stats: { pad: 24 }, icon: gi['01302103'].icon }, 'a sword: name from String.wz, level, job, stats from info/inc*');
   eq(gi['01372103'].stats, { mad: 29, int: 3 }, 'wand stats: incMAD and incINT map to mad / int');
   eq(gi['01072103'].stats, { pdd: 5, speed: 3 }, 'boots stats: incPDD, incSPEED');
@@ -218,12 +218,12 @@ try {
   eq(gi['01002003'].g, undefined, 'caps are unisex');
   eq([gi['01052000'].slot, gi['01052000'].long], ['coat', true], 'a Longcoat is a coat slot item marked long');
   ok(Object.values(gi).every((e) => e.slot !== 'shield' || e.job === 1 || e.job === 0), 'shields are warrior (or all-class) only');
-  ok(Object.values(gi).every((e) => e.slot !== 'weapon' || [1, 2, 4, 8, 0].includes(e.job)), 'weapons have one class job');
+  ok(Object.values(gi).every((e) => e.slot !== 'weapon' || [1, 2, 4, 8, 16, 0].includes(e.job)), 'weapons have one class job');
   // every tier t0..t7 has items, gloves, capes, shields and every class's weapon included; empty tier windows borrow a higher-level item and say so
   const tierOfE = (e: { level: number; tier?: number }) => e.tier ?? tierOfLevel(e.level);
   for (let t = 0; t < 8; t++) {
     for (const slot of ['glove', 'cape', 'shield', 'weapon', 'cap', 'coat', 'pants', 'shoes'] as const) ok(Object.values(gi).some((e) => e.slot === slot && tierOfE(e) === t), `tier ${t} has a ${slot}`);
-    for (const [job, nm] of [[1, 'warrior'], [2, 'magician'], [4, 'bowman'], [8, 'thief']] as const) ok(Object.values(gi).some((e) => e.slot === 'weapon' && e.job === job && tierOfE(e) === t), `tier ${t} has a ${nm} weapon`);
+    for (const [job, nm] of [[1, 'warrior'], [2, 'magician'], [4, 'bowman'], [8, 'thief'], [16, 'pirate']] as const) ok(Object.values(gi).some((e) => e.slot === 'weapon' && e.job === job && tierOfE(e) === t), `tier ${t} has a ${nm} weapon`);
   }
   ok(Object.values(gi).filter((e) => e.slot === 'glove' && e.tier === 5).every((e) => e.level > 59), 'the glove standing in for tier 5 is a higher-level one (tier field set)');
   ok(Object.values(gi).every((e) => e.level <= 120), 'no item above reqLevel 120');

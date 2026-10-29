@@ -54,6 +54,7 @@ export const WEAPON_SOUND_TYPES: Record<string, string[]> = {
   magician: ['wand', 'staff', 'barehands'],
   bowman: ['bow'],
   thief: ['dagger', 'claw', 'tGlove', 'swordS'],
+  pirate: ['knuckle', 'gun'],
 };
 
 /** Game.img and UI.img sounds: manifest key -> [image, node names tried in order] */

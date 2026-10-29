@@ -36,7 +36,7 @@ const KEYS: Record<string, WindowName> = { q: 'equip', i: 'inventory', c: 'stats
 const STAT_LINES: [keyof GearStats, string][] = [
   ['str', 'STR'], ['dex', 'DEX'], ['int', 'INT'], ['luk', 'LUK'], ['pad', 'WEAPON ATTACK'], ['mad', 'MAGIC ATTACK'], ['pdd', 'WEAPON DEF.'], ['mdd', 'MAGIC DEF.'], ['mhp', 'MaxHP'], ['mmp', 'MaxMP'], ['speed', 'SPEED'],
 ];
-const JOB_NAMES: [number, string][] = [[1, 'Warrior'], [2, 'Magician'], [4, 'Bowman'], [8, 'Thief']];
+const JOB_NAMES: [number, string][] = [[1, 'Warrior'], [2, 'Magician'], [4, 'Bowman'], [8, 'Thief'], [16, 'Pirate']];
 
 export function jobText(mask: number): string {
   if (!mask) return 'ALL CLASSES';

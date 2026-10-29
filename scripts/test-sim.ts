@@ -2,7 +2,7 @@
 import { Sim } from '../src/game/sim.ts';
 import { EVOLUTION_PASSIVE_SLOTS, partnerSlotOpen } from '../src/game/evolutions.ts';
 import { botInput, botPick } from '../src/game/bot.ts';
-import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, ARMOR_CAP, ARMOR_K, armorReduction, mitigated, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, poolLo, xpToNext, LADDER, DIFFICULTIES } from '../src/game/data.ts';
+import { BASE_ENEMY_SPEED, BOSSES, BOSS_COMPANION_HP, BOSS_EVERY, BOSS_TOTAL, BOSS_WAVES, CLASSES, enemyDmgMult, enemyHpMult, ENEMY_SPEED_CAP, MASTERIES, MASTERY_BY_KEY, SKILL_MASTERY_PER, enemySpeed, masteryMax, mobSpeedFactor, progress, SPAWN_RING_MAX, SPAWN_RING_MIN, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult, CLASS_BY_KEY, JOBS, JOB_BY_CODE, MAX_ALIVE, ARMOR_CAP, ARMOR_K, armorReduction, mitigated, MAX_PASSIVES, MAX_SKILLS, PASSIVES, SKILLS, aliveTarget, jobOfId, unlockedJobs, poolLo, xpToNext, LADDER, DIFFICULTIES } from '../src/game/data.ts';
 import { MESO } from '../src/game/types.ts';
 
 let failed = 0;
@@ -86,7 +86,7 @@ for (const c of CLASSES) {
 }
 console.log('-- level 10 (god-mode bot runs): ' + CLASSES.map((c) => `${c.name} ${lvlTimes[c.key]?.toFixed(1)} s`).join(', '));
 console.log('-- class kits');
-eq(CLASSES.length, 4, 'four classes');
+eq(CLASSES.length, 5, 'five classes');
 ok(new Set(SKILLS.map((s) => s.key)).size === SKILLS.length && new Set(PASSIVES.map((p) => p.key)).size === PASSIVES.length, 'skill keys and passive keys are unique');
 {
   const ids = [...SKILLS.map((s) => s.id), ...PASSIVES.map((p) => p.id)];
@@ -103,6 +103,32 @@ for (const c of CLASSES) {
   ok(c.branches.every((b) => JOB_BY_CODE[b]?.tier === 2 && JOB_BY_CODE[b + 1]?.tier === 3 && JOB_BY_CODE[b].cls === c.key), `${c.name} branches have a 2nd and a 3rd job`);
   const s0 = new Sim(1, c.key);
   eq(s0.maxHp, c.hp, `${c.name} base HP`); eq(s0.speed, c.speed, `${c.name} base speed`); eq(s0.skills[0].key, c.skills[0], `${c.name} starts with ${c.skills[0]}`);
+}
+// Pirate: the fifth class, fists and guns; a short headless run fires its skills and throws nothing
+{
+  const pc = CLASS_BY_KEY['pirate'];
+  eq([pc.firstJob, ...pc.branches].join(), '500,510,520', 'Pirate jobs 500 -> 510 / 520');
+  eq(JOBS.filter((j) => j.cls === 'pirate').map((j) => j.code).join(), '500,510,511,520,521', 'Pirate has five jobs');
+  eq(pc.weapon, 1482000, 'Pirate starts with a Knuckle');
+  eq(unlockedJobs(pc, 0, 1).join(), '500', 'Pirate unlockedJobs: 1st job only');
+  eq(unlockedJobs(pc, 510, 70).join(), '500,510,511', 'Pirate unlockedJobs: Brawler line');
+  eq(unlockedJobs(pc, 520, 70).join(), '500,520,521', 'Pirate unlockedJobs: Gunslinger line');
+  const sim = new Sim(5, 'pirate');
+  const fired = new Set<string>();
+  let threw = false;
+  try {
+    for (let i = 0; i < 90 * 60 && !sim.over; i++) {
+      if (sim.offer) { sim.pick(0); continue; }
+      const inp = botInput(sim, 1);
+      sim.setInput(inp.x, inp.y);
+      sim.tick();
+      for (const e of sim.events) if (e.type === 'cast') fired.add((e as { skill?: string }).skill ?? '');
+      sim.events.length = 0;
+    }
+  } catch (e) { threw = true; console.log(e); }
+  ok(!threw, 'a 90 s Pirate run does not throw');
+  ok(sim.kills > 20, `the Pirate kills enemies (${sim.kills})`);
+  ok(fired.has('flash_fist') && [...fired].every((k) => pc.skills.includes(k)), `the Pirate casts its own skills (${[...fired]})`);
 }
 // job advancement: every class and branch, god-mode bot, picks the card chosen below
 function jobRun(clsKey: string, branchIdx: number) {

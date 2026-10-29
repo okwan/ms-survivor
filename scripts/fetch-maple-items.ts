@@ -75,11 +75,12 @@ export const id8 = (n: number) => String(n).padStart(8, '0');
 /** Slot (and, for weapons, class) a scroll's "for <word>" names; null for words our gear does not have. */
 export function scrollSlot(word: string): { slot: GearSlot; wclass?: ClassKey } | null {
   const w = word.toLowerCase();
-  if (/two-?handed|crossbow|axe|mace|spear|pole|claw|knuckle|gun|blunt|\bbw\b/.test(w)) return null;
+  if (/two-?handed|crossbow|axe|mace|spear|pole|claw|blunt|\bbw\b/.test(w)) return null;
   if (/one-?handed sword/.test(w)) return { slot: 'weapon', wclass: 'warrior' };
   if (/\b(wand|staff)\b/.test(w)) return { slot: 'weapon', wclass: 'magician' };
   if (/\bbow\b/.test(w)) return { slot: 'weapon', wclass: 'bowman' };
   if (/\bdagger\b/.test(w)) return { slot: 'weapon', wclass: 'thief' };
+  if (/\b(knuckle|gun)\b/.test(w)) return { slot: 'weapon', wclass: 'pirate' };
   if (/\bcape\b/.test(w)) return { slot: 'cape' };
   if (/helmet|\bcap\b|\bhat\b/.test(w)) return { slot: 'cap' };
   if (/overall|topwear|\btop\b|\bcoat\b|longcoat/.test(w)) return { slot: 'coat' };

@@ -28,7 +28,7 @@ function buy(cls: ClassKey, h: HyperClass, keys: string[]): HyperClass {
 }
 
 // ---- the trees are generated from the skills ----
-eq(CLASSES.map((c) => c.key), ['warrior', 'magician', 'bowman', 'thief'], 'four classes');
+eq(CLASSES.map((c) => c.key), ['warrior', 'magician', 'bowman', 'thief', 'pirate'], 'five classes');
 const shape: Record<string, string> = {};
 for (const c of CLASSES) {
   const t = HYPER_TREES[c.key];
@@ -139,7 +139,7 @@ eq(sanitizeHyper([1, 2]), emptyHyper(), 'an array: empty');
   eq(bad({}, -50).levels, 0, 'negative levels become 0');
   eq(bad({}, Infinity).levels, 0, 'infinite levels become 0');
   eq(sanitizeHyper({ magician: 7, warrior: null, bowman: { levels: 'a', ranks: 5 }, thief: { levels: 40 }, wizard: {} }).thief, { levels: 40, ranks: {} }, 'garbage classes are emptied, unknown classes ignored');
-  eq(Object.keys(sanitizeHyper({ wizard: {} })).sort(), ['bowman', 'magician', 'thief', 'warrior'], 'always the four classes');
+  eq(Object.keys(sanitizeHyper({ wizard: {} })).sort(), ['bowman', 'magician', 'pirate', 'thief', 'warrior'], 'always the five classes');
   // a tree that changed (a node renamed) loses only the unknown ranks
   eq(bad({ [`${mc}:reinforce`]: 2, 'old_skill:reinforce': 3 }).ranks, { [`${mc}:reinforce`]: 2 }, 'a removed skill\'s ranks are dropped, the rest kept');
 }

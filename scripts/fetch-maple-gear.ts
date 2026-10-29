@@ -54,8 +54,8 @@ const FOLDERS: Record<string, { slot: GearSlot; long: boolean }> = {
   shield: { slot: 'shield', long: false },
   weapon: { slot: 'weapon', long: false },
 };
-/** Weapon type = id / 10000: sword 130, dagger 133, wand 137, staff 138, bow 145. The Thief uses the dagger (its stance is stab). */
-const WEAPON_TYPES: Record<ClassKey, number[]> = { warrior: [130], magician: [137, 138], bowman: [145], thief: [133] };
+/** Weapon type = id / 10000: sword 130, dagger 133, wand 137, staff 138, bow 145, knuckle 148, gun 149. The Thief uses the dagger (its stance is stab). */
+const WEAPON_TYPES: Record<ClassKey, number[]> = { warrior: [130], magician: [137, 138], bowman: [145], thief: [133], pirate: [148, 149] };
 const ALL_WEAPON_TYPES = new Set(Object.values(WEAPON_TYPES).flat());
 const INC: Record<string, keyof GearStats> = {
   incPAD: 'pad', incMAD: 'mad', incPDD: 'pdd', incMDD: 'mdd', incMHP: 'mhp', incMMP: 'mmp', incSPEED: 'speed', incSTR: 'str', incDEX: 'dex', incINT: 'int', incLUK: 'luk',
@@ -96,7 +96,7 @@ export function genderOfId(n: number): 0 | 1 | 2 {
   return g === 0 ? 0 : g === 1 ? 1 : 2;
 }
 
-/** Whether a class may use an item with this reqJob bitmask (0 = everyone; 16, pirates, matches none of the four). */
+/** Whether a class may use an item with this reqJob bitmask (0 = everyone; 16, pirates, is the fifth class). */
 export const jobFits = (job: number, cls: ClassKey) => job === 0 || (job & JOB_BIT[cls]) !== 0;
 
 /** names of all equips: String.wz Eqp.img/Eqp/<Category>/<id>/name, searching the whole Eqp subtree */
@@ -141,7 +141,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
     // ---- scan every equip image's info node ----
     const names = equipNames(strings, lg);
     const cands: Candidate[] = [];
-    const seen = { images: 0, cash: 0, noFrames: 0, pirate: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, derived: 0, tooHigh: 0, timeLimited: 0 };
+    const seen = { images: 0, cash: 0, noFrames: 0, noInfo: 0, unreadable: 0, noTuc: 0, flagged: 0, noStats: 0, derived: 0, tooHigh: 0, timeLimited: 0 };
     const infoKeys = new Map<string, number>();
     const vslots = new Map<string, number>();
     const islots = new Map<string, number>();
@@ -212,11 +212,6 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
         continue;
       }
       const job = intOf(val('reqJob'));
-      if (job === 16) {
-        seen.pirate++;
-        hard('pirate');
-        continue;
-      }
       const stats: GearStats = {};
       for (const [k, to] of Object.entries(INC)) {
         const v = intOf(val(k));
@@ -259,7 +254,7 @@ export function extractGear(tools: GearTools, character: WzLike, strings: WzLike
       if (bad.length) sample(f.slot, `${m[2]} L${level} soft ${bad.join(',')}: ${[...info.keys()].filter((k: string) => k !== 'icon' && k !== 'iconRaw').map((k: string) => `${k}=${val(k)}`).slice(0, 14).join(' ')}`);
       cands.push({ id: m[2].padStart(8, '0'), n, slot: f.slot, folder: m[1], long: f.long, level, job, gender: genderOfId(n), stats, where: path, tuc: intOf(val('tuc')), derived, bad, tier: tierOfLevel(Math.min(level, MAX_GEAR_LEVEL)) });
     }
-    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand frames, ${seen.pirate} pirate-only, ${seen.noInfo} without info, ${seen.unreadable} unreadable, ${seen.noStats} without inc* stats and not a real wearable, ${seen.derived} kept with DERIVED stats (no inc* keys), ${seen.timeLimited} timeLimited, ${seen.tooHigh} above reqLevel ${BORROW_MAX_LEVEL}; kept ${cands.length} candidates, of which soft-flagged (picked only when nothing cleaner): ${seen.noTuc} tuc <= 0, ${seen.flagged} notSale/exItem/setItemID/charmEXP/tradeBlock`);
+    log(`gear: scanned ${seen.images} equip images (${[...perFolder].map(([k, v]) => `${k} ${v}`).join(', ')}); skipped ${seen.cash} cash, ${seen.noFrames} without stand frames, ${seen.noInfo} without info, ${seen.unreadable} unreadable, ${seen.noStats} without inc* stats and not a real wearable, ${seen.derived} kept with DERIVED stats (no inc* keys), ${seen.timeLimited} timeLimited, ${seen.tooHigh} above reqLevel ${BORROW_MAX_LEVEL}; kept ${cands.length} candidates, of which soft-flagged (picked only when nothing cleaner): ${seen.noTuc} tuc <= 0, ${seen.flagged} notSale/exItem/setItemID/charmEXP/tradeBlock`);
     {
       const clean = (slot: string, t: number) => cands.filter((c) => c.slot === slot && tierOfLevel(Math.min(c.level, MAX_GEAR_LEVEL)) === t && !c.bad.length).length;
       const any = (slot: string, t: number) => cands.filter((c) => c.slot === slot && tierOfLevel(Math.min(c.level, MAX_GEAR_LEVEL)) === t).length;
