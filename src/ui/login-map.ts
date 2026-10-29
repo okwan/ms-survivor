@@ -762,6 +762,10 @@ export class MapLogin implements LoginLike {
     n.autocomplete = 'off';
     n.spellcheck = false;
     n.setAttribute('aria-label', 'Name of character');
+    n.autocapitalize = 'words';
+    n.enterKeyHint = 'done';
+    n.placeholder = 'Name';
+    n.addEventListener('focus', () => n.select());
     n.value = ch?.name ?? '';
     n.style.cssText = `left:${L.name.x}px;top:${L.name.y}px;width:${L.name.w}px;height:${L.name.h}px`;
     n.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') this.cCheck(); });

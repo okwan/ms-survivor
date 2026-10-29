@@ -4,6 +4,9 @@ import { isTouch } from './touch.ts';
 const R = 56;
 const DEAD = 0.12;
 
+/** true when a key event goes to a text field */
+export const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+
 export class Input {
   private keys = new Set<string>();
   private joyId = -1;
@@ -31,6 +34,8 @@ export class Input {
     root.appendChild(this.ghost);
 
     window.addEventListener('keydown', (e) => {
+      // typing in a text field (the character name) must not steer the hero or have its WASD swallowed
+      if (isTyping(e.target)) return;
       const k = e.key.toLowerCase();
       if (k === 'escape' || k === 'p') { if (!e.repeat) this.onPause(); return; }
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
