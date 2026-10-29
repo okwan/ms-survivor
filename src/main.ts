@@ -30,7 +30,7 @@ import { GachaUi } from './ui/gachapon.ts';
 import { ScrollPool } from './game/scrolls.ts';
 import { bookBonus, bookCounts, mergeBook } from './game/book.ts';
 import { applyUiTheme } from './ui/theme.ts';
-import { Input } from './ui/input.ts';
+import { Input, isTyping } from './ui/input.ts';
 import { isTouch } from './ui/touch.ts';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './ui/save.ts';
 import type { StoredRun } from './ui/save.ts';
@@ -242,6 +242,7 @@ async function boot() {
       difficulty: (i) => { save.settings.difficulty = Math.max(0, Math.min(i, save.cleared + 1)); writeSave(save); screens.setDifficulty(save); },
       hyper: () => hyperPanel.show(),
       pet: (on) => { save.settings.pet = on; writeSave(save); },
+      effects: (r) => setEffects(r),
       volume: (v) => { save.settings.volume = v; writeSave(save); bgm?.setVolume(v); },
       sfxVolume: (v) => { save.settings.sfxVolume = v; writeSave(save); sfx?.setVolume(v); sfx?.play('ui.click'); },
       mute: (m) => setMuted(m),
@@ -287,6 +288,20 @@ async function boot() {
     screens.setMuted(m);
     hud.setMuted(m);
   }
+  /** fewer, fainter skill effects around the hero: saves, applies to the renderer and the HUD button */
+  function setEffects(r: boolean) {
+    if (r) save.settings.effects = 'reduced'; else delete save.settings.effects;
+    writeSave(save);
+    renderer.setReducedEffects(r);
+    hud.setReducedEffects(r);
+  }
+  renderer.setReducedEffects(save.settings.effects === 'reduced');
+  hud.setReducedEffects(save.settings.effects === 'reduced');
+  hud.fxBtn.addEventListener('click', () => setEffects(save.settings.effects !== 'reduced'));
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'v' || isTyping(e.target)) return;
+    if (mode === 'playing') setEffects(save.settings.effects !== 'reduced');
+  });
   // button and card sounds for every UI element (clicks, and a soft tick when the pointer enters one)
   uiRoot.addEventListener('click', (e) => { if ((e.target as Element).closest('button, .card')) sfx?.play('ui.click'); });
   let hoverEl: Element | null = null;
@@ -354,6 +369,8 @@ async function boot() {
     const api = {
       get sim() { return sim; },
       start: (seed?: number, cls?: string) => startRun(seed, cls),
+      /** fewer effects on / off (saved and applied); returns whether they are reduced now */
+      effects: (reduced: boolean) => { setEffects(reduced); return save.settings.effects === 'reduced'; },
       /** open the New Character window, or (with a class) pick it and jump to the customisation step */
       create: () => { screens.hideAll(); create.show(save.character ?? { ...hero }); },
       step(seconds: number) {

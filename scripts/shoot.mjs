@@ -134,6 +134,24 @@ async function main() {
             console.log(`shoot ${s.tag}: attack-${cls}: ${e.message}`);
           }
         }
+        // a crowded late run: ten minutes fast-forwarded with the bot (many skills, high level, a big swarm), then played in real
+        // time and captured mid-attack, when the most effects are on the hero
+        for (const cls of ['magician', 'warrior']) {
+          try {
+            await page.evaluate((c) => { window.game.start(17, c); window.game.god(true); window.game.autopick(true); window.game.bot(true); window.game.step(600); }, cls);
+            await page.waitForTimeout(2500);
+            await page.waitForFunction(() => { const s = window.game.sim; return s.t - s.lastFire < 0.05; }, null, { timeout: 30000, polling: 'raf' });
+            await shot(`crowded-${cls}`, 250);
+            console.log(`shoot ${s.tag}: crowded-${cls} ${JSON.stringify(await page.evaluate(() => ({ t: window.game.sim.t, level: window.game.sim.level, skills: window.game.sim.skills.length, enemies: window.game.sim.enemies.length })))}`);
+            // the same moment with Fewer effects on
+            await page.evaluate(() => window.game.effects?.(true));
+            await page.waitForFunction(() => { const s = window.game.sim; return s.t - s.lastFire < 0.05; }, null, { timeout: 30000, polling: 'raf' });
+            await shot(`crowded-${cls}-reduced`, 250);
+            await page.evaluate(() => window.game.effects?.(false));
+          } catch (e) {
+            console.log(`shoot ${s.tag}: crowded-${cls}: ${e.message}`);
+          }
+        }
       }
     } catch (e) {
       console.log(`shoot ${s.tag}: ${e.message}`);

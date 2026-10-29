@@ -356,9 +356,9 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 /* ---------- items: notes, equip window upgrades, Monster Book ---------- */
 .notes { position: absolute; left: 50%; bottom: calc(71px * var(--sbs, 1) + 60px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px; align-items: center; pointer-events: none; z-index: 5; }
 .note { padding: 4px 12px; border-radius: 10px; border: 2px solid #fff; background: rgba(10,20,50,.85); color: #fff; font-size: 14px; font-weight: bold; }
-.note.good { border-color: #6aff7a; color: #d6ffd9; }
-.note.bad { border-color: #ff6a6a; color: #ffd6d6; }
-.note.card { border-color: #ffd23a; color: #fff0b0; }
+.note-good { border-color: #6aff7a; color: #d6ffd9; }
+.note-bad { border-color: #ff6a6a; color: #ffd6d6; }
+.note-card { border-color: #ffd23a; color: #fff0b0; }
 .gear-slot .left { position: absolute; left: 2px; top: 0; font-size: 9px; font-style: normal; color: #4a5278; }
 .gear-slot .plus { position: absolute; right: 1px; bottom: 0; font-size: 10px; color: #c05000; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
 .book .win { width: min(760px, 100%); }

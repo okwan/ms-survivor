@@ -28,6 +28,8 @@ export interface LoginHandlers {
   sfxVolume(v: number): void;
   mute(m: boolean): void;
   pet(on: boolean): void;
+  /** fewer, fainter skill effects around the hero */
+  effects(reduced: boolean): void;
 }
 
 /** the classic layout needs at least the two real title buttons */
@@ -91,6 +93,7 @@ export class LoginScreen implements LoginLike {
   private playBtn: HTMLButtonElement;
   private contBtn: HTMLButtonElement;
   private petEl!: HTMLInputElement;
+  private fxEl!: HTMLInputElement;
   private selectBtns!: HTMLDivElement;
   /** frames the select stage drew (tests) */
   drawn = 0;
@@ -130,6 +133,11 @@ export class LoginScreen implements LoginLike {
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
     this.optionsPane.appendChild(petOpt);
+    const fxOpt = el('label', 'pet-opt', '<input type="checkbox"> Fewer effects');
+    fxOpt.title = 'Fewer, fainter skill effects around your character';
+    this.fxEl = fxOpt.querySelector('input')!;
+    this.fxEl.addEventListener('change', () => this.h.effects(this.fxEl.checked));
+    this.optionsPane.appendChild(fxOpt);
     this.board.appendChild(this.optionsPane);
     this.board.appendChild(el('p', 'login-hint', isTouch() ? 'Move: drag anywhere.<br>Skills fire automatically.' : 'Move: WASD / arrows or drag on touch.<br>Skills fire automatically. Q equip, I items, C stats.'));
     this.titlePane.appendChild(this.board);
@@ -251,6 +259,7 @@ export class LoginScreen implements LoginLike {
     this.sfxVol.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
     this.petEl.checked = save.settings.pet;
+    this.fxEl.checked = save.settings.effects === 'reduced';
     this.refresh(save);
     this.shown = true;
     this.root.classList.remove('hidden');

@@ -19,6 +19,7 @@ const ICON = {
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
   mute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="slash" d="M4 4l16 16" fill="none" stroke="#ff7a7a" stroke-width="2.4" stroke-linecap="round"/></svg>',
   meter: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="5" width="4" height="15" rx="1"/><rect x="16" y="9" width="4" height="11" rx="1"/></svg>',
+  fx: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3l1.8 5.2L17 10l-5.2 1.8L10 17l-1.8-5.2L3 10l5.2-1.8z"/><path d="M18 14l.9 2.6 2.6.9-2.6.9L18 21l-.9-2.6-2.6-.9 2.6-.9z"/></svg>',
   fullscreen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
@@ -41,6 +42,7 @@ export class Hud {
   readonly muteBtn: HTMLButtonElement;
   /** toggles the damage meter (MeterPanel adds the behaviour) */
   readonly meterBtn: HTMLButtonElement;
+  readonly fxBtn: HTMLButtonElement;
   readonly fsBtn: HTMLButtonElement | null = null;
   /** the top-left column (kills, mesos, buffs): the damage meter hangs under it */
   get topLeft(): HTMLElement { return this.el.tl; }
@@ -115,9 +117,13 @@ export class Hud {
     this.meterBtn.className = 'pausebtn meterbtn';
     this.meterBtn.innerHTML = ICON.meter;
     this.meterBtn.title = 'Damage meter (T)';
+    this.fxBtn = document.createElement('button');
+    this.fxBtn.className = 'pausebtn fxbtn';
+    this.fxBtn.innerHTML = ICON.fx;
+    this.fxBtn.title = 'Fewer effects (V)';
     const btns = document.createElement('div');
     btns.className = 'hud-btns';
-    btns.append(this.meterBtn, this.muteBtn, this.pauseBtn);
+    btns.append(this.meterBtn, this.fxBtn, this.muteBtn, this.pauseBtn);
     if (isTouch() && canFullscreen()) {
       const fs = (this.fsBtn = document.createElement('button'));
       fs.className = 'pausebtn fsbtn';
@@ -212,6 +218,12 @@ export class Hud {
     this.muteBtn.classList.toggle('off', m);
     this.muteBtn.setAttribute('aria-pressed', String(m));
     this.muteBtn.title = m ? 'Unmute music' : 'Mute music';
+  }
+
+  /** the Fewer effects button shows its state (pressed + dimmed = fewer effects) */
+  setReducedEffects(r: boolean) {
+    this.fxBtn.classList.toggle('off', r);
+    this.fxBtn.setAttribute('aria-pressed', String(r));
   }
 
   show(on: boolean) {

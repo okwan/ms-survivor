@@ -47,6 +47,8 @@ export interface ScreenHandlers {
   /** opens the Hyper Skills window */
   hyper(): void;
   pet(on: boolean): void;
+  /** fewer, fainter skill effects around the hero */
+  effects(reduced: boolean): void;
   sfxVolume(v: number): void;
   mute(m: boolean): void;
 }
@@ -98,6 +100,7 @@ export class Screens {
   private quickBtn!: HTMLButtonElement;
   private continueBtn!: HTMLButtonElement;
   private petEl!: HTMLInputElement;
+  private fxEl!: HTMLInputElement;
   private bestEl!: HTMLElement;
   private mesoEl!: HTMLElement;
   private volEl!: HTMLInputElement;
@@ -113,7 +116,7 @@ export class Screens {
     this.h = h;
     this.icons = icons;
     this.title = this.buildTitle();
-    const lh = { create: () => h.start(), created: (r: CreateResult) => h.created?.(r), select: () => h.quick(), rename: (n: string) => h.rename?.(n), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on) };
+    const lh = { create: () => h.start(), created: (r: CreateResult) => h.created?.(r), select: () => h.quick(), rename: (n: string) => h.rename?.(n), continueRun: () => h.continueRun(), volume: (v: number) => h.volume(v), sfxVolume: (v: number) => h.sfxVolume(v), mute: (m: boolean) => h.mute(m), pet: (on: boolean) => h.pet(on), effects: (r: boolean) => h.effects(r) };
     if (mapLoginOk(loginScene)) this.login = new MapLogin(parent, lh, avatar, loginScene);
     else if (classic()) this.login = new LoginScreen(parent, lh, avatar);
     // the difficulty picker: ONE element, mounted by the login screen (signboard / character select), else above START on the plain title
@@ -171,6 +174,11 @@ export class Screens {
     this.petEl = petOpt.querySelector('input')!;
     this.petEl.addEventListener('change', () => this.h.pet(this.petEl.checked));
     body.appendChild(petOpt);
+    const fxOpt = el('label', 'pet-opt', '<input type="checkbox"> Fewer effects');
+    fxOpt.title = 'Fewer, fainter skill effects around your character';
+    this.fxEl = fxOpt.querySelector('input')!;
+    this.fxEl.addEventListener('change', () => this.h.effects(this.fxEl.checked));
+    body.appendChild(fxOpt);
     const vol = el('label', 'volume', 'Volume ');
     this.volEl = el('input', '');
     this.volEl.type = 'range'; this.volEl.min = '0'; this.volEl.max = '1'; this.volEl.step = '0.05';
@@ -251,6 +259,7 @@ export class Screens {
     if (ch) this.quickBtn.textContent = `Quick start: ${ch.name} the ${ch.cls[0].toUpperCase()}${ch.cls.slice(1)}`;
     this.setDifficulty(save);
     this.petEl.checked = save.settings.pet;
+    this.fxEl.checked = save.settings.effects === 'reduced';
     this.volEl.value = String(save.settings.volume);
     this.sfxVolEl.value = String(save.settings.sfxVolume);
     this.setMuted(save.settings.muted);
