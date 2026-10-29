@@ -2,7 +2,7 @@ import {
   BERSERK_AFTER, BOSSES, BOSS_EVERY, LADDER, MAX_GEMS, MAX_PASSIVES, MAX_SKILLS, NOVA_CAST, NOVA_DAMAGE_FRAC, NOVA_EVERY,
   CLASS_BY_KEY, DEFAULT_CLASS, GEAR_BOSS_DROPS, GEAR_DROP_ELITE, GEAR_DROP_NORMAL, GEAR_ELITE_TIER, GEAR_OFFER_SECONDS, GEAR_PICKUP_LIFE, DRAIN_CAP, MISSILE_SPEED, NOVA_RADIUS, PASSIVE_BY_KEY, PASSIVE_MAX_LEVEL, PLAYER_BASE, RECYCLE_DIST, RUN_LENGTH, SKILLS, SKILL_BY_KEY,
   JOB2_LEVEL, JOB3_LEVEL, JOB_BY_CODE, PASSIVES, jobOfId, unlockedJobs, SKILL_MAX_LEVEL, WEAKEN_FACTOR, skillDuration, SPAWN_INTERVAL, SPAWN_RING_MAX, SPAWN_RING_MIN, START_BANISHES, START_REROLLS, SUMMON_COUNT, SUMMON_EVERY,
-  SUMMON_RING, TICK, aliveTarget, mitigated, mesoValue, poolLo, progress, xpToNext,
+  SUMMON_RING, TICK, XP_BURST_LEVELS, XP_BURST_SECONDS, XP_GRANT_LEVELS, aliveTarget, mitigated, mesoValue, poolLo, progress, xpToNext,
   DIFFICULTIES, clampDifficulty, enemyDmgMult, enemyHpMult, LEVEL_HP, LEVEL_HP_CAP, levelDamageMult,
   BOSS_COMPANION_HP, BOSS_WAVES, BOSS_BARS, GEAR_BOSS_DROP_STEP, GEAR_BOSS_DROPS_MAX, GEAR_RARE_CHANCE, MASTERIES, MASTERY_BY_KEY, MASTERY_FILLER_CHANCE, SKILL_MASTERY_PER,
   SKILL_MASTERY_PREFIX, VITALITY_HEAL, ENEMY_SPEED_CAP, enemySpeed, masteryMax,
@@ -159,6 +159,8 @@ export class Sim {
 
   offer: Card[] | null = null;
   pendingLevels = 0;
+  /** run times of the recent level-ups (XP_BURST rolling window) */
+  levelTimes: number[] = [];
   rerolls = START_REROLLS;
   banishes = START_BANISHES;
   banished = new Set<string>();
@@ -595,9 +597,9 @@ export class Sim {
   }
 
   private newPickup(kind: PickupKind, x: number, y: number, value: number): Pickup {
-    const p = this.pickupPool.pop() ?? { kind, x, y, value, life: 0, pulled: false, item: null, scroll: null };
+    const p = this.pickupPool.pop() ?? { kind, x, y, value, life: 0, pulled: false, vac: false, item: null, scroll: null };
     p.item = null; p.scroll = null;
-    p.kind = kind; p.x = x; p.y = y; p.value = value; p.pulled = false;
+    p.kind = kind; p.x = x; p.y = y; p.value = value; p.pulled = false; p.vac = false;
     p.life = kind === POTION || kind === MESO ? 50 : 1e9;
     return p;
   }
@@ -971,7 +973,7 @@ export class Sim {
   private collect(p: Pickup) {
     this.emit({ type: 'pickup', kind: p.kind, x: p.x, y: p.y, value: p.value });
     switch (p.kind) {
-      case GEM: this.addXp((this.field.couponT > 0 ? p.value * COUPON_GEM_MULT : p.value) * (this.ail.curse ? CURSE_GEM : 1)); break;
+      case GEM: this.addXp((this.field.couponT > 0 && !p.vac ? p.value * COUPON_GEM_MULT : p.value) * (this.ail.curse ? CURSE_GEM : 1)); break;
       case POTION: this.hp = Math.min(this.maxHp, this.hp + this.maxHp * p.value); break;
       case ELIXIR: this.hp = this.maxHp; cureAilments(this); break;
       case MESO: case BAG: this.gainMesos(p.value * DIFFICULTIES[this.difficulty].mesos); break;
@@ -985,8 +987,15 @@ export class Sim {
 
   // ---- levelling & cards -----------------------------------------------------------------------
   private addXp(v: number) {
-    this.xp += v;
+    // one grant reaches at most XP_GRANT_LEVELS levels: fill the current bar, then at most (XP_GRANT_LEVELS - 1) more full bars
+    let cap = this.xpNeed - this.xp;
+    for (let l = 1; l < XP_GRANT_LEVELS; l++) cap += xpToNext(this.level + l);
+    this.xp += Math.min(v, cap);
+    const times = this.levelTimes;
     while (this.xp >= this.xpNeed) {
+      while (times.length > 0 && times[0] <= this.t - XP_BURST_SECONDS) times.shift();
+      if (times.length >= XP_BURST_LEVELS) { this.xp = this.xpNeed; break; } // bar stays full until the window frees
+      times.push(this.t);
       this.xp -= this.xpNeed;
       this.level++;
       this.xpNeed = xpToNext(this.level);
@@ -1197,6 +1206,7 @@ export class Sim {
     if (this.offer) return false;
 
     this.t += dt;
+    if (this.xp >= this.xpNeed) this.addXp(0); // a full bar held by the burst cap levels up once the window frees
     if (this.reviveT > 0) this.reviveT = Math.max(0, this.reviveT - dt);
     if (this.t >= RUN_LENGTH) {
       this.t = RUN_LENGTH;
