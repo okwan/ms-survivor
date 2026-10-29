@@ -630,7 +630,7 @@ export class MapLogin implements LoginLike {
       line(L.job, def?.name ?? ch.cls);
       line(L.level, String(lv));
       // stats as a v83 auto-assign would leave them: every AP in the class's main stat, 4 in the rest
-      const main = { warrior: 'str', magician: 'int', bowman: 'dex', thief: 'luk' }[ch.cls as string] ?? 'str';
+      const main = { warrior: 'str', magician: 'int', bowman: 'dex', thief: 'luk', pirate: 'str' }[ch.cls as string] ?? 'str';
       for (const k of ['str', 'dex', 'int', 'luk'] as const) line(L[k], String(k === main ? 4 + 5 * (lv - 1) : 4));
       line(L.fame, '0');
     }
@@ -645,7 +645,7 @@ export class MapLogin implements LoginLike {
     // v83 dice: four stats >= 4 summing to 25; the class's main stat is forced to be the highest
     const v = [4, 4, 4, 4];
     for (let n = 9; n > 0; n--) v[Math.floor(Math.random() * 4)]++;
-    const main = { warrior: 0, bowman: 1, magician: 2, thief: 3 }[this.cls as string] ?? 0;
+    const main = { warrior: 0, bowman: 1, magician: 2, thief: 3, pirate: 0 }[this.cls as string] ?? 0;
     const hi = v.indexOf(Math.max(...v));
     [v[main], v[hi]] = [v[hi], v[main]];
     this.stats = v;

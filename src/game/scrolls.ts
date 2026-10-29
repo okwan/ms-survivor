@@ -64,7 +64,7 @@ export function scrollUseful(d: ScrollDef, cls: ClassKey): boolean {
 }
 
 const SLOT_WORD: Record<GearSlot, string> = { cap: 'Helmet', coat: 'Overall Armor', pants: 'Bottomwear', shoes: 'Shoes', glove: 'Gloves', cape: 'Cape', shield: 'Shield', weapon: 'Weapon' };
-const WEAPON_WORD: Record<ClassKey, string> = { warrior: 'One-Handed Sword', magician: 'Wand', bowman: 'Bow', thief: 'Dagger' };
+const WEAPON_WORD: Record<ClassKey, string> = { warrior: 'One-Handed Sword', magician: 'Wand', bowman: 'Bow', thief: 'Dagger', pirate: 'Knuckle' };
 const STAT_WORD: Partial<Record<keyof GearStats, string>> = { pad: 'ATT', mad: 'Magic Att', pdd: 'DEF', mdd: 'Magic Def', mhp: 'HP', mmp: 'MP', speed: 'Speed', str: 'STR', dex: 'DEX', int: 'INT', luk: 'LUK' };
 
 export class ScrollPool {

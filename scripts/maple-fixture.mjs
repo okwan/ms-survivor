@@ -165,7 +165,7 @@ function shoesTree(id) {
   return { info: { islot: 'So', vslot: 'So', cash: 0 }, ...forFrames((a, i) => ({ shoes: cv(16, 4, box(16, 4, shade(col, 0.7)), 8, 0, 'shoes', { navel: [0, -6 + bobOf(a, i)] }) })) };
 }
 /** info/attack (attack action type) and info/afterImage (swing trail name) as in the real weapons */
-const WEAPON_INFO = { sword: { attack: 1, afterImage: 'swordOL' }, wand: { attack: 6, afterImage: 'mace' }, bow: { attack: 3, afterImage: 'bow' }, dagger: { attack: 1, afterImage: 'swordOS' } };
+const WEAPON_INFO = { sword: { attack: 1, afterImage: 'swordOL' }, wand: { attack: 6, afterImage: 'mace' }, bow: { attack: 3, afterImage: 'bow' }, dagger: { attack: 1, afterImage: 'swordOS' }, knuckle: { attack: 8, afterImage: 'knuckle' } };
 /** Character.wz/Afterimage/<name>.img: <level>/<action>/<bodyFrame>/<n> canvases. Levels 0 and 1 are identical (aliased), 2 has more frames; a non-numeric "charge" level is ignored. */
 export function afterimageTree(col) {
   const trail = (w, h, ox, oy, delay) => cv(w, h, box(w, h, col), ox, oy, 'x', {}, { delay });
@@ -177,7 +177,7 @@ export function afterimageTree(col) {
 }
 /** Weapons point left of the hand; the bow is a tall arc, attacks tilt the blade. Only the actions the weapon type provides exist. */
 function weaponTree(kind) {
-  const acts = kind === 'bow' ? ['stand2', 'walk2', 'alert', 'shoot1', 'swingO1'] : kind === 'dagger' ? ['stand1', 'walk1', 'alert', 'stabO1', 'stabO2', 'swingO1'] : ['stand1', 'walk1', 'alert', 'swingO1', 'swingO2', 'swingO3', 'stabO1'];
+  const acts = kind === 'bow' ? ['stand2', 'walk2', 'alert', 'shoot1', 'swingO1'] : kind === 'dagger' || kind === 'knuckle' ? ['stand1', 'walk1', 'alert', 'stabO1', 'stabO2', 'swingO1'] : ['stand1', 'walk1', 'alert', 'swingO1', 'swingO2', 'swingO3', 'stabO1'];
   const t = { info: { islot: 'Wp', vslot: 'Wp', cash: 0, attackSpeed: 4, ...WEAPON_INFO[kind] } };
   for (const a of acts) {
     t[a] = {};
@@ -206,7 +206,7 @@ export async function characterImages({ noBase = false, skip = () => false } = {
   const { wantedItems, SLOT_FOLDERS } = await import('../src/maple/avatar-core.ts');
   const want = wantedItems();
   const Character = {};
-  const weaponKind = (id) => ({ 1302000: 'sword', 1372005: 'wand', 1452002: 'bow', 1332005: 'dagger' })[Number(id)] ?? 'sword';
+  const weaponKind = (id) => ({ 1302000: 'sword', 1372005: 'wand', 1452002: 'bow', 1332005: 'dagger', 1482000: 'knuckle' })[Number(id)] ?? 'sword';
   const put = (slot, id, tree, folderIndex = 0) => {
     if (skip(slot, id)) return;
     const folder = SLOT_FOLDERS[slot][folderIndex];
@@ -277,6 +277,8 @@ export function gearImages() {
     add('Weapon', 'Weapon', 1372100 + t, weaponTree('wand'), `Test Wand ${t}`, { ...lvl, reqJob: 2, incMAD: 20 + 3 * t, incINT: t });
     add('Weapon', 'Weapon', 1452100 + t, weaponTree('bow'), `Test Bow ${t}`, { ...lvl, reqJob: 4, incPAD: 15 + 3 * t });
     add('Weapon', 'Weapon', 1332100 + t, weaponTree('dagger'), `Test Dagger ${t}`, { ...lvl, reqJob: 8, incPAD: 12 + 3 * t });
+    add('Weapon', 'Weapon', 1482100 + t, weaponTree('knuckle'), `Test Knuckle ${t}`, { ...lvl, reqJob: 16, incPAD: 13 + 3 * t });
+    add('Weapon', 'Weapon', 1492100 + t, weaponTree('knuckle'), `Test Gun ${t}`, { ...lvl, reqJob: 16, incPAD: 12 + 3 * t });
   });
   // a tier with no clean gloves / capes at all: only a notSale glove at level 95 and gloves / capes of level 105-115 exist above them
   add('Glove', 'Glove', 1082300, gloveTree(tint(9)), 'Rare Gloves', { reqLevel: 95, reqJob: 0, cash: 0, incPDD: 9, notSale: 1, tuc: 0 });
@@ -288,7 +290,6 @@ export function gearImages() {
   add('Longcoat', 'Overall', 1052000, coatTree(1052000), 'Test Robe', { reqLevel: 30, reqJob: 2, cash: 0, incPDD: 12, incMDD: 12, vslot: 'MaPn' });
   // items the selection must skip
   add('Cap', 'Cap', 1009998, capTree(tint(1), 'CpH1H5'), 'Cash Cap', { reqLevel: 0, reqJob: 0, cash: 1 });
-  add('Cap', 'Cap', 1009997, capTree(tint(2), 'CpH1H5'), 'Pirate Cap', { reqLevel: 0, reqJob: 16, cash: 0 });
   // novelty items the drop filters must reject: no tuc, an event flag, no stats
   add('Cap', 'Cap', 1002999, capTree(tint(3), 'CpH1H5'), 'No Slots Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, tuc: 0 });
   add('Cap', 'Cap', 1002998, capTree(tint(3), 'CpH1H5'), 'Event Cap', { reqLevel: 30, reqJob: 0, cash: 0, incPDD: 50, timeLimited: 1 });

@@ -139,19 +139,21 @@ const gachaEvents = (sim: Sim) => sim.events.filter((e): e is Extract<SimEvent, 
 
 // ---- recipes: readiness, evolution, replacement ----
 {
-  eq(RECIPES.length, 10, 'ten recipes, one per 3rd job');
-  eq(EVOLVED_SKILLS.length, 10, 'ten evolved skills');
+  eq(RECIPES.length, 12, 'twelve recipes, one per 3rd job');
+  eq(EVOLVED_SKILLS.length, 12, 'twelve evolved skills');
   const thirdJobs = new Set(RECIPES.map((r) => jobOfId(SKILL_BY_KEY[r.base].id)));
-  eq(thirdJobs.size, 10, 'each recipe has its own 3rd job');
+  eq(thirdJobs.size, 12, 'each recipe has its own 3rd job');
   ok([...thirdJobs].every((j) => JOB_BY_CODE[j]?.tier === 3), 'every base skill is a 3rd-job skill');
   const ids = new Set([...SKILLS.map((x) => x.id), ...PASSIVES.map((x) => x.id)]);
   ok(EVOLVED_SKILLS.every((e) => e.evolved === true && !ids.has(e.id) && !SKILLS.some((x) => x.key === e.key)), 'evolved skills are flagged and are not in the card pool tables');
   ok(EVOLVED_SKILLS.every((e) => SKILL_BY_KEY[e.key] === e), 'evolved skills are registered by key');
   ok(RECIPES.every((r) => SKILL_BY_KEY[r.evolved]?.evolved && PASSIVE_BY_KEY[r.partner] && classOf(r.base).key === JOB_BY_CODE[jobOfId(PASSIVE_BY_KEY[r.partner].id)]?.cls), 'recipe keys exist and base and partner share a class');
-  eq(EVOLVED_SKILLS.map((e) => e.id).sort(), [1121008, 1221009, 1321003, 2121007, 2221007, 2321008, 3121004, 3221001, 4121007, 4221007].sort(), 'v83 Skill.wz ids of the 4th-job skills');
+  eq(EVOLVED_SKILLS.map((e) => e.id).sort(), [1121008, 1221009, 1321003, 2121007, 2221007, 2321008, 3121004, 3221001, 4121007, 4221007, 5121007, 5221004].sort(), 'v83 Skill.wz ids of the 4th-job skills');
   const wanted = new Set(WANTED_SKILLS.map((w) => w.key));
   ok(EVOLVED_SKILLS.every((e) => wanted.has(e.key)), 'the asset step extracts the evolved skills (WANTED_SKILLS)');
   eq(WANTED_SKILLS.find((w) => w.key === 'brandish')!.image, '112.img', 'evolved skill lives in its 4th-job image');
+  eq(RECIPES.filter((r) => ['energy_blast', 'flamethrower'].includes(r.base)).map((r) => `${r.base}+${r.partner}>${r.evolved}`), ['energy_blast+energy_charge>barrage', 'flamethrower+gun_mastery>rapid_fire'], 'Pirate recipes: Marauder -> Buccaneer, Outlaw -> Corsair');
+  eq(WANTED_SKILLS.find((w) => w.key === 'barrage')!.image, '512.img', 'Buccaneer skill lives in 512.img');
 
   for (const r of RECIPES) {
     const s = hero(r, 3);
@@ -355,7 +357,7 @@ function dps(cls: string, key: string, crowd: number, rad = 0.6): number {
   return total / 30;
 }
 {
-  const LINE = new Set(['hurricane', 'piercing_arrow']);
+  const LINE = new Set(['hurricane', 'piercing_arrow', 'rapid_fire']);
   for (const r of RECIPES) {
     const cls = classOf(r.base).key;
     const b1 = dps(cls, r.base, 0, 2.9), e1 = dps(cls, r.evolved, 0, 2.9);

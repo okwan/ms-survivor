@@ -365,7 +365,29 @@ const THIEF_SKILLS: SkillDef[] = [
   S('band_of_thieves', 'Band of Thieves', 4211004, 'cone', 'poison', 36.8, 3.0, 0, 8, 1, 'Your band rushes the enemies ahead.'),
   S('assaulter', 'Assaulter', 4211002, 'melee', 'arcane', 103.5, 5.0, 7, 0, 1, 'Dash in and strike the nearest enemy.'),
 ];
-export const SKILLS: SkillDef[] = [...MAGICIAN_SKILLS, ...WARRIOR_SKILLS, ...BOWMAN_SKILLS, ...THIEF_SKILLS];
+const PIRATE_SKILLS: SkillDef[] = [
+  // Pirate (1st job)
+  S('flash_fist', 'Flash Fist', 5001001, 'melee', 'arcane', 28, 0.8, 4, 0, 1, 'A quick punch at the nearest enemy.'),
+  S('somersault_kick', 'Somersault Kick', 5001002, 'nova', 'arcane', 20, 2.2, 0, 4.5, 1, 'A flying kick that hits everything around you.'),
+  S('double_shot_pirate', 'Double Shot', 5001003, 'bolt', 'arcane', 14, 1.1, 22, 0, 2, 'Two bullets at the nearest enemies.'),
+  // Brawler
+  S('double_uppercut', 'Double Uppercut', 5101003, 'melee', 'arcane', 22, 1.2, 4.5, 0, 1, 'Two rising punches that stun.', { hits: 2, stun: 0.5 }),
+  S('corkscrew_blow', 'Corkscrew Blow', 5101004, 'pierce', 'arcane', 34, 2.2, 14, 0, 1, 'A spinning dash punch through a line of enemies.', { missile: 30 }),
+  // Marauder
+  S('energy_drain', 'Energy Drain', 5111004, 'melee', 'poison', 42, 2.0, 4.5, 0, 2, 'Drains life from nearby enemies.', { drain: 0.2 }),
+  S('shockwave', 'Shockwave', 5111006, 'nova', 'lightning', 30, 4.5, 0, 8, 1, 'A shockwave that blasts everything around you.'),
+  S('energy_blast', 'Energy Blast', 5111002, 'cone', 'lightning', 34, 3.0, 0, 8, 1, 'A blast of energy through everything in front.'),
+  // Gunslinger
+  S('grenade', 'Grenade', 5201002, 'bolt', 'fire', 25, 2.6, 22, 3.5, 1, 'A grenade that bursts on impact.'),
+  S('blank_shot', 'Blank Shot', 5201004, 'cone', 'arcane', 17, 2.4, 0, 7, 1, 'A deafening blank that stuns enemies in front.', { stun: 0.8 }),
+  // Outlaw
+  S('burst_fire', 'Burst Fire', 5210000, 'bolt', 'arcane', 9, 1.8, 22, 0, 4, 'A burst of bullets at the nearest enemies.'),
+  S('flamethrower', 'Flamethrower', 5211004, 'cone', 'fire', 30, 3.0, 0, 7, 1, 'A gout of flame through everything in front.'),
+  S('ice_splitter', 'Ice Splitter', 5211005, 'cone', 'ice', 28, 3.2, 0, 7, 1, 'A freezing blast that slows enemies.', { slow: 2 }),
+  S('octopus', 'Octopus', 5211001, 'orbit', 'arcane', 18, 1.2, 14, 0, 1, 'An octopus cannon circles you and shoots enemies.'),
+  S('gaviota', 'Gaviota', 5211002, 'strike', 'fire', 26, 4.0, 18, 4, 1, 'A seagull bomber hits the thickest crowd.'),
+];
+export const SKILLS: SkillDef[] = [...MAGICIAN_SKILLS, ...WARRIOR_SKILLS, ...BOWMAN_SKILLS, ...THIEF_SKILLS, ...PIRATE_SKILLS];
 export const SKILL_BY_KEY: Record<string, SkillDef> = Object.fromEntries(SKILLS.map((s) => [s.key, s]));
 
 export type PassiveStat = 'might' | 'maxHp' | 'speed' | 'haste' | 'armor' | 'area' | 'magnet' | 'growth' | 'regen' | 'crit';
@@ -444,6 +466,20 @@ export const PASSIVES: PassiveDef[] = [
   PS('haste_bandit', 'Haste', 4201003, 'speed', 0.1, '+10% move speed'),
   PS('dagger_booster', 'Dagger Booster', 4201002, 'haste', 0.1, D.haste(0.1)),
   PS('meso_guard', 'Meso Guard', 4211005, 'armor', 1, D.armor),
+  // Pirate
+  PS('bullet_time', 'Bullet Time', 5000000, 'crit', 0.03, D.crit(0.03)),
+  PS('dash', 'Dash', 5001005, 'speed', 0.1, '+10% move speed'),
+  PS('improve_max_hp_pirate', 'Improve Max HP', 5100000, 'maxHp', 0.2, '+20% max HP'),
+  PS('knuckler_mastery', 'Knuckler Mastery', 5100001, 'crit', 0.04, D.crit(0.04)),
+  PS('knuckler_booster', 'Knuckler Booster', 5101006, 'haste', 0.08, D.haste(0.08)),
+  PS('mp_recovery', 'MP Recovery', 5101005, 'regen', 1, '+1 HP per second'),
+  PS('oak_barrel', 'Oak Barrel', 5101007, 'armor', 1, D.armor),
+  PS('stun_mastery', 'Stun Mastery', 5110000, 'might', 0.08, D.might(0.08)),
+  PS('energy_charge', 'Energy Charge', 5110001, 'might', 0.1, D.might(0.1)),
+  PS('transformation', 'Transformation', 5111005, 'armor', 1, D.armor),
+  PS('gun_mastery', 'Gun Mastery', 5200000, 'crit', 0.04, D.crit(0.04)),
+  PS('gun_booster', 'Gun Booster', 5201003, 'haste', 0.08, D.haste(0.08)),
+  PS('wings', 'Wings', 5201005, 'speed', 0.1, '+10% move speed'),
 ];
 export const PASSIVE_BY_KEY: Record<string, PassiveDef> = Object.fromEntries(PASSIVES.map((p) => [p.key, p]));
 
@@ -502,7 +538,7 @@ export const CONE_ANGLE = (100 * Math.PI) / 180;
 
 // ---- classes (docs/CLASSES.md) -----------------------------------------------------------------
 
-export type ClassKey = 'warrior' | 'magician' | 'bowman' | 'thief';
+export type ClassKey = 'warrior' | 'magician' | 'bowman' | 'thief' | 'pirate';
 /** weapon stance: which character action plays when a skill fires */
 export type Stance = 'swing' | 'shoot' | 'stab';
 
@@ -545,6 +581,11 @@ const JOB_LIST: JobDef[] = [
   { code: 411, name: 'Hermit', cls: 'thief', tier: 3, blurb: 'Avengers, webs and a shadow partner.', sig: ['avenger', 'shadow_web'] },
   { code: 420, name: 'Bandit', cls: 'thief', tier: 2, blurb: 'Dagger fighter who steals mesos.', sig: ['savage_blow', 'steal'] },
   { code: 421, name: 'Chief Bandit', cls: 'thief', tier: 3, blurb: 'Meso explosions and a big Assaulter.', sig: ['meso_explosion', 'assaulter'] },
+  { code: 500, name: 'Pirate', cls: 'pirate', tier: 1, blurb: 'A fresh Pirate.', sig: ['flash_fist', 'somersault_kick'] },
+  { code: 510, name: 'Brawler', cls: 'pirate', tier: 2, blurb: 'Fist fighter who stuns and drains.', sig: ['double_uppercut', 'corkscrew_blow'] },
+  { code: 511, name: 'Marauder', cls: 'pirate', tier: 3, blurb: 'Shockwaves and energy blasts.', sig: ['shockwave', 'energy_blast'] },
+  { code: 520, name: 'Gunslinger', cls: 'pirate', tier: 2, blurb: 'Guns, grenades and blank shots.', sig: ['grenade', 'blank_shot'] },
+  { code: 521, name: 'Outlaw', cls: 'pirate', tier: 3, blurb: 'Flamethrowers, ice and a pet octopus.', sig: ['flamethrower', 'octopus'] },
 ];
 export const JOBS: JobDef[] = JOB_LIST;
 export const JOB_BY_CODE: Record<number, JobDef> = Object.fromEntries(JOBS.map((j) => [j.code, j]));
@@ -576,6 +617,7 @@ export const CLASSES: ClassDef[] = [
   { key: 'magician', name: 'Magician', hp: 120, speed: 7.0, crit: 0.05, weapon: 1372005, weaponName: 'Wand', stance: 'swing', skills: skillsOf(MAGICIAN_SKILLS), firstJob: 200, branches: [210, 220, 230], blurb: 'Fragile but deadly spells from afar.', botReach: 6.5 },
   { key: 'bowman', name: 'Bowman', hp: 120, speed: 7.2, crit: 0.1, weapon: 1452002, weaponName: 'Bow', stance: 'shoot', skills: skillsOf(BOWMAN_SKILLS), firstJob: 300, branches: [310, 320], blurb: 'Fast and precise. Arrows, hawks and blizzards.', botReach: 6.5 },
   { key: 'thief', name: 'Thief', hp: 150, speed: 7.5, crit: 0.08, weapon: 1332005, weaponName: 'Dagger', stance: 'stab', skills: skillsOf(THIEF_SKILLS), firstJob: 400, branches: [410, 420], blurb: 'Quickest hero. Stars, stabs and stolen life.', botReach: 3.4 },
+  { key: 'pirate', name: 'Pirate', hp: 140, speed: 7.3, crit: 0.07, weapon: 1482000, weaponName: 'Knuckle', stance: 'stab', skills: skillsOf(PIRATE_SKILLS), firstJob: 500, branches: [510, 520], blurb: 'Brawler fists or Gunslinger guns.', botReach: 3.0 },
 ];
 export const CLASS_BY_KEY: Record<string, ClassDef> = Object.fromEntries(CLASSES.map((c) => [c.key, c]));
 export const DEFAULT_CLASS: ClassKey = 'magician';

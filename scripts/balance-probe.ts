@@ -41,7 +41,7 @@ function realPool(): GearPool {
 // check is printed too
 function derivedPool(): GearPool {
   const list: GearItem[] = [];
-  const wt: Record<ClassKey, number> = { warrior: 130, magician: 137, bowman: 145, thief: 133 };
+  const wt: Record<ClassKey, number> = { warrior: 130, magician: 137, bowman: 145, thief: 133, pirate: 148 };
   TIER_LEVELS.forEach((lo, t) => {
     for (const v of [0, 1]) {
       const L = Math.min(99, lo + 4 + v * 5 + (t === 7 ? 5 : 0));

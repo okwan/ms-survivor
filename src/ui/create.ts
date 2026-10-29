@@ -1,5 +1,5 @@
 /**
- * MapleStory-style "New Character" window: step 1 picks a class (four cards), step 2 customises the look with left/right
+ * MapleStory-style "New Character" window: step 1 picks a class (five cards), step 2 customises the look with left/right
  * pickers, a dice randomiser, a name box and a live animated preview of the composited character; "Start" begins the run.
  *
  * Markup is deliberately plain with clear class names (create-*, class-card, pick-row, arrow...) so a later skin can restyle it.

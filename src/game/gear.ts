@@ -16,9 +16,9 @@ export const GEAR_SLOT_NAMES: Record<GearSlot, string> = { cap: 'Cap', coat: 'To
 /** unequipped items a hero can carry */
 export const BAG_SIZE = 24;
 /** job bit of a class in an item's reqJob (0 = every class) */
-export const JOB_BIT: Record<ClassKey, number> = { warrior: 1, magician: 2, bowman: 4, thief: 8 };
+export const JOB_BIT: Record<ClassKey, number> = { warrior: 1, magician: 2, bowman: 4, thief: 8, pirate: 16 };
 /** the stat that counts as "main" for each class */
-export const MAIN_STAT: Record<ClassKey, 'str' | 'int' | 'dex' | 'luk'> = { warrior: 'str', magician: 'int', bowman: 'dex', thief: 'luk' };
+export const MAIN_STAT: Record<ClassKey, 'str' | 'int' | 'dex' | 'luk'> = { warrior: 'str', magician: 'int', bowman: 'dex', thief: 'luk', pirate: 'str' };
 /** reqLevel lower bounds of the item tiers 0..7 (the last one is 80-99; the extractor skips classic items from level 100 up) */
 export const TIER_LEVELS = [0, 10, 20, 30, 40, 50, 60, 80];
 /** highest reqLevel of an item the extractor keeps */
@@ -233,7 +233,7 @@ export class GearPool {
   static placeholder(): GearPool {
     const list: GearItem[] = [];
     const mats = ['Bronze', 'Iron', 'Steel', 'Silver', 'Mithril', 'Gold', 'Orihalcon', 'Dragon'];
-    const wnames: Record<ClassKey, string> = { warrior: 'Sword', magician: 'Wand', bowman: 'Bow', thief: 'Dagger' };
+    const wnames: Record<ClassKey, string> = { warrior: 'Sword', magician: 'Wand', bowman: 'Bow', thief: 'Dagger', pirate: 'Knuckle' };
     for (let t = 0; t <= GEAR_MAX_TIER; t++) {
       const level = TIER_LEVELS[t];
       const base = (slot: GearSlot, name: string, job: number, stats: GearStats): GearItem => ({

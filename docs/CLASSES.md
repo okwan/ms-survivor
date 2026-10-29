@@ -1,7 +1,7 @@
 # Classes
 
 Oscar wants a MapleStory-style start: pick a class, then customize the character like the real
-character creation screen. Four explorer classes. Skills and passives are the real ones of each
+character creation screen. Five classes (four explorers and the Pirate). Skills and passives are the real ones of each
 job (v83 Skill.wz ids, which also give the icons and effects); a skill's job is its id / 10000
 (1001004 -> 100 Warrior, 1111005 -> 111 Crusader). Unverified ids are logged by the asset step
 against String.wz Skill.img names, so a wrong id only costs its art. Max 6 owned skills and 6
@@ -10,11 +10,11 @@ passives, skill max level 8, passive max level 5, and the same level scaling as 
 
 ## Jobs
 
-- Every class starts as its 1st job (Warrior 100, Magician 200, Bowman 300, Thief 400) with only 1st-job skills and passives.
+- Every class starts as its 1st job (Warrior 100, Magician 200, Bowman 300, Thief 400, Pirate 500) with only 1st-job skills and passives.
   The start skill is the first skill of the class.
 - Level 30: job advancement. The level-up dialog offers the class's 2nd jobs as cards (job name, two signature skills with a
   one-line description each). Warrior: Fighter / Page / Spearman. Magician: Fire/Poison Wizard / Ice/Lightning Wizard / Cleric.
-  Bowman: Hunter / Crossbowman. Thief: Assassin / Bandit (the real game has two 2nd jobs for these classes).
+  Bowman: Hunter / Crossbowman. Thief: Assassin / Bandit. Pirate: Brawler / Gunslinger (the real game has two 2nd jobs for these classes).
   Picking one adds only that branch's 2nd-job skills and passives to the pool; 1st-job ones stay on offer.
   Bots and autopick take the first card. Plays the level-up effect and shows "Job Advancement! <job>".
 - Level 70: automatic 3rd job of the same branch (Fighter -> Crusader, ...). Its skills and passives join the pool, same banner.
@@ -31,6 +31,7 @@ passives, skill max level 8, passive max level 5, and the same level scaling as 
 | Magician | 120 | 7.0 | 5% | Wand 01372005 | one-handed swing |
 | Bowman | 120 | 7.2 | 10% | Bow 01452002 | shoot |
 | Thief | 150 | 7.5 | 8% | Dagger 01332005 | stab |
+| Pirate | 140 | 7.3 | 7% | Knuckle 01482000 | stab |
 
 Passives are the real ones of each job and are listed with the jobs below. Stats: might = damage, haste = cooldown speed, armor = flat damage reduction per hit.
 
@@ -277,6 +278,60 @@ Passives: Haste 4201003 (+10% move speed), Dagger Booster 4201002 (+10% cooldown
 Passives: Meso Guard 4211005 (+1 armor).
 
 
+## Pirate
+
+Fists and guns. Both weapon types (knuckle 148, gun 149; reqJob bit 16) are Pirate gear; the hero keeps the knuckle look. Main stat STR. The 2nd jobs have only two skills each so the 3rd-job skills still fit in the six skill slots; numbers were raised after the bot probe (Brawler line wins about 1 of 4 runs, like the Warrior).
+
+### Pirate (500, 1st job, from the start)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| flash_fist | Flash Fist | 5001001 | melee | 28 | 0.8 | 4 | 0 | 1 | start skill |
+| somersault_kick | Somersault Kick | 5001002 | nova | 20 | 2.2 | 0 | 4.5 | 1 |  |
+| double_shot_pirate | Double Shot | 5001003 | bolt | 14 | 1.1 | 22 | 0 | 2 |  |
+
+Passives: Bullet Time 5000000 (+3% crit chance), Dash 5001005 (+10% move speed).
+
+### Brawler (510, 2nd job, choose at level 30)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| double_uppercut | Double Uppercut | 5101003 | melee | 22 | 1.2 | 4.5 | 0 | 1 | 2 hits per target, stun 0.5 s |
+| corkscrew_blow | Corkscrew Blow | 5101004 | pierce | 34 | 2.2 | 14 | 0 | 1 | missile 30 yd/s |
+
+Passives: Improve Max HP 5100000 (+20% max HP), Knuckler Mastery 5100001 (+4% crit chance), Knuckler Booster 5101006 (+8% cooldown speed), MP Recovery 5101005 (+1 HP per second), Oak Barrel 5101007 (+1 armor).
+
+### Marauder (511, 3rd job, automatic at level 70 after Brawler)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| energy_drain | Energy Drain | 5111004 | melee | 42 | 2 | 4.5 | 0 | 2 | drain 0.2 |
+| shockwave | Shockwave | 5111006 | nova | 30 | 4.5 | 0 | 8 | 1 |  |
+| energy_blast | Energy Blast | 5111002 | cone | 34 | 3 | 0 | 8 | 1 |  |
+
+Passives: Stun Mastery 5110000 (+8% damage), Energy Charge 5110001 (+10% damage), Transformation 5111005 (+1 armor).
+
+### Gunslinger (520, 2nd job, choose at level 30)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| grenade | Grenade | 5201002 | bolt | 25 | 2.6 | 22 | 3.5 | 1 | splash |
+| blank_shot | Blank Shot | 5201004 | cone | 17 | 2.4 | 0 | 7 | 1 | stun 0.8 s |
+
+Passives: Gun Mastery 5200000 (+4% crit chance), Gun Booster 5201003 (+8% cooldown speed), Wings 5201005 (+10% move speed).
+
+### Outlaw (521, 3rd job, automatic at level 70 after Gunslinger)
+
+| key | name | id | kind | dmg | cd | range | radius | count | other |
+|---|---|---|---|---|---|---|---|---|---|
+| burst_fire | Burst Fire | 5210000 | bolt | 9 | 1.8 | 22 | 0 | 4 |  |
+| flamethrower | Flamethrower | 5211004 | cone | 30 | 3 | 0 | 7 | 1 |  |
+| ice_splitter | Ice Splitter | 5211005 | cone | 28 | 3.2 | 0 | 7 | 1 | slow 2 s |
+| octopus | Octopus | 5211001 | orbit | 18 | 1.2 | 14 | 0 | 1 |  |
+| gaviota | Gaviota | 5211002 | strike | 26 | 4 | 18 | 4 | 1 |  |
+
+The Outlaw has no passives of its own.
+
 ## Evolutions (4th-job skills from Mastery Books)
 
 Recipe: the 3rd-job skill at max level (8) AND the partner passive owned (any level). The next boss Gachapon capsule then opens with a Mastery Book, which replaces
@@ -294,14 +349,16 @@ the base skill with the 4th-job skill at max level (see docs/DESIGN.md, "Gachapo
 | Sniper | arrow_eruption | mortal_blow_sniper | Piercing Arrow | 3221001 | pierce | 20 | 2 | 34 | 0 | 1 | passes 8 + level, missile 44 yd/s |
 | Hermit | avenger | shadow_partner | Triple Throw | 4121007 | bolt | 65 | 1.5 | 24 | 1.1 | 3 | splash |
 | Chief Bandit | meso_explosion | meso_guard | Boomerang Step | 4221007 | melee | 54 | 2 | 7 | 2 | 5 |  |
+| Marauder | energy_blast | energy_charge | Barrage | 5121007 | melee | 30 | 1.6 | 6 | 0 | 1 | 6 hits |
+| Outlaw | flamethrower | gun_mastery | Rapid Fire | 5221004 | pierce | 10 | 0.45 | 26 | 0 | 2 | passes 6 + level, missile 42 yd/s |
 
-Keys: brandish, blast, rush, meteor_shower, blizzard_mage (the Sniper's Blizzard is `blizzard`), genesis, hurricane, piercing_arrow, triple_throw, boomerang_step.
+Keys: brandish, blast, rush, meteor_shower, blizzard_mage (the Sniper's Blizzard is `blizzard`), genesis, hurricane, piercing_arrow, triple_throw, boomerang_step, barrage, rapid_fire.
 The evolved skills are not in the class skill lists, so level-up cards never offer them. A hero who owns a recipe's skill may take its partner passive into one extra
 passive slot (passive slots are otherwise full by level 70).
 
 ## Character creation
 
-Like the real game's New Character window: choose a class first (four large cards with the class's
+Like the real game's New Character window: choose a class first (five large cards with the class's
 weapon and its start skill icon), then customise: gender, skin (5 tones), face (3 per gender), hair
 (3 styles per gender), hair colour (8: black, red, orange, blonde, green, blue, purple, brown = last
 digit 0-7 of the hair id), top, bottom and shoes (2 starter options each), and a name. A dice button
