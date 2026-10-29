@@ -78,13 +78,13 @@ export const LAYOUT = {
     /** charInfo's origin point, and the texts relative to its top-left */
     info: [560, 357] as Pt,
     /** value columns of the baked labels (JOB / LV. / STR / DEX left, FAME / INT / LUK right) and the line under WORLD RANKING */
-    job: [37, 5] as Pt,
-    level: [37, 23] as Pt,
-    str: [37, 41] as Pt,
-    dex: [37, 59] as Pt,
-    fame: [127, 23] as Pt,
-    int: [127, 41] as Pt,
-    luk: [127, 59] as Pt,
+    job: [37, 3] as Pt,
+    level: [37, 21] as Pt,
+    str: [37, 39] as Pt,
+    dex: [37, 57] as Pt,
+    fame: [127, 21] as Pt,
+    int: [127, 39] as Pt,
+    luk: [127, 57] as Pt,
     best: [6, 101] as Pt,
   },
   /** the v83 creator on the create step's map (screen coords at the create camera) */
@@ -124,7 +124,7 @@ export const LAYOUT = {
     /** margin from the window corner (plus the safe-area insets) */
     inset: 12,
     /** the side gutter beside the scaled stage under which the dock turns into 44px icon buttons */
-    gutter: 170,
+    gutter: 150,
   },
 };
 
@@ -175,6 +175,9 @@ export class MapLogin implements LoginLike {
   private scene: LoginSection;
   private steps: Record<LoginStep, { x: number; y: number }>;
   private ctx: CanvasRenderingContext2D;
+  /** small copy of the scene behind the stage: blurred, it fills the letterbox bars */
+  private bctx: CanvasRenderingContext2D | null;
+  private frame = 0;
   private panels: Record<'title' | 'world' | 'select' | 'create', HTMLDivElement>;
   private dock: HTMLDivElement;
   private opts: HTMLDivElement;
@@ -243,6 +246,10 @@ export class MapLogin implements LoginLike {
     } catch { /* private mode */ }
 
     const root = (this.root = el('div', 'screen mlogin hidden'));
+    const backdrop = el('canvas', 'ml-backdrop');
+    backdrop.width = 160;
+    backdrop.height = 120;
+    this.bctx = backdrop.getContext('2d');
     const stage = el('div', 'ml-stage');
     const canvas = el('canvas', 'ml-canvas');
     canvas.width = VIEW_W;
@@ -256,7 +263,7 @@ export class MapLogin implements LoginLike {
     ui.append(this.panels.title, this.panels.world, this.panels.select, this.panels.create, this.diffSlot);
     stage.append(canvas, ui);
     // the dock is a child of the screen, not of the scaled stage: it keeps its size and never covers the scene art
-    root.append(stage, this.dock);
+    root.append(backdrop, stage, this.dock);
 
     // extras dock: Options (music / SFX / mute / pet), then whatever addButton adds above it
     this.opts = el('div', 'ml-opts hidden');
@@ -288,9 +295,18 @@ export class MapLogin implements LoginLike {
     fit();
     window.addEventListener('resize', fit);
     window.addEventListener('keydown', (e) => {
-      if (!this.shown || this.pan || e.key !== 'Enter' || e.repeat) return;
-      if ((e.target as Element | null)?.closest?.('button, .ml-opts')) return;
+      if (!this.shown || this.pan || e.repeat || (e.key !== 'Enter' && e.key !== 'Escape')) return;
+      const t = e.target as Element | null;
+      if (t?.closest?.('input, textarea')) return;
+      if (e.key === 'Escape') {
+        if (this.state === 'world') this.worldBack();
+        else if (this.state === 'select') this.goTo('world');
+        else if (this.state === 'create') this.cCancel();
+        return;
+      }
+      if (t?.closest?.('button, .ml-opts')) return;
       if (this.state === 'title') this.goTo('world');
+      else if (this.state === 'world' && this.chansEl.childElementCount) this.goTo('select');
       else if (this.state === 'select' && this.save?.character) this.h.select();
     });
   }
@@ -316,6 +332,10 @@ export class MapLogin implements LoginLike {
     }
     this.shown = true;
     this.root.classList.remove('hidden');
+    // fade in (cross-fades with the boot overlay)
+    this.root.classList.remove('ml-in');
+    void this.root.offsetWidth;
+    this.root.classList.add('ml-in');
     this.t0 = performance.now();
     this.goTo('title', undefined, true);
     cancelAnimationFrame(this.raf);
@@ -571,10 +591,7 @@ export class MapLogin implements LoginLike {
     this.tabsOn = false;
     this.scrollT0 = performance.now();
     this.spriteImg(P, 'Common/step/1', ...L.step);
-    this.spriteBtn(P, 'Common/BtStart', ...L.back, () => {
-      if (this.chansEl.childElementCount) { this.chansEl.textContent = ''; this.placeSel = null; this.showTabs(); }
-      else this.goTo('title');
-    }, { label: 'Back' });
+    this.spriteBtn(P, 'Common/BtStart', ...L.back, () => this.worldBack(), { label: 'Back' });
     this.tabsEl = el('div', 'hidden');
     this.chansEl = el('div');
     P.append(this.chansEl, this.tabsEl);
@@ -584,6 +601,12 @@ export class MapLogin implements LoginLike {
       if (b) { b.dataset.world = String(i); b.classList.toggle('on', i === this.world); this.tabs.push(b); }
     }
     if (!this.seq('WorldSelect/scroll/0').length) this.showTabs();
+  }
+
+  /** Back on the world step: closes the channel panel, else returns to the title. */
+  private worldBack() {
+    if (this.chansEl.childElementCount) { this.chansEl.textContent = ''; this.placeSel = null; this.showTabs(); }
+    else this.goTo('title');
   }
 
   private showTabs() {
@@ -674,7 +697,7 @@ export class MapLogin implements LoginLike {
       line(L.fame, '0');
     }
     const s = this.save;
-    line(L.best, `Best ${s && s.bestTime > 0 ? fmtTime(s.bestTime) : '-'}  ·  ${(s?.mesos ?? 0).toLocaleString('en-US')} mesos`);
+    line(L.best, `${s && s.bestTime > 0 ? `Best run ${fmtTime(s.bestTime)}` : 'No runs yet'} · ${(s?.mesos ?? 0).toLocaleString('en-US')} mesos`);
   }
 
 
@@ -933,14 +956,39 @@ export class MapLogin implements LoginLike {
 
   // ---------------------------------------------------------------- canvas
 
-  private image(src: string): HTMLImageElement | null {
+  /** the shared loader: one <img> per file, started once */
+  private load(src: string): HTMLImageElement {
     let im = this.imgs.get(src);
     if (!im) {
       im = new Image();
       im.src = BASE + src;
       this.imgs.set(src, im);
     }
+    return im;
+  }
+
+  private image(src: string): HTMLImageElement | null {
+    const im = this.load(src);
     return im.complete && im.naturalWidth ? im : null;
+  }
+
+  /** Loads the title step's art (scene frames, Common/ and Title/ sprites) so the first show has no pop-in (waits 8 s at most), then the rest of the ui sprites in the background. */
+  async preload(onProgress?: (frac: number) => void): Promise<void> {
+    const need = new Set<string>();
+    for (const b of this.scene.backs) for (const f of b.frames) need.add(f.src);
+    for (const o of this.scene.objs) for (const f of o.frames) need.add(f.src);
+    const rest = new Set<string>();
+    for (const [k, s] of Object.entries(this.scene.ui)) (/^(Common|Title)\//.test(k) ? need : rest).add(s.src);
+    for (const s of need) rest.delete(s);
+    let done = 0;
+    const one = async (src: string) => {
+      const im = this.load(src);
+      try { if (im.decode) await im.decode(); else if (!im.complete) await new Promise((r) => { im.onload = im.onerror = r; }); } catch { /* missing or undecodable: skipped */ }
+      onProgress?.(++done / need.size);
+    };
+    await Promise.race([Promise.all([...need].map(one)), new Promise((r) => setTimeout(r, 8000))]);
+    onProgress?.(1);
+    for (const src of rest) this.load(src);
   }
 
   private blit(s: LoginSprite, x: number, y: number, flip = false, alpha = 1, cw = s.w) {
@@ -976,6 +1024,7 @@ export class MapLogin implements LoginLike {
       if (f !== a.cur) { a.cur = f; a.apply(f); }
     }
     this.draw(now, t);
+    if (this.bctx && this.frame++ % 3 === 0) this.bctx.drawImage(this.ctx.canvas, 0, 0, 160, 120);
   };
 
   private draw(now: number, t: number) {
