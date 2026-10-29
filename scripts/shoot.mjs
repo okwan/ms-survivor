@@ -86,7 +86,7 @@ async function main() {
         return el.inputValue();
       };
       const savedName = () => page.evaluate(() => JSON.parse(localStorage.getItem('maple-survivor-save-v1') || '{}').character?.name);
-      console.log(`shoot ${s.tag}: name check: id box "${await typed('.ml-field[aria-label="Character name"]', 'Swadd')}", saved "${await savedName()}"`);
+      const nameCheck = [`id box "${await typed('.ml-field[aria-label="Character name"]', 'Swadd')}", saved "${await savedName()}"`];
       for (const sel of ['[data-shot=login]', '[data-shot=world]', '[data-shot=channel]']) {
         await click(sel);
         await page.waitForTimeout(1500);
@@ -95,13 +95,14 @@ async function main() {
       if ((await click('[data-shot=cnew]')) || (await click('[data-shot=new]'))) {
         await page.waitForTimeout(2500);
         await shot('create');
-        console.log(`shoot ${s.tag}: name check: creator box "${await typed('.ml-cname, .create-name', 'Wasd')}"`);
+        nameCheck.push(`creator box "${await typed('.ml-cname, .create-name', 'Wasd')}"`);
         if (await click('[data-shot=dice]')) {
           await page.waitForTimeout(800);
           await shot('create-dice');
         }
       }
       console.log(`shoot ${s.tag}: ui ${JSON.stringify(await page.evaluate(() => window.game?.ui?.()))}`);
+      console.log(`shoot ${s.tag}: name check: ${nameCheck.join(', ')}`);
       // the other menus, desktop only: windows on the title, then a run (playing, level-up, pause, equip, results)
       if (s.tag === 'desktop') {
         await page.reload();
